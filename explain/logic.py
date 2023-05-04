@@ -557,6 +557,6 @@ class ExplainBot:
         # Concatenate final response, parse, and conversation representation
         # This is done so that we can split both the parse and final
         # response, then present all the data
-        final_result = returned_item + f"<>{response_id}"
-
+        # final_result = returned_item + f"<>{response_id}"
+        final_result = returned_item
         return final_result
