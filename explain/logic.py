@@ -176,9 +176,9 @@ class ExplainBot:
         question_pd = pd.read_csv(self.conversation.question_bank_path, delimiter=";")
         feature_names = self.categorical_features + self.numerical_features
         answer_dict = {
-            "general_questions": list(question_pd[question_pd["question_type"] == "general"][["q_id", "paraphrased"]].values),
-            "feature_questions": list(question_pd[question_pd["question_type"] == "feature"][["q_id", "paraphrased"]].values),
-            "feature_names": [[feature_id, feature_name]for feature_id, feature_name in enumerate(feature_names)],
+            "general_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in question_pd[question_pd["question_type"] == "general"].iterrows()], #question_pd[question_pd["question_type"] == "general"][["q_id", "paraphrased"]],
+            "feature_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in question_pd[question_pd["question_type"] == "feature"].iterrows()], #list(question_pd[question_pd["question_type"] == "feature"][["q_id", "paraphrased"]].values),
+            "feature_names": [{'id':feature_id, 'feature_name': feature_name}for feature_id, feature_name in enumerate(feature_names)],
         }
         return answer_dict
 
@@ -524,7 +524,7 @@ class ExplainBot:
     def update_state_dy_id(self,
                            question_id: int,
                            user_session_conversation: Conversation,
-                           feature_id=None):
+                           feature_id:int =None):
         """The main experiment driver.
 
                 The function controls state updates of the conversation. It accepts the
@@ -542,7 +542,7 @@ class ExplainBot:
 
         app.logger.info(f'USER INPUT: q_id:{question_id}, f_id:{feature_id}')
         instance_id = self.conversation.get_var('diverse_instances').contents[0]["id"]  # TODO: Get current instance
-        returned_item = run_action_by_id(user_session_conversation, int(question_id), instance_id, feature_id)
+        returned_item = run_action_by_id(user_session_conversation, int(question_id), instance_id, int(feature_id))
 
         username = user_session_conversation.username  # TODO: Check if needed?!
 
@@ -557,6 +557,6 @@ class ExplainBot:
         # Concatenate final response, parse, and conversation representation
         # This is done so that we can split both the parse and final
         # response, then present all the data
-        final_result = returned_item + f"<>{response_id}"
-
+        # final_result = returned_item + f"<>{response_id}"
+        final_result = returned_item
         return final_result

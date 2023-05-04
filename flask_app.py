@@ -59,7 +59,12 @@ def home():
     """Load the explanation interface."""
     app.logger.info("Loaded Login")
     objective = BOT.conversation.describe.get_dataset_objective()
-    return render_template("index.html", currentUserId="user", datasetObjective=objective)
+    return render_template("new.html", currentUserId="user", datasetObjective=objective)
+
+@bp.route('/get_datapoint', methods=['GET'])
+def get_datapoint():
+    data_instances = BOT.load_data_instances()
+    return data_instances[0]
 
 
 @bp.route("/log_feedback", methods=['POST'])
@@ -110,6 +115,19 @@ def sample_prompt():
     return prompt
 
 
+@bp.route("/get_questions", methods=['POST'])
+def get_questions():
+    """Load the questions."""
+    if request.method == "POST":
+        app.logger.info("generating the questions")
+        try:
+            response = BOT.get_questions_and_attributes()
+        except Exception as ext:
+            app.logger.info(f"Traceback getting questions: {traceback.format_exc()}")
+            app.logger.info(f"Exception getting questions: {ext}")
+            response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
+        return response
+
 @bp.route("/get_response", methods=['POST'])
 def get_bot_response():
     """Load the box response."""
@@ -117,16 +135,16 @@ def get_bot_response():
         app.logger.info("generating the bot response")
         try:
             data = json.loads(request.data)
-            user_text = data["userInput"]
+            print(f'MICHI STYLE DEBUG: ${data}')
             conversation = BOT.conversation
-            # TODO: Get question_id and feature_id from frontend (from user_text?)
-            question_id = None
-            feature_id = None
+            question_id = data["question"]
+            feature_id = data["feature"]
             response = BOT.update_state_dy_id(question_id, conversation, feature_id)
         except Exception as ext:
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
+        print(f'MICHI STYLE DEBUG: ${response}')
         return response
 
 
@@ -141,4 +159,4 @@ if __name__ != '__main__':
 if __name__ == "__main__":
     # clean up storage file on restart
     app.logger.info(f"Launching app from config: {args.config}")
-    app.run(debug=False, port=4455, host='0.0.0.0')
+    app.run(debug=True, port=4455, host='0.0.0.0')

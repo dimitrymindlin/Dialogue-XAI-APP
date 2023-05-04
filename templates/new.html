@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/static/styles/new.css">
+  <title>Document</title>
+</head>
+
+<body>
+  <div class="ttm-layout">
+    <div class="ttm-datapoint">
+      <header class="ttm-header" style="margin-bottom: 1rem;">
+        <div class="ttm-header-title">
+          Datapoint
+        </div>
+      </header>
+      <main id="datapoint">
+        <p>Name: <span>First Last</span></p>
+        <p>Age: <span>25</span></p>
+        <p>SthSth: <span>SthSth</span></p>
+        <p>SthSth: <span>SthSth</span></p>
+        <p>SthSth: <span>SthSth</span></p>
+        <p>SthSth: <span>SthSth</span></p>
+      </main>
+    </div>
+    <div class="ttm-chat">
+      <div class="ttm">
+        <header class="ttm-header">
+          <div class="ttm-header-title">
+            TalkToModel
+          </div>
+        </header>
+        <main class="ttm-chat">
+          <div class="msg left-msg">
+            <div class="msg-bubble">
+              <div class="msg-text">
+                Hello 😊, I'm a machine learning model trained to {{ datasetObjective }}.
+                <br><br>
+                Let's get started. Ask me something!
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <div class="inputarea">
+      <form class="ttm-inputarea" style="display: grid;">
+        <div class="general-questions" style="grid-row: 1;">
+          <header class="ttm-header">
+            <p>Generelle Fragen</p>
+          </header>
+          <button value="Warum bist du so süß?">Warum bist du so süß?</button>
+          <button value="Woher kriege ich diese Fragen?">Woher kriege ich diese Fragen?</button>
+          <button value="Was ist der Sinn der Welt?">Was ist der Sinn der Welt?</button>
+        </div>
+        <hr style="border-top: 3px solid #bbb; margin: 20px;">
+        <div class="feature-questions" style="grid-row: 2;">
+          <header class="ttm-header">
+            <p>Feature Fragen</p>
+          </header>
+          <button value="Warum sagt Feature ___, dass ich doof bin?">Warum sagt Feature ___, dass ich doof bin?</button>
+          <button value="Wie wichtig ist Feature ____?">Wie wichtig ist Feature ____?</button>
+          <button value="Was passiert, wenn Feature ____ ausgeschlossen wird??">Was passiert, wenn Feature ____ ausgeschlossen wird??</button>
+        </div>
+        <div class="feature-questions-dropdown" style="grid-row: 3;">
+          <select name="feature-questions-dropdown" id="feature-questions-dropdown">
+            <option value="head_size">head_size</option>
+            <option value="league_of_legends_mmr">league_of_legends_mmr</option>
+            <option value="random_noise">random_noise</option>
+          </select>
+        </div>
+        <div class="submit-button" style="grid-row: 4;">
+          <hr style="border-top: 3px solid #bbb; margin: 20px;">
+          <input type="submit" value="Frage stellen!" style="width: 80%;">
+        </div>
+      </form>
+    </div>
+  </div>
+  <script>
+    async function fetchData() {
+      try {
+        const response = await fetch('/get_datapoint');
+        const data = await response.json();
+
+        const datapointElement = document.getElementById('datapoint');
+        let newDataHtml = '';
+
+        for (const key in data) {
+          newDataHtml += `<p>${key}: <span>${data[key]}</span></p>`;
+        }
+
+        datapointElement.innerHTML = newDataHtml;
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+
+      try {
+        const response = await fetch('/get_questions', {
+          method: "POST",
+        });
+        const data = await response.json();
+
+        console.log(data)
+
+        // add general questions to list of questions
+        const generalQuestionsElement = document.querySelector('.general-questions');
+        let newGeneralQuestionsHtml = '<header class="ttm-header"><p>Generelle Fragen</p></header>';
+
+        for (const key in data['general_questions']) {
+          newGeneralQuestionsHtml += `<button type="button" data-value="${data['general_questions'][key]['id']}">${data['general_questions'][key]['question']}</button>`;
+        }
+
+        generalQuestionsElement.innerHTML = newGeneralQuestionsHtml;
+
+        // add feature questions to list of quetions
+        const featureQuestionsElement = document.querySelector('.feature-questions');
+        let newFeatureQuestionsHtml = '<header class="ttm-header"><p>Feature Fragen</p></header>';
+
+        for (const key in data['feature_questions']) {
+          newFeatureQuestionsHtml += `<button type="button" data-value="${data['feature_questions'][key]['id']}">${data['feature_questions'][key]['question']}</button>`;
+        }
+
+        featureQuestionsElement.innerHTML = newFeatureQuestionsHtml;
+
+        // add feature names to dropdown
+        const featureQuestionsDropdownElement = document.querySelector('#feature-questions-dropdown');
+        let newFeatureQuestionsDropdownHtml = '';
+
+        for (const key in data['feature_names']) {
+          newFeatureQuestionsDropdownHtml += `<option value="${data['feature_names'][key]['id']}">${data['feature_names'][key]['feature_name']}</option>`;
+        }
+
+        featureQuestionsDropdownElement.innerHTML = newFeatureQuestionsDropdownHtml;
+
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    }
+    function createChatBubble(className, text) {
+      const msgDiv = document.createElement('div');
+      msgDiv.classList.add('msg', className);
+
+      const msgBubbleDiv = document.createElement('div');
+      msgBubbleDiv.classList.add('msg-bubble');
+
+      const msgTextDiv = document.createElement('div');
+      msgTextDiv.classList.add('msg-text');
+      msgTextDiv.innerHTML = text;
+
+      msgBubbleDiv.appendChild(msgTextDiv);
+      msgDiv.appendChild(msgBubbleDiv);
+
+      return msgDiv;
+    }
+
+    // Call the fetchData function when the page loads
+    fetchData().then(() => {
+      // Button handlers
+      const buttons = document.querySelectorAll('button[type="button"]');
+      const submitButton = document.querySelector('.submit-button input[type="submit"]');
+
+      let activeQuestion = '';
+      let activeQuestionText = '';
+      let activeFeature = '';
+      let activeFeatureText = '';
+
+      function setButtonActive() {
+        buttons.forEach(button => {
+          button.classList.remove('active');
+        });
+        this.classList.add('active');
+        activeQuestion = this.getAttribute('data-value');
+        activeQuestionText = this.innerText;
+      }
+
+      async function submitQuestion(e) {
+        e.preventDefault(); // Prevent default form submission
+
+        if (activeQuestion) {
+          console.log('Submitting question:', activeQuestion);
+
+          // Get the selected feature
+          const featureQuestionsDropdown = document.getElementById('feature-questions-dropdown');
+          activeFeature = featureQuestionsDropdown.value;
+          activeFeatureText = featureQuestionsDropdown.options[featureQuestionsDropdown.selectedIndex].text;
+
+          // Add the input question bubble to the chat
+          const chatContainer = document.querySelector('.ttm-chat main');
+
+          const textForChatWindow = activeQuestionText.replace(/\[feature X\]/, function(i, match ) {
+            return activeFeatureText;
+          })
+
+          const inputBubble = createChatBubble('right-msg', textForChatWindow);
+          chatContainer.appendChild(inputBubble);
+
+          // Simulate chatbot response
+          const chatbotResponse = await fetch('/get_response', {
+            method: "POST",
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              question: activeQuestion,
+              feature: activeFeature
+            })
+          })
+
+          result = await chatbotResponse.text()
+
+          // Add the response bubble to the chat after a delay
+          setTimeout(() => {
+            const responseBubble = createChatBubble('left-msg', result);
+            chatContainer.appendChild(responseBubble);
+          }, 1000); // 1-second delay to simulate chatbot response time
+
+        } else {
+          console.log('No question selected');
+        }
+      }
+
+
+      buttons.forEach(button => {
+        button.addEventListener('click', setButtonActive);
+      });
+
+      submitButton.addEventListener('click', submitQuestion);
+    });
+  </script>
+</body>
+
+</html>
