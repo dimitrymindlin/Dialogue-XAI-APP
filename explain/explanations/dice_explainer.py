@@ -98,6 +98,11 @@ class TabularDice(Explanation):
         if desired_class is None:
             desired_class = self.desired_class
 
+        # Calculate permitted range for each feature
+        permitted_range_dict = {}
+        for feature in self.num_features:
+            permitted_range_dict[feature] = [data[feature].min(), data[feature].max()]
+
         cfes = {}
         for d in tqdm(list(data.index)):
             # dice has a few function calls that are going to be deprecated
@@ -109,7 +114,8 @@ class TabularDice(Explanation):
                 cur_cfe = self.exp.generate_counterfactuals(data.loc[[d]],
                                                             total_CFs=self.num_cfes_per_instance,
                                                             desired_class=desired_class,
-                                                            features_to_vary=features_to_vary)
+                                                            features_to_vary=features_to_vary,
+                                                            permitted_range=permitted_range_dict)
             cfes[d] = cur_cfe
         return cfes
 
@@ -138,8 +144,11 @@ class TabularDice(Explanation):
                 if self.categorical_mapping is not None:
                     try:
                         cfe_f = self.categorical_mapping[feature_index][int(cfe_f)]
+                        inc_dec = "change"
                     except KeyError:
                         pass  # feature is numeric and not in categorical mapping
+                    except IndexError:
+                        print("Index error in DICE explanation encountered...")
                 # round cfe_f if it is float and turn to string to print
                 if isinstance(cfe_f, float):
                     cfe_f = str(round(cfe_f, self.rounding_precision))
@@ -208,17 +217,21 @@ class TabularDice(Explanation):
         output_string += "First, if you <em>"
         transition_words = ["Further,", "Also,", "In addition,", "Furthermore,"]
 
+        # Get all cfe strings and remove duplicates
+        cfe_strings = [self.get_change_string(final_cfes.loc[[c_id]], original_instance) for c_id in final_cfe_ids]
+        cfe_strings = list(set(cfe_strings))
+
         for i, c_id in enumerate(final_cfe_ids):
             # Stop the summary in case its getting too large
             if i < self.num_in_short_summary:
                 if i != 0:
                     output_string += f"{np.random.choice(transition_words)} if you <em>"
-                output_string += self.get_change_string(final_cfes.loc[[c_id]], original_instance)
+                output_string += cfe_strings[c_id]
                 new_prediction = self.get_label_text(new_predictions[i])
                 output_string += f"</em>, the model will predict {new_prediction}.<br><br>"
             else:
                 additional_options += "If you <em>"
-                additional_options += self.get_change_string(final_cfes.loc[[c_id]], original_instance)
+                additional_options += cfe_strings[c_id]
                 new_prediction = self.get_label_text(new_predictions[i])
                 additional_options += f"</em>, the model will predict {new_prediction}.<br><br>"
 
