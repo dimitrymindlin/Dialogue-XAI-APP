@@ -241,7 +241,7 @@ def get_and_preprocess_titanic():
         dataset['Sex'] = dataset['Sex'].map({'female': 0, 'male': 1}).astype(int)
 
         # Mapping titles
-        title_mapping = {"Mr": 1, "Miss": 2, "Mrs": 3, "Master": 4, "Rare": 5}
+        title_mapping = {"Mr": 0, "Miss": 1, "Mrs": 2, "Master": 3, "Rare": 4}
         dataset['Title'] = dataset['Title'].map(title_mapping)
         dataset['Title'] = dataset['Title'].fillna(0)
 
