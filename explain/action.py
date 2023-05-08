@@ -136,7 +136,7 @@ def run_action_by_id(conversation: Conversation,
         # What attributes of this person led the model to make this prediction?
         explanation = explain_feature_importances(conversation, data, parse_op, regen,
                                                   return_full_summary=False)
-        answer = "The following 3 attributes of the person were the most important for the prediction. "
+        answer = "The following attributes were most important for the prediction. "
         return answer + explanation[0]
     if question_id == 7:
         # What would happen to the prediction if we changed [feature] for this person?

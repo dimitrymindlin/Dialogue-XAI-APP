@@ -134,8 +134,9 @@ class TabularAnchor(Explanation):
             filtering_description = f"For instances where <b>{filtering_text}</b>"
         else:
             filtering_description = ""
-        output_string = f"{filtering_description}, the original prediction is "
-        output_string += f"<em>{original_label}</em>. "
+        #output_string = f"{filtering_description}, the original prediction is "
+        #output_string += f"<em>{original_label}</em>. "
+        output_string = ""
         output_string += "By fixing the following attributes, the prediction stays the same even though other attributes are changed:"
         output_string += "<br><br>"
 

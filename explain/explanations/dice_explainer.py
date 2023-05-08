@@ -206,8 +206,9 @@ class TabularDice(Explanation):
             filtering_description = f"For instances where <b>{filtering_text}</b>"
         else:
             filtering_description = ""
-        output_string = f"{filtering_description}, the original prediction is "
-        output_string += f"<em>{original_label}</em>. "
+        # output_string = f"{filtering_description}, the original prediction is "
+        # output_string += f"<em>{original_label}</em>. "
+        output_string = ""
         output_string += "Here are some options to change the prediction of this instance."
         output_string += "<br><br>"
 
@@ -221,21 +222,23 @@ class TabularDice(Explanation):
         cfe_strings = [self.get_change_string(final_cfes.loc[[c_id]], original_instance) for c_id in final_cfe_ids]
         cfe_strings = list(set(cfe_strings))
 
-        for i, c_id in enumerate(final_cfe_ids):
+        for i, cfe_string in enumerate(cfe_strings):
             # Stop the summary in case its getting too large
             if i < self.num_in_short_summary:
                 if i != 0:
                     output_string += f"{np.random.choice(transition_words)} if you <em>"
-                output_string += cfe_strings[c_id]
-                new_prediction = self.get_label_text(new_predictions[i])
-                output_string += f"</em>, the model will predict {new_prediction}.<br><br>"
+                output_string += cfe_string
+                # new_prediction = self.get_label_text(new_predictions[i])
+                # output_string += f"</em>, the model will predict {new_prediction}.<br><br>"
+                output_string += f"</em>, the model will predict the opposite class.<br><br>"
             else:
                 additional_options += "If you <em>"
-                additional_options += cfe_strings[c_id]
-                new_prediction = self.get_label_text(new_predictions[i])
-                additional_options += f"</em>, the model will predict {new_prediction}.<br><br>"
+                additional_options += cfe_string
+                #new_prediction = self.get_label_text(new_predictions[i])
+                #additional_options += f"</em>, the model will predict {new_prediction}.<br><br>"
+                additional_options += f"</em>, the model will predict the opposite class.<br><br>"
 
-        output_string += "If you want some more options, just ask &#129502"
+        # output_string += "If you want some more options, just ask &#129502"
 
         return additional_options, output_string
 
@@ -265,7 +268,8 @@ class TabularDice(Explanation):
 
         final_cfes = cfe.cf_examples_list[0].final_cfs_df
         if final_cfes is None:
-            return (f"I couldn't find any counterfactuals for this instance by changing the chosen feature "), 0
+            return (
+                       f"There are no changes possible to the chosen attribute that would result in a different prediction."), 0
         final_cfe_ids = list(final_cfes.index)
 
         if self.temp_outcome_name in final_cfes.columns:
@@ -275,12 +279,13 @@ class TabularDice(Explanation):
 
         original_instance = data.loc[[key]]
 
-        output_string = f"The original prediction is "
-        output_string += f"<em>{original_label}</em>. "
+        # output_string = f"The original prediction is "
+        # output_string += f"<em>{original_label}</em>. "
+        output_string = ""
         output_string += "Here is how you could switch the attribute values to flip the prediction."
         output_string += "<br><br>"
 
-        output_string += "First, if you <em>"
+        output_string += "If you <em>"
         transition_words = ["Further,", "Also,", "In addition,", "Furthermore,"]
 
         for i, c_id in enumerate(final_cfe_ids):
