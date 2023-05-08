@@ -66,11 +66,10 @@ def home():
 def get_datapoint():
     """
     Get a new datapoint from the dataset.
-    Currently infinity loop.
     TODO: Check with michi where experiment handling will be.
     """
-    instance = BOT.data_instances.pop(0) if len(BOT.data_instances) > 0 else BOT.load_data_instances()[0]
-    return instance
+    # get_next_instance returns tuple with (id, datapoint_dict)
+    return BOT.get_next_instance()[1]
 
 
 @bp.route("/log_feedback", methods=['POST'])

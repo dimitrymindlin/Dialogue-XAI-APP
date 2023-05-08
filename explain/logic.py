@@ -124,6 +124,7 @@ class ExplainBot:
         self.decoder = None
 
         self.data_instances = []
+        self.current_instance = []
 
         # Initialize parser + prompts as None
         # These are done when the dataset is loaded
@@ -167,6 +168,15 @@ class ExplainBot:
         self.load_explanations(background_dataset=background_dataset,
                                categorical_mapping=self.categorical_mapping)
 
+    def get_next_instance(self):
+        """
+        Returns the next instance in the data_instances list if possible.
+        """
+        if len(self.data_instances) == 0:
+            self.load_data_instances()  # TODO: Infinity loop - Where is experiment end determined?
+        self.current_instance = self.data_instances.pop(0)
+        return self.current_instance
+
     def init_loaded_var(self, name: bytes):
         """Inits a var from manual load."""
         self.manual_var_filename = name.decode("utf-8")
@@ -176,7 +186,7 @@ class ExplainBot:
         Returns the questions and attributes for the current dataset.
         """
         question_pd = pd.read_csv(self.conversation.question_bank_path, delimiter=";")
-        feature_names = self.categorical_features + self.numerical_features
+        feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
         answer_dict = {
             "general_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in question_pd[question_pd["question_type"] == "general"].iterrows()], #question_pd[question_pd["question_type"] == "general"][["q_id", "paraphrased"]],
             "feature_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in question_pd[question_pd["question_type"] == "feature"].iterrows()], #list(question_pd[question_pd["question_type"] == "feature"][["q_id", "paraphrased"]].values),
@@ -262,7 +272,7 @@ class ExplainBot:
             for i, val in enumerate(current_instance):
                 if i in self.categorical_mapping:
                     instance_result_dict[dataset_pd.columns[i]] = self.categorical_mapping[i][val]
-            instance_results.append(instance_result_dict)
+            instance_results.append((id, instance_result_dict))
         self.data_instances = instance_results
 
     def load_model(self, filepath: str):
@@ -504,8 +514,7 @@ class ExplainBot:
             returned_item = run_action(
                 user_session_conversation, parse_tree, parsed_text)
         else:
-            # TODO: Provide real question ID here
-            instance_id = self.conversation.get_var('diverse_instances').contents[0]["id"]
+            instance_id = self.current_instance[0]
             returned_item = run_action_by_id(user_session_conversation, int(text), instance_id)
 
         username = user_session_conversation.username
@@ -545,8 +554,9 @@ class ExplainBot:
             return ''
 
         app.logger.info(f'USER INPUT: q_id:{question_id}, f_id:{feature_id}')
-        instance_id = self.conversation.get_var('diverse_instances').contents[0]["id"]  # TODO: Get current instance
-        returned_item = run_action_by_id(user_session_conversation, int(question_id), instance_id, int(feature_id))
+        instance_id = self.current_instance[0]
+        returned_item = run_action_by_id(user_session_conversation, int(question_id), instance_id,
+                                         int(feature_id))
 
         username = user_session_conversation.username  # TODO: Check if needed?!
 
