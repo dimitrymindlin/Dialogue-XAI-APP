@@ -61,10 +61,16 @@ def home():
     objective = BOT.conversation.describe.get_dataset_objective()
     return render_template("new.html", currentUserId="user", datasetObjective=objective)
 
+
 @bp.route('/get_datapoint', methods=['GET'])
 def get_datapoint():
-    data_instances = BOT.load_data_instances()
-    return data_instances[0]
+    """
+    Get a new datapoint from the dataset.
+    Currently infinity loop.
+    TODO: Check with michi where experiment handling will be.
+    """
+    instance = BOT.data_instances.pop(0) if len(BOT.data_instances) > 0 else BOT.load_data_instances()[0]
+    return instance
 
 
 @bp.route("/log_feedback", methods=['POST'])
@@ -127,6 +133,7 @@ def get_questions():
             app.logger.info(f"Exception getting questions: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
         return response
+
 
 @bp.route("/get_response", methods=['POST'])
 def get_bot_response():

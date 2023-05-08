@@ -123,6 +123,8 @@ class ExplainBot:
                                dataset_name=name)"""
         self.decoder = None
 
+        self.data_instances = []
+
         # Initialize parser + prompts as None
         # These are done when the dataset is loaded
         self.prompts = None
@@ -249,17 +251,19 @@ class ExplainBot:
         # list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
 
-    def load_data_instances(self, ids=[993]):
+    def load_data_instances(self):
         dataset_pd = self.conversation.get_var("dataset").contents['X']
+        diverse_instances = self.conversation.get_var("diverse_instances").contents
         instance_results = []
-        for id in ids:
+        for instance in diverse_instances:
+            id = instance['id']
             current_instance = list(dataset_pd.loc[id].values)
             instance_result_dict = {}
             for i, val in enumerate(current_instance):
                 if i in self.categorical_mapping:
                     instance_result_dict[dataset_pd.columns[i]] = self.categorical_mapping[i][val]
             instance_results.append(instance_result_dict)
-        return instance_results
+        self.data_instances = instance_results
 
     def load_model(self, filepath: str):
         """Loads a model.
