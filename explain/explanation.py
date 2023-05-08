@@ -302,6 +302,13 @@ class MegaExplainer(Explanation):
             sig_coefs.sort(reverse=True, key=lambda x: abs(x[1]))
             app.logger.info(sig_coefs)
 
+            # round the feature importance values to 2 decimal places
+            for i in range(len(sig_coefs)):
+                sig_coefs[i][1] = round(sig_coefs[i][1], 2)
+
+            # Remove those with a feature importance of 0
+            sig_coefs = [x for x in sig_coefs if x[1] != 0]
+
             # Add full list of feature importances to the comprehensive print out
             shortened_output += "<ul>"
             for i, sig in enumerate(sig_coefs):

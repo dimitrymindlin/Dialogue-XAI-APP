@@ -55,6 +55,12 @@ def get_feature_importance_by_feature_id(conversation,
     feature_importance_ranking = list(feature_importances[label].keys()).index(feature_name)
     feature_importance_value = feature_importances[label][feature_name]
     feature_importance_value = round(feature_importance_value[0], 3)
+
+    # If the feature importance value is 0, then the feature is not important for the prediction
+    if feature_importance_value == 0:
+        output_text = f"The feature <em>{feature_name}</em> is not important for the prediction."
+        return output_text, 1, 0
+
     feature_importance_ranking_name = feature_importance_ranking + 1
     if feature_importance_ranking_name == 1:
         feature_importance_ranking_name = 'most'
