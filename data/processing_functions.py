@@ -158,6 +158,22 @@ def get_and_preprocess_german_short():
     x_values['Age'] = pd.cut(x_values['Age'], bins=[18, 25, 35, 60, 120],
                              labels=['student', 'young', 'adult', 'senior'])
 
+    # Rename columns
+    x_values = x_values.rename(columns={"Age": "Age Group",
+                                        "Sex": "Gender",
+                                        "Job": "Job Level",
+                                        "Housing": "Housing Type",
+                                        "Duration": "Credit Duration",
+                                        "Purpose": "Credit Purpose"})
+
+    # Rename values in column "job Level"
+    x_values['Job Level'] = x_values['Job Level'].replace(
+        {0: 'unskilled and non-resident', 1: 'unskilled and resident', 2: 'skilled', 3: 'highly skilled'})
+
+    # Rename values in colmn "housing type"
+    x_values['Housing Type'] = x_values['Housing Type'].replace(
+        {'free': 'lives in housing that is free', 'rent': 'rents their housing', 'own': 'owns a house'})
+
     col_names = list(x_values.columns)
 
     # Transform target label to 0 and 1.
@@ -165,7 +181,13 @@ def get_and_preprocess_german_short():
 
     # Transform categorical values to int with LabelEncoder
     data_columns = list(x_values.columns)
-    categorical_col_names = ['Age', 'Sex', 'Job', 'Housing', 'Saving accounts', 'Checking account', 'Purpose']
+    categorical_col_names = ['Age Group',
+                             'Gender',
+                             'Job Level',
+                             'Housing Type',
+                             'Saving accounts',
+                             'Checking account',
+                             'Credit Purpose']
 
     categorical_col_ids = [data_columns.index(col) for col in categorical_col_names]
 

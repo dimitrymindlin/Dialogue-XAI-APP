@@ -19,8 +19,8 @@ ExplainBot.dataset_index_column = 0
 ExplainBot.target_variable_name = "y"
 # ExplainBot.categorical_features = ["gender", "foreignworker", "single", "hastelephone", "checkingaccountbalancegreaterorequalto0", "checkingaccountbalancegreaterorequalthan200", "savingsaccountbalancegreaterorequalthan200", "savingsaccountbalancegreaterorequalthan500", "missedpayments", "nocurrentloan", "criticalaccountorloanselsewhere", "otherloansatbank", "otherloansatstore", "hascoapplicant", "hasguarantor", "ownshouse", "rentshouse", "unemployed", "yearsatcurrentjoblessthan1", "yearsatcurrentjobgreaterorequalthan4", "jobclassisskilled"]
 # ExplainBot.numerical_features = ["age", "loanduration", "loanamount", "yearsatcurrenthome", "loanrateaspercentofincome", "numberofotherloansatbank", "numberofliableindividuals", 'loanpurposebusiness', 'loanpurposeeducation', 'loanpurposeelectronics', 'loanpurposefurniture', 'loanpurposehomeappliances', 'loanpurposenewcar', 'loanpurposeother', 'loanpurposerepairs', 'loanpurposeretraining', 'loanpurposeusedcar']
-ExplainBot.categorical_features = ['Sex', 'Job', 'Housing', 'Saving accounts', 'Checking account', 'Purpose']
-ExplainBot.numerical_features = ['Age', 'Credit amount', 'Duration']
+ExplainBot.categorical_features = ['Age Group','Gender', 'Job Level', 'Housing Type', 'Saving accounts', 'Checking account', 'Credit Purpose']
+ExplainBot.numerical_features = ['Credit amount', 'Credit Duration']
 ExplainBot.remove_underscores = True
 ExplainBot.categorical_mapping_path = "./data/german_column_id_to_values_mapping.json"
 

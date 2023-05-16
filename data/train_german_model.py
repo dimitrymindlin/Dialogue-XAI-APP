@@ -25,11 +25,13 @@ age_categories = [[0, 1, 2, 3]]
 savings_categories = [[0, 1, 2, 3, 4]]
 # checking_categories = [['NA', 'little', 'moderate', 'rich']]
 checking_categories = [[0, 1, 2, 3]]
-one_hot_col_names = ['Sex', 'Housing', 'Purpose']
-sex_categories = [list(np.sort(german_data['x_values']['Sex'].unique()))]
-housing_categories = [list(np.sort(german_data['x_values']['Housing'].unique()))]
-purpose_categories = [list(np.sort(german_data['x_values']['Purpose'].unique()))]
-standard_scaler_col_list = ['Credit amount', 'Duration']
+job_level_categories = [[0, 1, 2, 3]]
+one_hot_col_names = ['Gender', 'Housing Type', 'Credit Purpose']
+sex_categories = [list(np.sort(german_data['x_values']['Gender'].unique()))]
+housing_categories = [list(np.sort(german_data['x_values']['Housing Type'].unique()))]
+purpose_categories = [list(np.sort(german_data['x_values']['Credit Purpose'].unique()))]
+
+standard_scaler_col_list = ['Credit amount', 'Credit Duration']
 
 X_values = german_data["x_values"]
 y_values = german_data["y_values"]
@@ -60,12 +62,13 @@ X_test = X_test.values
 data_columns = german_data['column_names']
 preprocessor = ColumnTransformer(
     [
-        ('onehot_sex', OneHotEncoder(categories=sex_categories), [data_columns.index('Sex')]),
-        ('onehot_housing', OneHotEncoder(categories=housing_categories), [data_columns.index('Housing')]),
-        ('onehot_purpose', OneHotEncoder(categories=purpose_categories), [data_columns.index('Purpose')]),
+        ('onehot_sex', OneHotEncoder(categories=sex_categories), [data_columns.index('Gender')]),
+        ('onehot_housing', OneHotEncoder(categories=housing_categories), [data_columns.index('Housing Type')]),
+        ('onehot_purpose', OneHotEncoder(categories=purpose_categories), [data_columns.index('Credit Purpose')]),
         ('ordinal_saving', OrdinalEncoder(categories=savings_categories), [data_columns.index('Saving accounts')]),
         ('ordinal_checking', OrdinalEncoder(categories=checking_categories), [data_columns.index('Checking account')]),
-        ('ordinal_age', OrdinalEncoder(categories=age_categories), [data_columns.index('Age')]),
+        ('ordinal_age', OrdinalEncoder(categories=age_categories), [data_columns.index('Age Group')]),
+        ('ordinal_job', OrdinalEncoder(categories=age_categories), [data_columns.index('Job Level')]),
         ('scaler', StandardScaler(), [data_columns.index(col) for col in standard_scaler_col_list])
     ],
     remainder='drop'
