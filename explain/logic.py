@@ -8,7 +8,7 @@ import json
 import pickle
 from random import seed as py_random_seed
 import secrets
-
+from jinja2 import Environment, FileSystemLoader
 import numpy as np
 import pandas as pd
 import torch
@@ -17,6 +17,7 @@ from flask import Flask
 import gin
 
 from explain.action import run_action, run_action_by_id
+from explain.actions.explanation import explain_cfe, explain_cfe_by_given_features
 from explain.conversation import Conversation
 from explain.decoder import Decoder
 from explain.explanation import MegaExplainer
@@ -574,3 +575,259 @@ class ExplainBot:
         # final_result = returned_item + f"<>{response_id}"
         final_result = returned_item
         return final_result
+
+    def build_exit_survey_table(self):
+        mega_explainer = self.conversation.get_var('mega_explainer').contents
+        diverse_instances = self.conversation.get_var('diverse_instances').contents
+        # Load md file
+        file_loader = FileSystemLoader('.')
+        env = Environment(loader=file_loader)
+        template = env.get_template('templates/exit_questionnaire_template.md')
+        model = self.conversation.get_var("model").contents
+
+        def get_features_by_avg_rank(lists):
+            """
+            Computes the feature(s) with the highest or lowest average rank across multiple lists.
+
+            Parameters:
+                lists (list[list[str]]): A list of lists, where each list contains a set of features in a specific order.
+
+
+            Returns:
+                Tuple[list[str], list[str]]: A Tuple of lists of features with the highest (Tuple[0]) and lowest (Tuple[1])
+                 average rank across all lists.
+            """
+
+            # Create a dictionary to store the total rank of each feature and the number of times it appears in the lists
+            feature_count = {}
+            total_rank = {}
+
+            # Loop through the lists and calculate the total rank of each feature
+            for lst in lists:
+                for i, feature in enumerate(lst):
+                    feature_count[feature] = feature_count.get(feature, 0) + 1
+                    total_rank[feature] = total_rank.get(feature, 0) + i + 1
+
+            # Calculate the average rank for each feature
+            avg_ranks = {feature: total_rank[feature] / feature_count[feature] for feature in feature_count}
+            # Return all features ordered by the highest or lowest average rank
+            return sorted(avg_ranks, key=avg_ranks.get, reverse=False), sorted(avg_ranks, key=avg_ranks.get,
+                                                                               reverse=True)
+
+        def turn_df_instance_to_dict(instance):
+            """
+            Change pandas instance to a dictionary to print to md file.
+            """
+            person_dict = {}
+            for col_id, (key, value) in enumerate(instance.to_dict().items()):
+                col_name = instance.columns[col_id]
+                if col_name in self.categorical_features:
+                    value = self.categorical_mapping[col_id][int(value[instance.index[0]])]
+                else:
+                    value = value[instance.index[0]]
+                person_dict[key] = value
+            return person_dict
+
+        def change_slightly_attributes(instance):
+            """
+            Changes slightly the attributes of an instance and ensure that the new instance does not flip
+            the classifiers prediction.
+            """
+            changeable_features = ["Credit Purpose", "Gender", "Age Group"]
+            result_instance = None
+            for feature_name in changeable_features:
+                # randomly decide if this feature should be changed
+                if np.random.randint(0, 3) == 0:  # 66% chance to change
+                    continue
+                tmp_instance = instance.copy() if result_instance is None else result_instance.copy()
+
+                # Get random change value for this feature
+                random_change = np.random.randint(0,
+                                                  len(self.categorical_mapping[instance.columns.get_loc(feature_name)]))
+                tmp_instance.at[tmp_instance.index[0], feature_name] += random_change
+                tmp_instance.at[tmp_instance.index[0], feature_name] %= len(
+                    self.categorical_mapping[instance.columns.get_loc(feature_name)])
+                # Check if prediction stays the same
+                if model.predict(tmp_instance)[0] == \
+                        model.predict(instance)[0]:
+                    result_instance = tmp_instance.copy()
+            return result_instance
+
+        # First, get most important feature across all instances
+        feature_importances_list = []
+        # iterate over data df and handle each row as an instance (pandas df)
+        for row in diverse_instances:
+            data = pd.DataFrame(row['values'], index=[row['id']])
+            feature_importance_dict = mega_explainer.get_feature_importances(data, [], False)[0]
+            for label, feature_importances in feature_importance_dict.items():
+                feature_importances_list.append(list(feature_importances.keys()))
+
+        most_important_features_list, least_important_features_list = get_features_by_avg_rank(feature_importances_list)
+
+        # Second, counterfactual thinking
+        ### get a random instance from the dataset
+        cf_count = 0
+        for instance in diverse_instances:
+            if cf_count == 2:
+                break
+            # turn the instance into a pandas df
+            instance = pd.DataFrame(instance['values'], index=[instance['id']])
+            instance_copy = instance.copy()
+            # change slightly the attributes of the instance
+            instance_copy = change_slightly_attributes(instance_copy)
+
+            # Turn instance into key-value dict
+            a2_instance_dict = turn_df_instance_to_dict(instance_copy)
+            prediction = model.predict(instance_copy)[0]
+            # Get necessary textes
+            prediction_text = self.conversation.class_names[prediction]
+            alternative_prediction_text = self.conversation.class_names[1 - prediction]
+
+            # Find such cfe's that only a single attribute is changed.
+            feature_names_to_value_mapping = {}
+            for feature in instance.columns:
+
+                cfe_string, _ = explain_cfe_by_given_features(self.conversation, instance, [feature])
+                if cfe_string != 'There are no changes possible to the chosen attribute that would result in a different prediction.':
+                    try:
+                        feature_name = cfe_string.split("change")[1].split("to")[0].strip()
+                        alternative_feature_value = cfe_string.split("change")[1].split("to")[1].split("<")[0].strip()
+                    except IndexError:  # numerical feature
+                        feature_name = cfe_string.split("crease")[1].split("to")[0].strip()  # increase or decrease
+                        alternative_feature_value = cfe_string.split("crease")[1].split("to")[1].split("<")[0].strip()
+                    feature_names_to_value_mapping[feature_name] = alternative_feature_value
+                if len(feature_names_to_value_mapping) > 1 and cf_count == 0:
+                    break  # Stop for first CF. Only need one.
+
+            if len(feature_names_to_value_mapping) == 0:
+                continue  # if such cfe's don't exist, continue with next instance
+            if len(feature_names_to_value_mapping) < 3 and cf_count == 1:
+                continue  # if second cf round, we need more possible cfs... at least 3!
+
+            # Get textes for each feature change
+            for feature_name, alternative_feature_value in feature_names_to_value_mapping.items():
+                feature_names_to_value_mapping[feature_name] = alternative_feature_value
+                feature_index = instance.columns.get_loc(feature_name)
+                if feature_name in self.categorical_features:
+                    alt_feature_values = self.categorical_mapping[feature_index].copy()
+                    alt_feature_values.remove(alternative_feature_value)
+                else:
+                    # for numerical values...
+                    # TODO: HOW TO HANDLE THIS?!
+                    alt_feature_values = ["ADD_VALUE_HERE", "ADD_VALUE_HERE"]
+                # if first cf, save it
+
+                if cf_count == 0:
+                    a2_q1_1 = a2_instance_dict
+                    a2_q1_2 = prediction_text
+                    a2_q1_3 = feature_name
+                    a2_q1_4 = alternative_prediction_text
+                    a2_q1_5 = f"Change {feature_name} to {alternative_feature_value}"
+                    a2_q1_6 = f"Change {feature_name} to {alt_feature_values[0]}"
+                    a2_q1_7 = f"Change {feature_name} to {alt_feature_values[1]}"
+                    break
+            # For second cf, save the 3 possibilities
+            if cf_count == 1:
+                # Get multiple counterfactuals that are true and make 2 up that are false.
+                cf_string_list = []
+                for feature, value in feature_names_to_value_mapping.items():
+                    cf_string_list.append(f"Change {feature} to {value}")
+
+                non_cf_string_list = []
+                non_cf_features = list(set(instance.columns) - set(feature_names_to_value_mapping.keys()))
+                for feature in non_cf_features:
+                    # Value should be different from original instance
+                    original_value = instance[feature].values[0]
+                    feature_id = instance.columns.get_loc(feature)
+                    if feature in self.categorical_features:
+                        original_categorical = self.categorical_mapping[feature_id][
+                            original_value]
+                        non_cf_feature_values = self.categorical_mapping[feature_id].copy()
+                        non_cf_feature_values.remove(original_categorical)
+                        non_cf_string_list.append(f"Change {feature} to {non_cf_feature_values[-1]}")
+                    else:
+                        non_cf_string_list.append(f"Change {feature} to ADD_VALUE_HERE")
+
+                a2_q2_1 = a2_instance_dict
+                a2_q2_2 = prediction_text
+                a2_q2_3 = alternative_prediction_text
+                a2_q2_4 = cf_string_list[0]
+                a2_q2_5 = cf_string_list[1]
+                a2_q2_6 = non_cf_string_list[0]
+                a2_q2_7 = non_cf_string_list[1]
+                a2_q2_8 = cf_string_list[2]
+
+            cf_count += 1
+
+        # Third, Simulate Model Behavior
+        # 3.1 Present an instance and ask for prediction
+        for instance in diverse_instances:
+            # turn the instance into a pandas df
+            instance = pd.DataFrame(instance['values'], index=[instance['id']])
+            instance_copy = instance.copy()
+
+            # Change some attributes that don't change the prediction
+            instance_copy = change_slightly_attributes(instance_copy)
+            if instance_copy is None:
+                continue
+
+            # turn instance_copy into a dict
+            a3_1_instance_dict = turn_df_instance_to_dict(instance_copy)
+
+        # 3.2 present 3 instances and ask which is most likely to be high risk
+        found_high_risk = None
+        not_high_risk = []
+        for instance in diverse_instances:
+            # turn the instance into a pandas df
+            instance = pd.DataFrame(instance['values'], index=[instance['id']])
+            instance_copy = instance.copy()
+
+            # Change some attributes that don't change the prediction
+            instance_copy = change_slightly_attributes(instance_copy)
+            if instance_copy is None:
+                continue
+
+            # get instance prediction
+            instance_prediction = model.predict(instance_copy)[0]
+            if instance_prediction == 0:
+                found_high_risk = turn_df_instance_to_dict(instance_copy)
+            else:
+                not_high_risk.append(turn_df_instance_to_dict(instance_copy))
+            if len(not_high_risk) > 1 and found_high_risk is not None:
+                break
+
+        markdown = template.render(
+            a1_q1_1=most_important_features_list[0],
+            a1_q1_2=least_important_features_list[1],
+            a1_q1_3=least_important_features_list[2],
+            a1_q2_1=least_important_features_list[0],
+            a1_q2_2=most_important_features_list[1],
+            a1_q2_3=most_important_features_list[2],
+            a2_q1_1=a2_q1_1,
+            a2_q1_2=a2_q1_2,
+            a2_q1_3=a2_q1_3,
+            a2_q1_4=a2_q1_4,
+            a2_q1_5=a2_q1_5,
+            a2_q1_6=a2_q1_6,
+            a2_q1_7=a2_q1_7,
+            a2_q2_1=a2_q2_1,
+            a2_q2_2=a2_q2_2,
+            a2_q2_3=a2_q2_3,
+            a2_q2_4=a2_q2_4,
+            a2_q2_5=a2_q2_5,
+            a2_q2_6=a2_q2_6,
+            a2_q2_7=a2_q2_7,
+            a2_q2_8=a2_q2_8,
+            a3_q1_1=a3_1_instance_dict,
+            a3_q1_2=prediction_text,
+            a3_q1_3=alternative_prediction_text,
+            a3_q2_1=not_high_risk[0],
+            a3_q2_2=not_high_risk[1],
+            a3_q2_3=found_high_risk,
+            a3_q2_4=self.conversation.class_names[0]
+        )
+
+        # Save the rendered Markdown to a file
+        output_file = 'exit_questionnaire_filled.md'
+        with open(output_file, 'w') as file:
+            file.write(markdown)
