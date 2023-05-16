@@ -161,6 +161,23 @@ class TabularDice(Explanation):
         change_string = change_string[:-5]
         return change_string
 
+    def get_final_cfes(self, data, ids, ids_to_regenerate=None, save_to_cache=False):
+        """
+        Returns the final cfes as pandas df and their ids for a given data instance.
+        """
+        explanation = self.get_explanations(ids,
+                                            data,
+                                            ids_to_regenerate=ids_to_regenerate,
+                                            save_to_cache=save_to_cache)
+
+        cfe = explanation[ids[0]]
+        final_cfes = cfe.cf_examples_list[0].final_cfs_df
+        final_cfe_ids = list(final_cfes.index)
+
+        if self.temp_outcome_name in final_cfes.columns:
+            final_cfes.pop(self.temp_outcome_name)
+        return final_cfes, final_cfe_ids
+
     def summarize_explanations(self,
                                data: pd.DataFrame,
                                ids_to_regenerate: list[int] = None,
@@ -187,21 +204,9 @@ class TabularDice(Explanation):
         ids = list(data.index)
         key = ids[0]
 
-        explanation = self.get_explanations(ids,
-                                            data,
-                                            ids_to_regenerate=ids_to_regenerate,
-                                            save_to_cache=save_to_cache)
-        original_prediction = self.model.predict(data)[0]
-        original_label = self.get_label_text(original_prediction)
-
-        cfe = explanation[key]
-        final_cfes = cfe.cf_examples_list[0].final_cfs_df
-        final_cfe_ids = list(final_cfes.index)
-
-        if self.temp_outcome_name in final_cfes.columns:
-            final_cfes.pop(self.temp_outcome_name)
-
-        new_predictions = self.model.predict(final_cfes)
+        final_cfes, final_cfe_ids = self.get_final_cfes(data, ids,
+                                                        ids_to_regenerate=ids_to_regenerate,
+                                                        save_to_cache=save_to_cache)
 
         original_instance = data.loc[[key]]
 
