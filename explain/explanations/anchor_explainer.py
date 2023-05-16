@@ -63,7 +63,7 @@ class TabularAnchor(Explanation):
         if self.mode == "tabular":
             output = self.explainer.explain_instance(data_x[0],
                                                      self.model.predict,
-                                                     threshold=0.85,
+                                                     threshold=0.95,
                                                      max_anchor_size=3)
             return output
 
@@ -117,25 +117,7 @@ class TabularAnchor(Explanation):
                                             data,
                                             ids_to_regenerate=ids_to_regenerate,
                                             save_to_cache=save_to_cache)
-        original_prediction = self.model.predict(data)[0]
-        original_label = self.get_label_text(original_prediction)
-
         exp = explanation[key]
-
-        print('Anchor: %s' % (' AND '.join(exp.names())))
-        print('Precision: %.2f' % exp.precision())
-        print('Coverage: %.2f' % exp.coverage())
-        print()
-        # TODO: Understand coverage and precision for impact of explanation
-
-        original_instance = data.loc[[key]]
-        # TODO: Write Better Output explanation
-        if filtering_text is not None and len(filtering_text) > 0:
-            filtering_description = f"For instances where <b>{filtering_text}</b>"
-        else:
-            filtering_description = ""
-        #output_string = f"{filtering_description}, the original prediction is "
-        #output_string += f"<em>{original_label}</em>. "
         output_string = ""
         output_string += "By fixing the following attributes, the prediction stays the same even though other attributes are changed:"
         output_string += "<br><br>"
@@ -143,23 +125,6 @@ class TabularAnchor(Explanation):
         additional_options = "Here are some more options to change the prediction of"
         additional_options += f" instance id {str(key)}.<br><br>"
 
-        output_string += ' AND '.join(exp.names())
-        """transition_words = ["Further,", "Also,", "In addition,", "Furthermore,"]
-
-        for i, c_id in enumerate(final_cfe_ids):
-            # Stop the summary in case its getting too large
-            if i < self.num_in_short_summary:
-                if i != 0:
-                    output_string += f"{np.random.choice(transition_words)} if you <em>"
-                output_string += self.get_change_string(final_cfes.loc[[c_id]], original_instance)
-                new_prediction = self.get_label_text(new_predictions[i])
-                output_string += f"</em>, the model will predict {new_prediction}.<br><br>"
-            else:
-                additional_options += "If you <em>"
-                additional_options += self.get_change_string(final_cfes.loc[[c_id]], original_instance)
-                new_prediction = self.get_label_text(new_predictions[i])
-                additional_options += f"</em>, the model will predict {new_prediction}.<br><br>"
-
-        output_string += "If you want some more options, just ask &#129502"""
+        output_string += ' AND <br><br>'.join(exp.names())
 
         return additional_options, output_string
