@@ -354,7 +354,7 @@ class ExplainBot:
             # Store the dataset
             self.conversation.add_dataset(dataset, y_values, categorical, numeric)
 
-            # Set up the parser
+            """# Set up the parser
             self.parser = Parser(cat_features=categorical,
                                  num_features=numeric,
                                  dataset=dataset,
@@ -368,7 +368,7 @@ class ExplainBot:
                                    target=np.unique(list(y_values)),
                                    feature_value_dict=self.parser.features,
                                    class_names=self.conversation.class_names,
-                                   skip_creating_prompts=skip_prompts)
+                                   skip_creating_prompts=skip_prompts)"""
             app.logger.info("..done")
 
             return "success"
