@@ -155,6 +155,7 @@ class Explainer:
 
     def _compute_faithfulness_auc(self, data, explanation, c_label, k, metric="topk"):
         """Computes AUC for faithfulness scores, perturbing top k (where k is an array).
+        AKA. Fudge Score in the paper?!
 
         Args:
             data:

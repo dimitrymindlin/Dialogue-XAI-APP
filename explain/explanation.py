@@ -365,7 +365,7 @@ class MegaExplainer(Explanation):
         Returns:
             summary: a string containing the summary.
         """
-
+        # TODO(dimi): Currently only works if data is one instance.
         # Note that the explanations are returned as MegaExplanation
         # dataclass instances
         if ids_to_regenerate is None:

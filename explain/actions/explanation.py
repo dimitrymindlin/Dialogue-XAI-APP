@@ -49,7 +49,7 @@ def get_feature_importance_by_feature_id(conversation,
     """Get Lime or SHAP explanation for a specific feature, considering fidelity (mega explainer functionality)"""
     feature_name = data.columns[feature_id]
     mega_explainer_exp = conversation.get_var('mega_explainer').contents
-    feature_importances, scores = mega_explainer_exp.get_feature_importances(data=data, ids_to_regenerate=regen)
+    feature_importances, _ = mega_explainer_exp.get_feature_importances(data=data, ids_to_regenerate=regen)
     label = list(feature_importances.keys())[0]  # TODO: Currently only working for 1 instance in data.
     # Get ranking of feature importance (position in feature_importances)
     feature_importance_ranking = list(feature_importances[label].keys()).index(feature_name)
@@ -93,7 +93,7 @@ def explain_cfe_by_given_features(conversation,
         feature_names_list: List of feature names to change
     """
     dice_tabular = conversation.get_var('tabular_dice').contents
-    cfes = dice_tabular.run_explanation(data, "opposite", feature_names_list)
+    cfes = dice_tabular.run_explanation(data, "opposite", features_to_vary=feature_names_list)
     for instance_id, cfe in cfes.items():
         change_string = dice_tabular.summarize_cfe(cfe, data)
     conversation.store_followup_desc(change_string[0])
