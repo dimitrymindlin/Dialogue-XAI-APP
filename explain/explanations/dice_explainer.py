@@ -46,6 +46,7 @@ class TabularDice(Explanation):
         self.num_in_short_summary = num_in_short_summary
         self.categorical_mapping = categorical_mapping
         self.dice_model = dice_ml.Model(model=self.model, backend="sklearn")
+        self.permitted_range_dict = None
 
         # Format data in dice accepted format
         predictions = self.model.predict(data)
@@ -99,9 +100,10 @@ class TabularDice(Explanation):
             desired_class = self.desired_class
 
         # Calculate permitted range for each feature
-        permitted_range_dict = {}
-        for feature in self.num_features:
-            permitted_range_dict[feature] = [data[feature].min(), data[feature].max()]
+        if not self.permitted_range_dict:
+            self.permitted_range_dict = {}
+            for feature in self.num_features:
+                self.permitted_range_dict[feature] = [data[feature].min(), data[feature].max()]
 
         cfes = {}
         for d in tqdm(list(data.index)):
@@ -110,12 +112,13 @@ class TabularDice(Explanation):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 if self.non_binary and desired_class == "opposite":
-                    desired_class = int(np.random.choice([p for p in self.classes if p != self.model.predict(data.loc[[d]])[0]]))
+                    desired_class = int(
+                        np.random.choice([p for p in self.classes if p != self.model.predict(data.loc[[d]])[0]]))
                 cur_cfe = self.exp.generate_counterfactuals(data.loc[[d]],
                                                             total_CFs=self.num_cfes_per_instance,
                                                             desired_class=desired_class,
                                                             features_to_vary=features_to_vary,
-                                                            permitted_range=permitted_range_dict)
+                                                            permitted_range=self.permitted_range_dict)
             cfes[d] = cur_cfe
         return cfes
 
