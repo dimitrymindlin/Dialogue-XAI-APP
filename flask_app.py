@@ -52,6 +52,7 @@ gin.parse_config_file(args.config)
 
 # Setup the explainbot
 BOT = ExplainBot()
+#BOT.build_exit_survey_table()
 
 
 @bp.route('/')
