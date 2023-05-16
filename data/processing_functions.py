@@ -82,13 +82,12 @@ def _save_column_id_to_value_index_mapping(data: np.ndarray,
     """
     categorical_names = {}
     for column_id in column_ids:
-        if column_id != 2:  # Ignore column 'Job' because it is already in int.
-            # As in LIME example "Categorical features"
-            # https://marcotcr.github.io/lime/tutorials/Tutorial%20-%20continuous%20and%20categorical%20features.html
-            le = LabelEncoder()
-            le.fit(data[:, column_id])
-            data[:, column_id] = le.transform(data[:, column_id])
-            categorical_names[column_id] = le.classes_.tolist()
+        # As in LIME example "Categorical features"
+        # https://marcotcr.github.io/lime/tutorials/Tutorial%20-%20continuous%20and%20categorical%20features.html
+        le = LabelEncoder()
+        le.fit(data[:, column_id])
+        data[:, column_id] = le.transform(data[:, column_id])
+        categorical_names[column_id] = le.classes_.tolist()
 
     with open("german_column_id_to_values_mapping.json", "w") as f:
         json.dump(categorical_names, f)
