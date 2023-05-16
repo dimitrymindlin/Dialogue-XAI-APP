@@ -268,11 +268,13 @@ class ExplainBot:
         instance_results = []
         for instance in diverse_instances:
             id = instance['id']
-            current_instance = list(dataset_pd.loc[id].values)
+            # current_instance = list(dataset_pd.loc[id].values)
             instance_result_dict = {}
-            for i, val in enumerate(current_instance):
+            for i, (feature_name, val) in enumerate(instance['values'].items()):
                 if i in self.categorical_mapping:
-                    instance_result_dict[dataset_pd.columns[i]] = self.categorical_mapping[i][val]
+                    instance_result_dict[feature_name] = self.categorical_mapping[i][val]
+                else:
+                    instance_result_dict[feature_name] = val
             instance_results.append((id, instance_result_dict))
         self.data_instances = instance_results
 
