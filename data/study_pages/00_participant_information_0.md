@@ -12,6 +12,7 @@ Please take a moment to answer the following questions:
 - What is your gender? [necessary???]
 - What is your educational background, e.g. what do you study? [dropdown]
 - What is your level of familiarity with machine learning models and artificial intelligence? [range]
+- What is your level of familiarity with the topic of credit risk assessment? [range]
 
 Your responses will be kept confidential, and we will only use them to help us analyze the results of our study.
 

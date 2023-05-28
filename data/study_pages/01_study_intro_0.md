@@ -18,5 +18,6 @@ For example, given an applicant with the following attributes:
 The model would give the prediction that this is a high risk customer and the loan should not be approved.
 Such a model can also provide its confidence in the prediction. In this case, the model is 99% confident in its prediction.
 
+## Decsribe how a model makes a prediction, what are features?
 Next &rarr;
 

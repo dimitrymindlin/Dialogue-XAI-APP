@@ -88,7 +88,6 @@ What do you think our machine learning model will predict for this person?
 
 1. The model will predict this person will bad credit risk.
 2. The model will predict this person will good credit risk.
-3.
 
 **Question 6:** Consider three people with the following profiles:
 
