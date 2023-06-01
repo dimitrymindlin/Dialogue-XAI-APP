@@ -42,7 +42,7 @@ Explanation.max_cache_size = 1_000_000
 
 # MegaExplainer Params
 MegaExplainer.cache_location = "./cache/german-mega-explainer-tabular-logistic-regression.pkl"
-MegaExplainer.use_selection = True
+MegaExplainer.use_selection = False
 
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/german-dice-tabular.pkl"
