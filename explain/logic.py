@@ -8,6 +8,8 @@ import json
 import pickle
 from random import seed as py_random_seed
 import secrets
+from typing import List
+
 from jinja2 import Environment, FileSystemLoader
 import numpy as np
 import pandas as pd
@@ -50,8 +52,8 @@ class ExplainBot:
                  background_dataset_file_path: str,
                  dataset_index_column: int,
                  target_variable_name: str,
-                 categorical_features: list[str],
-                 numerical_features: list[str],
+                 categorical_features: List[str],
+                 numerical_features: List[str],
                  remove_underscores: bool,
                  name: str,
                  parsing_model_name: str = "nearest-neighbor",
