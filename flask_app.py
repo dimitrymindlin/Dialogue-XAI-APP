@@ -7,6 +7,7 @@ import traceback
 
 from flask import Flask
 from flask import render_template, request, Blueprint
+from flask_cors import CORS
 import gin
 
 from explain.logic import ExplainBot
@@ -28,6 +29,8 @@ gin.parse_config_file("global_config.gin")
 args = GlobalArgs()
 
 bp = Blueprint('host', __name__, template_folder='templates')
+
+CORS(bp)
 
 dictConfig({
     'version': 1,
@@ -70,7 +73,8 @@ def get_datapoint():
     TODO: Check with michi where experiment handling will be.
     """
     # get_next_instance returns tuple with (id, datapoint_dict)
-    return BOT.get_next_instance()[1]
+    resp = BOT.get_next_instance()[1]
+    return resp
 
 
 @bp.route("/log_feedback", methods=['POST'])
@@ -142,7 +146,6 @@ def get_bot_response():
         app.logger.info("generating the bot response")
         try:
             data = json.loads(request.data)
-            print(f'MICHI STYLE DEBUG: ${data}')
             conversation = BOT.conversation
             question_id = data["question"]
             feature_id = data["feature"]

@@ -1,6 +1,6 @@
-## This study aims to understand how people understand machine learning models and their predictions with the help of explainable AI 
+## This study aims to understand how people understand machine learning models and their predictions with the help of explainable AI
 
-Our Machine Learning Model is trained on a collection of loan application data. 
+Our Machine Learning Model is trained on a collection of loan application data.
 It can predict whether a loan application will be approved or not.
 
 For example, given an applicant with the following attributes:
@@ -20,4 +20,3 @@ Such a model can also provide its confidence in the prediction. In this case, th
 
 ## Decsribe how a model makes a prediction, what are features?
 Next &rarr;
-
