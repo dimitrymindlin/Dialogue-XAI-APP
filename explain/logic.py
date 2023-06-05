@@ -62,7 +62,8 @@ class ExplainBot:
                  use_guided_decoding: bool = True,
                  feature_definitions: dict = None,
                  skip_prompts: bool = False,
-                 categorical_mapping_path: str = None):
+                 categorical_mapping_path: str = None,
+                 feature_tooltip_mapping = None):
         """The init routine.
 
         Arguments:
@@ -109,6 +110,7 @@ class ExplainBot:
         self.use_guided_decoding = use_guided_decoding
         self.categorical_features = categorical_features
         self.numerical_features = numerical_features
+        self.feature_tooltip_mapping = feature_tooltip_mapping
 
         # A variable used to help file uploads
         self.manual_var_filename = None
@@ -177,6 +179,12 @@ class ExplainBot:
             self.load_data_instances()  # TODO: Infinity loop - Where is experiment end determined?
         self.current_instance = self.data_instances.pop(0)
         return self.current_instance
+
+    def get_feature_tooltips(self):
+        """
+        Returns the feature tooltips for the current dataset.
+        """
+        return self.feature_tooltip_mapping
 
     def init_loaded_var(self, name: bytes):
         """Inits a var from manual load."""
@@ -830,6 +838,6 @@ class ExplainBot:
         )
 
         # Save the rendered Markdown to a file
-        output_file = 'exit_questionnaire_filled.md'
+        output_file = '03_exit_questionnaire_filled.md'
         with open(output_file, 'w') as file:
             file.write(markdown)

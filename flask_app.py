@@ -77,6 +77,15 @@ def get_datapoint():
     return resp
 
 
+@bp.route('/get_feature_tooltips', methods=['GET'])
+def get_feature_tooltips():
+    """
+    Get feature tooltips from the dataset.
+    """
+    resp = BOT.feature_tooltip_mapping()
+    return resp
+
+
 @bp.route("/log_feedback", methods=['POST'])
 def log_feedback():
     """Logs feedback"""
