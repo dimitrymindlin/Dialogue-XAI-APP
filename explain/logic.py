@@ -24,6 +24,7 @@ from explain.conversation import Conversation
 from explain.decoder import Decoder
 from explain.explanation import MegaExplainer
 from explain.explanations.anchor_explainer import TabularAnchor
+from explain.explanations.ceteris_paribus import CeterisParibus
 from explain.explanations.dice_explainer import TabularDice
 from explain.explanations.diverse_instances import DiverseInstances
 from explain.parser import Parser, get_parse_tree
