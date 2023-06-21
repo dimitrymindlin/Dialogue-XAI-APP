@@ -42,7 +42,7 @@ Explanation.max_cache_size = 1_000_000
 
 # MegaExplainer Params
 MegaExplainer.cache_location = "./cache/german-mega-explainer-tabular-logistic-regression.pkl"
-MegaExplainer.use_selection = True
+MegaExplainer.use_selection = False
 
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/german-dice-tabular.pkl"
@@ -64,3 +64,12 @@ Conversation.question_bank_path =  "./data/question_bank.csv"
 DatasetDescription.dataset_objective = "predict whether someone is good or bad credit risk"
 DatasetDescription.dataset_description = "credit risk"
 DatasetDescription.model_description = "gradient boosted tree"
+
+# Tool tips
+ExplainBot.feature_tooltip_mapping = {0: "The age range to which the applicant belongs.", 'Gender': "The gender of the applicant. (Male / Female)", 'Job Level': "The skill level of the applicant's job, measured on a scale from 0 to 3, with 0 indicating unskilled and 3 indicating highly skilled.",
+'Housing Type': "The type of housing the applicant resides in, indicating whether they own or rent.",
+'Saving accounts': "The balance in the applicant's savings account, indicating whether they have a balance and, if so, the amount.",
+'Checking account': "The balance in the applicant's checking account, indicating whether they have a balance and, if so, the amount.",
+'Credit amount': "The requested amount of credit by the applicant.",
+'Credit Duration': "The requested duration of the credit by the applicant."
+}

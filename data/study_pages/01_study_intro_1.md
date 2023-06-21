@@ -1,18 +1,15 @@
-## The study consists of 3 Phases
+## Example
 
-### Phase 1: Understanding the Model
+For example, given an applicant with the following attributes:
 
-In the first phase you will be shown {number} applicants with their attributes and the model's prediction.
-For each applicant, you will have the possibility to ask predefined questions about the prediction that will be
-answered by techniques from explainable AI. Feel free to provide your own questions if you can't find
-it in the provided collection.
+- Age: 30
+- Gender: Male
+- Job-Level: Skilled
+- Housing: Free
+- Savings Account: Moderate
+- Checking Account: Moderate
+- Credit Amount: 2862€
+- Duration: 36 months
+- Purpose: Car
 
-### Phase 2: Classifying Applicants
-
-In the second phase you will see new applicants, and you will be asked to guess how the model would decide 
-for them.
-
-### Phase 3: Final Questionaire
-
-In the final questionaire, we will ask you some questions about your experience with the study. We are interested
-in your opinion about the questions and answers and how you understood the models' behaviour.
+The model would give the prediction that this is a **high risk** customer.
