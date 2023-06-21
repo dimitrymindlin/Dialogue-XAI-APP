@@ -11,3 +11,5 @@
 9;What is the scope of change permitted to still get the same prediction?;Which changes to this person would still get the same prediction?;Anchors;Sufficiency conditions;general
 10;What is the [highest/lowest/...] feature(s) one can have to still get the same prediction?;Which maximum changes to this feature would not influence the class prediction?;Anchors;Sufficiency conditions;feature
 11;What is the necessary feature(s) present or absent to guarantee this prediction?;What attributes must be present or absent to guarantee this prediction?;Semi-Factual Explanations;Semi-Factual Explanations;general
+12;How does the prediction change when this feature changes?;How does the prediction change when this attribute changes?;Ceteris Paribus;feature
+13;How common is the current values for this attribute?;How common is the current values for this attribute?;Feature statistics; feature

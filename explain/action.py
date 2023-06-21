@@ -167,3 +167,7 @@ def run_action_by_id(conversation: Conversation,
         return explanation[0]
     else:
         return f"This is a mocked answer to your question with id {question_id}."
+    """if question_id == 12:
+        # How does the prediction change when this attribute changes? Ceteris Paribus
+        explanation = explain_ceteris_paribus(conversation, data, parse_op, regen)"""
+

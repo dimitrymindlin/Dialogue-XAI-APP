@@ -258,6 +258,14 @@ class ExplainBot:
         tabular_anchor.get_explanations(ids=list(data.index),
                                         data=data)
 
+        """# Load Ceteris Paribus Explanations
+        ceteris_paribus_explainer = CeterisParibus(model=model,
+                                                   data=data,
+                                                   ys=self.conversation.get_var('dataset').contents['y'],
+                                                   class_names=self.conversation.class_names)
+        ceteris_paribus_explainer.get_explanations(ids=list(data.index),
+                                                   data=data)"""
+
         # Add all the explanations to the conversation
         self.conversation.add_var('mega_explainer', mega_explainer, 'explanation')
         self.conversation.add_var('tabular_dice', tabular_dice, 'explanation')
