@@ -17,6 +17,8 @@ from flask import Flask
 import gin
 import numpy as np
 
+from data.response_templates.feature_importances import textual_fi_with_values, textual_fi_relational, \
+    visual_feature_importance_list
 from explain.mega_explainer.explainer import Explainer
 
 app = Flask(__name__)
@@ -219,27 +221,61 @@ class MegaExplainer(Explanation):
         return generated_explanations
 
     @staticmethod
-    def format_option_text(sig: list[float], i: int):
-        """Formats a cfe option."""
+    def format_option_text(sig: list[float],
+                           i: int):
+        """Formats a feature importance option."""
         shortened_output = ""
-
-        if sig[1] > 0:
-            pos_neg = "positive"
+        feature_name_and_value, fi_value = sig
+        if fi_value > 0:
+            pos_neg = "increases"
         else:
-            pos_neg = "negative"
+            pos_neg = "decreases"
 
         if i == 0:
-            shortened_output += (f"<b>{sig[0]}</b> is the <b>most important </b>feature and has a"
-                                 f" <em>{pos_neg}</em> influence on the predictions")
+            position = "most"
+        elif i == 1:
+            position = "second most"
+        elif i == 2:
+            position = "third most"
+        else:
+            position = f"{i + 1}."
 
-        if i == 1:
-            shortened_output += (f"<b>{sig[0]}</b> is the <b>second</b> most important feature and has a"
-                                 f" <em>{pos_neg}</em> influence on the predictions")
-        if i == 2:
-            shortened_output += (f"<b>{sig[0]}</b> is the <b>third</b> most important feature and has a"
-                                 f" <em>{pos_neg}</em> influence on the predictions")
+        shortened_output += (f"<b>{feature_name_and_value}</b> is the <b>{position}</b> important attribute and it"
+                             f" <em>{pos_neg}</em> the likelihood of the current prediction ")
 
         return shortened_output, pos_neg
+
+    def get_information_to_print_explanation(self,
+                                             feature_importances: dict,
+                                             feature_values: pandas.DataFrame = None):
+        for label in feature_importances:
+            sig_coefs = []
+            for feature_imp in feature_importances[label]:
+                if feature_values is not None and self.categorical_mapping is not None:
+                    feature_value = feature_values[feature_imp].values[0]
+                    column_id = self.data.columns.get_loc(feature_imp)
+                    try:
+                        decoded_feature_value = self.categorical_mapping[column_id][int(feature_value)]
+                    except KeyError:
+                        decoded_feature_value = feature_value
+                    sig_coefs.append([feature_imp + " = " + str(decoded_feature_value),
+                                      np.mean(feature_importances[label][feature_imp])])
+                else:
+                    sig_coefs.append([feature_imp,
+                                      np.mean(feature_importances[label][feature_imp])])
+
+            sig_coefs.sort(reverse=True, key=lambda x: abs(x[1]))
+            app.logger.info(sig_coefs)
+
+            # TODO: For type A, make with values.
+            # round the feature importance values to 2 decimal places
+            for i in range(len(sig_coefs)):
+                sig_coefs[i][1] = round(sig_coefs[i][1], 2)
+
+            # Remove those with a feature importance of 0
+            sig_coefs = [x for x in sig_coefs if x[1] != 0]
+
+        return sig_coefs
 
     def format_explanations_to_string(self,
                                       feature_importances: dict,
@@ -427,8 +463,19 @@ class MegaExplainer(Explanation):
 
         feature_importances, scores = self.get_feature_importances(data, ids_to_regenerate, save_to_cache)
 
+        # Todo: Make different types of formatting here.
+        # full_summary, short_summary = textual_fi_with_values(app.logger, feature_importances, feature_values=data)
+        sig_coefs = self.get_information_to_print_explanation(feature_importances, data)
+        # A
+        # response = textual_fi_with_values(sig_coefs)
+        # B
+        response = textual_fi_relational(sig_coefs)
+        # C # TODO: Check with michi how to show plot.
+        # response = visual_feature_importance_list(sig_coefs)
+
+        """#This is OLD 
         full_summary, short_summary = self.format_explanations_to_string(feature_importances,
                                                                          scores,
                                                                          filtering_text,
-                                                                         feature_values=data)
-        return full_summary, short_summary
+                                                                         feature_values=data)"""
+        return response

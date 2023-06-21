@@ -8,6 +8,8 @@ import json
 import pickle
 from random import seed as py_random_seed
 import secrets
+from typing import List
+
 from jinja2 import Environment, FileSystemLoader
 import numpy as np
 import pandas as pd
@@ -22,6 +24,7 @@ from explain.conversation import Conversation
 from explain.decoder import Decoder
 from explain.explanation import MegaExplainer
 from explain.explanations.anchor_explainer import TabularAnchor
+from explain.explanations.ceteris_paribus import CeterisParibus
 from explain.explanations.dice_explainer import TabularDice
 from explain.explanations.diverse_instances import DiverseInstances
 from explain.parser import Parser, get_parse_tree
@@ -50,8 +53,8 @@ class ExplainBot:
                  background_dataset_file_path: str,
                  dataset_index_column: int,
                  target_variable_name: str,
-                 categorical_features: list[str],
-                 numerical_features: list[str],
+                 categorical_features: List[str],
+                 numerical_features: List[str],
                  remove_underscores: bool,
                  name: str,
                  parsing_model_name: str = "nearest-neighbor",
@@ -262,6 +265,14 @@ class ExplainBot:
                                        feature_names=list(data.columns))
         tabular_anchor.get_explanations(ids=list(data.index),
                                         data=data)
+
+        """# Load Ceteris Paribus Explanations
+        ceteris_paribus_explainer = CeterisParibus(model=model,
+                                                   data=data,
+                                                   ys=self.conversation.get_var('dataset').contents['y'],
+                                                   class_names=self.conversation.class_names)
+        ceteris_paribus_explainer.get_explanations(ids=list(data.index),
+                                                   data=data)"""
 
         # Add all the explanations to the conversation
         self.conversation.add_var('mega_explainer', mega_explainer, 'explanation')

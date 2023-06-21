@@ -91,3 +91,4 @@ word2number==1.1
 wordninja==2.0.0
 anchor-exp>=0.0.2.0<1
 flask-cors>=3.0.10
+dalex>=1.5.0<2

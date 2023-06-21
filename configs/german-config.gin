@@ -53,6 +53,9 @@ TabularAnchor.cache_location = "./cache/german-anchor-tabular.pkl"
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/german-diverse-instances.pkl"
 
+# Ceteris Paribus
+CeterisParibus.cache_location = "./cache/german-ceteris-paribus.pkl"
+
 # Conversation params
 Conversation.class_names = {0: "bad credit risk", 1: "good credit risk"}
 Conversation.question_bank_path =  "./data/question_bank.csv"

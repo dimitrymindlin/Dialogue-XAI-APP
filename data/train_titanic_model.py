@@ -9,7 +9,8 @@ from sklearn.preprocessing import OneHotEncoder
 
 from sklearn import metrics
 from sklearn.pipeline import Pipeline
-from sklearn.svm import SVC
+#import random forest classifier
+from sklearn.ensemble import RandomForestClassifier as clf
 
 np.random.seed(0)
 parent = dirname(dirname(abspath(__file__)))
@@ -43,7 +44,7 @@ preprocessor = ColumnTransformer(
     ]
 )
 lr_pipeline = Pipeline([('preprocessing', preprocessor),
-                        ('lr', SVC(probability=True))])
+                        ('lr', clf(max_depth=4, n_estimators=10, random_state=42))])
 lr_pipeline.fit(X_train, y_train)
 
 print("Train Score:", lr_pipeline.score(X_train, y_train))
@@ -57,5 +58,14 @@ print("AUC_test", metrics.auc(fpr, tpr))
 
 with open("titanic_model_short_grad_tree.pkl", "wb") as f:
     pkl.dump(lr_pipeline, f)
+
+# Print feature importances for random forest with feature names
+feature_importances = lr_pipeline.named_steps['lr'].feature_importances_
+feature_names = lr_pipeline.named_steps['preprocessing'].get_feature_names()
+feature_names = np.array(feature_names)
+print("Feature importances:")
+for name, importance in zip(feature_names, feature_importances):
+    print(name, "=", importance)
+
 
 print("Saved model!")

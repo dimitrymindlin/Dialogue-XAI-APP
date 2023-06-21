@@ -125,20 +125,20 @@ def run_action_by_id(conversation: Conversation,
                                                   return_full_summary=False)
         answer = "The most important attributes for this prediction are: "
         return answer + explanation[0]
-    if question_id == 5:
+    """if question_id == 5:
         # Why did the model give this particular prediction for this person?
         explanation = explain_feature_importances(conversation, data, parse_op, regen,
                                                   return_full_summary=False)
         answer = "The prediction can be explained by looking at the most important attributes. <br>"
         answer += "Here are the top most important ones: <br>"
-        return answer + explanation[0]
-    if question_id == 6:
+        return answer + explanation[0]"""
+    if question_id == 5:
         # What attributes of this person led the model to make this prediction?
         explanation = explain_feature_importances(conversation, data, parse_op, regen,
                                                   return_full_summary=False)
         answer = "The following attributes were most important for the prediction. "
         return answer + explanation[0]
-    if question_id == 7:
+    if question_id == 6:
         # What would happen to the prediction if we changed [feature] for this person?
         explanation = explain_cfe_by_given_features(conversation, data, [feature_name])
         if explanation[1] == 0:
@@ -146,24 +146,28 @@ def run_action_by_id(conversation: Conversation,
         else:
             answer = explanation[0]
         return answer
-    if question_id == 8:
+    if question_id == 7:
         # How should this person change to get a different prediction?
         explanation = explain_cfe(conversation, data, parse_op, regen)
         return explanation[0]
-    if question_id == 9:
+    if question_id == 8:
         # How should this attribute change to get a different prediction?
         explanation = explain_cfe_by_given_features(conversation, data, [feature_name])
         return explanation[0]
-    if question_id == 10:
+    if question_id == 9:
         # Which changes to this person would still get the same prediction?
         explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
         return explanation[0]
-    if question_id == 11:
+    if question_id == 10:
         # Which maximum changes would not influence the class prediction?
         pass
-    if question_id == 12:
+    if question_id == 11:
         # What attributes must be present or absent to guarantee this prediction?
         explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
         return explanation[0]
     else:
         return f"This is a mocked answer to your question with id {question_id}."
+    """if question_id == 12:
+        # How does the prediction change when this attribute changes? Ceteris Paribus
+        explanation = explain_ceteris_paribus(conversation, data, parse_op, regen)"""
+

@@ -193,6 +193,11 @@ def get_and_preprocess_german_short():
 
     x_values, categorical_mapping = _save_column_id_to_value_index_mapping(x_values.to_numpy(), categorical_col_ids)
     x_values = pd.DataFrame(x_values, columns=col_names, dtype=int)
+
+    # Change dtype of categorical columns to object
+    for col in categorical_col_names:
+        x_values[col] = x_values[col].astype(object)
+
     output = {
         "x_values": x_values,
         "y_values": y_values,

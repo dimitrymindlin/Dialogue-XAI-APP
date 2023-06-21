@@ -87,6 +87,9 @@ class Conversation:
 
         self.username = "unknown"
 
+        # Question id to answer type mapping
+        self.question_id_to_answer_type = {}
+
         # The description
         self.describe = DatasetDescription(index_col=index_col,
                                            target_var_name=target_var_name,
