@@ -178,4 +178,4 @@ if __name__ != '__main__':
 if __name__ == "__main__":
     # clean up storage file on restart
     app.logger.info(f"Launching app from config: {args.config}")
-    app.run(debug=True, port=4455, host='0.0.0.0')
+    app.run(debug=False, port=4455, host='0.0.0.0')
