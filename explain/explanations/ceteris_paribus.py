@@ -37,10 +37,11 @@ class CeterisParibus(Explanation):
 
     def __init__(self,
                  model,
-                 data: pd.DataFrame,
+                 background_data: pd.DataFrame,
                  ys: pd.DataFrame,
                  class_names: dict,
-                 cache_location: str = "./cache/ceterisparibus-tabular.pkl"):
+                 cache_location: str = "./cache/ceterisparibus-tabular.pkl",
+                 feature_names: list = None):
         """
 
         Args:
@@ -51,48 +52,19 @@ class CeterisParibus(Explanation):
 
         """
         super().__init__(cache_location, class_names)
-        self.data = data.to_numpy()
+        self.background_data = background_data
         self.model = model
         """self.categorical_names = categorical_names
-        self.class_names = list(class_names.values())
-        self.feature_names = feature_names"""
-        # Predict data to get model output
-
-        # Explain here
-        exp = dx.Explainer(self.model, self.data, y=ys)
-        observation = pd.DataFrame(self.data[0, :]).T
-        pred = exp.predict(observation)
-        """bd = exp.predict_parts(observation, type='break_down', label=ys.iloc[0])
-        bd_interactions= exp.predict_parts(observation, type='break_down_interactions', label="John+")
-        bd.plot(bd_interactions)"""
-        rf_profile = exp.predict_profile(observation, label="test", variables=["6"])
-        print(rf_profile.result.head())
-        # Create bar plot from rf_profile
-        rf_profile.plot()
-        plt.show()
-        print()
-
-    def get_explanation(self, data_x: np.ndarray) -> AnchorExplanation:
-        """
-
-        Args:
-            data_x: the data instance to explain of shape (1, num_features)
-        Returns: Ceteris Paribus explanation object
-
-        """
-        output = self.explainer.explain_instance(data_x[0],
-                                                 self.model.predict,
-                                                 threshold=0.95,
-                                                 max_anchor_size=3)
-        return output
+        self.class_names = list(class_names.values())"""
+        self.feature_names = feature_names
+        self.ys = ys
 
     def run_explanation(self,
-                        data: pd.DataFrame,
-                        desired_class: str = None):
+                        current_data: pd.DataFrame):
         """Generate tabular dice explanations.
 
         Arguments:
-            data: The data to generate explanations for in pandas df.
+            current_data: The data to generate explanations for in pandas df.
             desired_class: The desired class of the cfes. If None, will use the default provided
                            at initialization.
         Returns:
@@ -100,8 +72,28 @@ class CeterisParibus(Explanation):
         """
 
         cps = {}
-        for d in tqdm(list(data.index)):
-            cur_cp = self.get_explanation(data.loc[[d]].to_numpy())
+        for d in tqdm(list(current_data.index)):
+            instance = current_data.loc[[d]]
+            # Explain here
+            #observation = pd.DataFrame(instance).T
+            # pred = np.array([np.argmax(self.model.predict(instance))])
+            exp = dx.Explainer(self.model, self.background_data, y=self.ys)
+            """bd = exp.predict_parts(observation, type='break_down', label=ys.iloc[0])
+            bd_interactions= exp.predict_parts(observation, type='break_down_interactions', label="John+")
+            bd.plot(bd_interactions)"""
+            rf_profile = exp.predict_profile(instance)
+            print(rf_profile.result.head())
+            # Create bar plot from rf_profile
+            rf_profile.plot(variable_type='categorical')
+            plt.show()
+            print()
+
+            output = self.explainer.explain_instance(data_x[0],
+                                                     self.model.predict,
+                                                     threshold=0.95,
+                                                     max_anchor_size=3)
+            return output
+
             cps[d] = cur_cp
         return cps
 
