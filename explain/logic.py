@@ -410,7 +410,7 @@ class ExplainBot:
 
             return "success"
         else:
-            return dataset
+            return dataset, y_values
 
     def set_num_prompts(self, num_prompts):
         """Updates the number of prompts to a new number"""
