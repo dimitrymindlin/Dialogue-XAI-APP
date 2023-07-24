@@ -64,6 +64,9 @@ def read_and_format_data(filepath,
     if not cat_features and not num_features:
         cat_features, num_features = get_numeric_categorical(dataset)
 
+    # Make categorical features categorical in the dataset
+    dataset[cat_features] = dataset[cat_features].astype('object')
+
     return dataset, y_values, cat_features, num_features
 
 
