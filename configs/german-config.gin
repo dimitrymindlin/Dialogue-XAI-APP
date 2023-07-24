@@ -61,7 +61,7 @@ Conversation.class_names = {0: "bad credit risk", 1: "good credit risk"}
 Conversation.question_bank_path =  "./data/question_bank.csv"
 
 # Dataset description
-DatasetDescription.dataset_objective = "predict whether someone is good or bad credit risk"
+DatasetDescription.dataset_objective = "predict whether someone is a low or high credit risk customer"
 DatasetDescription.dataset_description = "credit risk"
 DatasetDescription.model_description = "gradient boosted tree"
 
