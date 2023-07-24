@@ -8,7 +8,7 @@ from flask import Flask
 
 from explain.actions.explanation import explain_feature_importances, explain_cfe, \
     get_feature_importance_by_feature_id, explain_cfe_by_given_features, \
-    explain_anchor_changeable_attributes_without_effect
+    explain_anchor_changeable_attributes_without_effect, explain_feature_statistic
 from explain.actions.filter import filter_operation
 from explain.conversation import Conversation
 from explain.actions.get_action_functions import get_all_action_functions_map
@@ -111,8 +111,7 @@ def run_action_by_id(conversation: Conversation,
     if question_id == 2:
         # How important is each attribute to the model's predictions?
         # Create full feature explanations
-        explanation = explain_feature_importances(conversation, data, parse_op, regen,
-                                                  return_full_summary=True)
+        explanation = explain_feature_importances(conversation, data, parse_op, regen)
         return explanation[0]
     if question_id == 3:
         # How strong does [feature X] affect the prediction?
@@ -120,10 +119,10 @@ def run_action_by_id(conversation: Conversation,
         return explanation[0]
 
     if question_id == 4:
-        # What are the most important attributes for this prediction?
-        explanation = explain_feature_importances(conversation, data, parse_op, regen,
-                                                  return_full_summary=False)
-        answer = "The most important attributes for this prediction are: "
+        # What are the top 3 important attributes for this prediction?
+        parse_op = "top 3"
+        explanation = explain_feature_importances(conversation, data, parse_op, regen)
+        answer = "The top 3 attributes for this prediction are: "
         return answer + explanation[0]
     """if question_id == 5:
         # Why did the model give this particular prediction for this person?
@@ -134,8 +133,7 @@ def run_action_by_id(conversation: Conversation,
         return answer + explanation[0]"""
     if question_id == 5:
         # What attributes of this person led the model to make this prediction?
-        explanation = explain_feature_importances(conversation, data, parse_op, regen,
-                                                  return_full_summary=False)
+        explanation = explain_feature_importances(conversation, data, parse_op, regen)
         answer = "The following attributes were most important for the prediction. "
         return answer + explanation[0]
     if question_id == 6:
@@ -165,6 +163,14 @@ def run_action_by_id(conversation: Conversation,
         # What attributes must be present or absent to guarantee this prediction?
         explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
         return explanation[0]
+    if question_id == 12:
+        # How does the prediction change when this attribute changes? Ceteris Paribus
+        # explanation = explain_ceteris_paribus(conversation, data, parse_op, regen)
+        return f"This is a mocked answer to your question with id {question_id}."
+    if question_id == 13:
+        # 13;How common is the current values for this attribute?
+        explanation = explain_feature_statistic(conversation, feature_name)
+        return explanation
     else:
         return f"This is a mocked answer to your question with id {question_id}."
     """if question_id == 12:

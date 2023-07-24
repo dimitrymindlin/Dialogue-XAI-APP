@@ -66,7 +66,6 @@ def get_feature_importance_by_feature_id(conversation,
         feature_importance_ranking_name = 'second most'
 
     output_text = f"The feature <em>{feature_name}</em> is the <em>{feature_importance_ranking_name}</em>. important feature with a value of {str(feature_importance_value)}. "
-    output_text += f"This means that if the feature didn't have the current value, the prediction probability would change by the given amount."
     return output_text, 1, feature_importance_value
 
 
@@ -107,3 +106,9 @@ def explain_anchor_changeable_attributes_without_effect(conversation, data, pars
     additional_options, short_summary = out
     conversation.store_followup_desc(additional_options)
     return short_summary, 1
+
+
+def explain_feature_statistic(conversation, feature_name):
+    feature_stats_exp = conversation.get_var('feature_statistics_explainer').contents
+    explanation = feature_stats_exp.get_single_feature_statistic(feature_name)
+    return explanation
