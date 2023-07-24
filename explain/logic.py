@@ -27,6 +27,7 @@ from explain.explanations.anchor_explainer import TabularAnchor
 from explain.explanations.ceteris_paribus import CeterisParibus
 from explain.explanations.dice_explainer import TabularDice
 from explain.explanations.diverse_instances import DiverseInstances
+from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
 from explain.parser import Parser, get_parse_tree
 from explain.prompts import Prompts
 from explain.utils import read_and_format_data
@@ -66,7 +67,7 @@ class ExplainBot:
                  feature_definitions: dict = None,
                  skip_prompts: bool = False,
                  categorical_mapping_path: str = None,
-                 feature_tooltip_mapping = None):
+                 feature_tooltip_mapping=None):
         """The init routine.
 
         Arguments:
@@ -162,16 +163,17 @@ class ExplainBot:
                           store_to_conversation=True,
                           skip_prompts=skip_prompts)
 
-        background_dataset = self.load_dataset(background_dataset_file_path,
-                                               dataset_index_column,
-                                               target_variable_name,
-                                               categorical_features,
-                                               numerical_features,
-                                               remove_underscores,
-                                               store_to_conversation=False)
+        background_dataset, background_y_values = self.load_dataset(background_dataset_file_path,
+                                                                    dataset_index_column,
+                                                                    target_variable_name,
+                                                                    categorical_features,
+                                                                    numerical_features,
+                                                                    remove_underscores,
+                                                                    store_to_conversation=False)
 
         # Load the explanations
         self.load_explanations(background_dataset=background_dataset,
+                               y_values=background_y_values,
                                categorical_mapping=self.categorical_mapping)
 
     def get_next_instance(self):
@@ -200,13 +202,20 @@ class ExplainBot:
         question_pd = pd.read_csv(self.conversation.question_bank_path, delimiter=";")
         feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
         answer_dict = {
-            "general_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in question_pd[question_pd["question_type"] == "general"].iterrows()], #question_pd[question_pd["question_type"] == "general"][["q_id", "paraphrased"]],
-            "feature_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in question_pd[question_pd["question_type"] == "feature"].iterrows()], #list(question_pd[question_pd["question_type"] == "feature"][["q_id", "paraphrased"]].values),
-            "feature_names": [{'id':feature_id, 'feature_name': feature_name}for feature_id, feature_name in enumerate(feature_names)],
+            "general_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in
+                                  question_pd[question_pd["question_type"] == "general"].iterrows()],
+            # question_pd[question_pd["question_type"] == "general"][["q_id", "paraphrased"]],
+            "feature_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in
+                                  question_pd[question_pd["question_type"] == "feature"].iterrows()],
+            # list(question_pd[question_pd["question_type"] == "feature"][["q_id", "paraphrased"]].values),
+            "feature_names": [{'id': feature_id, 'feature_name': feature_name} for feature_id, feature_name in
+                              enumerate(feature_names)],
         }
         return answer_dict
 
-    def load_explanations(self, background_dataset, categorical_mapping=None):
+    def load_explanations(self, background_dataset,
+                          y_values=None,
+                          categorical_mapping=None):
         """Loads the explanations.
 
         If set in gin, this routine will cache the explanations.
@@ -266,11 +275,19 @@ class ExplainBot:
         tabular_anchor.get_explanations(ids=list(data.index),
                                         data=data)
 
-        """# Load Ceteris Paribus Explanations
-        ceteris_paribus_explainer = CeterisParibus(model=model,
-                                                   data=data,
-                                                   ys=self.conversation.get_var('dataset').contents['y'],
-                                                   class_names=self.conversation.class_names)
+        # Load feature statistics explanations
+        feature_statistics_explainer = FeatureStatisticsExplainer(data,
+                                                                  self.numerical_features,
+                                                                  feature_names=list(data.columns),
+                                                                  rounding_precision=self.conversation.rounding_precision,
+                                                                  categorical_mapping=self.categorical_mapping)
+
+        # Load Ceteris Paribus Explanations
+        """ceteris_paribus_explainer = CeterisParibus(model=model,
+                                                   background_data=background_dataset,
+                                                   ys=y_values,
+                                                   class_names=self.conversation.class_names,
+                                                   feature_names=list(data.columns))
         ceteris_paribus_explainer.get_explanations(ids=list(data.index),
                                                    data=data)"""
 
@@ -280,6 +297,7 @@ class ExplainBot:
         self.conversation.add_var('tabular_anchor', tabular_anchor, 'explanation')
         # list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
+        self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
     def load_data_instances(self):
         dataset_pd = self.conversation.get_var("dataset").contents['X']
