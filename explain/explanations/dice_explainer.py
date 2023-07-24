@@ -140,14 +140,14 @@ class TabularDice(Explanation):
 
             if orig_f != cfe_f:
                 if cfe_f > orig_f:
-                    inc_dec = "increase"
+                    inc_dec = "Increasing"
                 else:
-                    inc_dec = "decrease"
+                    inc_dec = "Decreasing"
                 # Turn feature to categorical name if possible
                 if self.categorical_mapping is not None:
                     try:
                         cfe_f = self.categorical_mapping[feature_index][int(cfe_f)]
-                        inc_dec = "change"
+                        inc_dec = "Changing"
                     except KeyError:
                         pass  # feature is numeric and not in categorical mapping
                     except IndexError:
@@ -155,7 +155,7 @@ class TabularDice(Explanation):
                 # round cfe_f if it is float and turn to string to print
                 if isinstance(cfe_f, float):
                     cfe_f = str(round(cfe_f, self.rounding_precision))
-                change_string += f"{inc_dec} {feature} to {cfe_f}"
+                change_string += f"{inc_dec} <b>{feature}</b> to </b>{cfe_f}</b>"
                 change_string += " and "
         # Strip off last and
         change_string = change_string[:-5]
@@ -244,7 +244,7 @@ class TabularDice(Explanation):
                 additional_options += cfe_string
                 #new_prediction = self.get_label_text(new_predictions[i])
                 #additional_options += f"</em>, the model will predict {new_prediction}.<br><br>"
-                additional_options += f"</em>, the model will predict the opposite class.<br><br>"
+                #additional_options += f"</em>, the model will predict the opposite class.<br><br>"
 
         # output_string += "If you want some more options, just ask &#129502"
 

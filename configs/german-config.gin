@@ -66,7 +66,10 @@ DatasetDescription.dataset_description = "credit risk"
 DatasetDescription.model_description = "gradient boosted tree"
 
 # Tool tips
-ExplainBot.feature_tooltip_mapping = {0: "The age range to which the applicant belongs.", 'Gender': "The gender of the applicant. (Male / Female)", 'Job Level': "The skill level of the applicant's job, measured on a scale from 0 to 3, with 0 indicating unskilled and 3 indicating highly skilled.",
+ExplainBot.feature_tooltip_mapping = {
+'Age Range': "The age range to which the applicant belongs.",
+'Gender': "The gender of the applicant. (Male / Female)",
+'Job Level': "The skill level of the applicant's job, measured on a scale from 0 to 3, with 0 indicating unskilled and 3 indicating highly skilled.",
 'Housing Type': "The type of housing the applicant resides in, indicating whether they own or rent.",
 'Saving accounts': "The balance in the applicant's savings account, indicating whether they have a balance and, if so, the amount.",
 'Checking account': "The balance in the applicant's checking account, indicating whether they have a balance and, if so, the amount.",
