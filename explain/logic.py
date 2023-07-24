@@ -727,7 +727,7 @@ class ExplainBot:
             for feature in instance.columns:
 
                 cfe_string, _ = explain_cfe_by_given_features(self.conversation, instance, [feature])
-                if cfe_string != 'There are no changes possible to the chosen attribute that would result in a different prediction.':
+                if cfe_string != 'There are no changes possible to the chosen attribute alone that would result in a different prediction.':
                     try:
                         feature_name = cfe_string.split("change")[1].split("to")[0].strip()
                         alternative_feature_value = cfe_string.split("change")[1].split("to")[1].split("<")[0].strip()
