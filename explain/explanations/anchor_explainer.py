@@ -119,12 +119,12 @@ class TabularAnchor(Explanation):
                                             save_to_cache=save_to_cache)
         exp = explanation[key]
         output_string = ""
-        output_string += "By fixing the following attributes, the prediction stays the same even though other attributes are changed:"
+        output_string += "By fixing all of the following attributes, the prediction stays the same even though other attributes are changed:"
         output_string += "<br><br>"
 
         additional_options = "Here are some more options to change the prediction of"
         additional_options += f" instance id {str(key)}.<br><br>"
 
-        output_string += ' AND <br><br>'.join(exp.names())
+        output_string += ' <br><br>'.join(exp.names())
 
         return additional_options, output_string

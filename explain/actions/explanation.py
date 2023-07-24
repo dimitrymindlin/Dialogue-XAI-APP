@@ -54,6 +54,9 @@ def get_feature_importance_by_feature_id(conversation,
     feature_importance_value = feature_importances[label][feature_name]
     feature_importance_value = round(feature_importance_value[0], 3)
 
+    # TODO: Outsource text generation to answer_templates and get relationship to first feature and previous feature as
+    #  answer type.
+
     # If the feature importance value is 0, then the feature is not important for the prediction
     if feature_importance_value == 0:
         output_text = f"The feature <em>{feature_name}</em> is not important for the prediction."

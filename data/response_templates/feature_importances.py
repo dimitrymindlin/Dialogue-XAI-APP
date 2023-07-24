@@ -34,7 +34,8 @@ def textual_fi_with_values(sig_coefs: Dict[str, float],
 
 def textual_fi_relational(sig_coefs: Dict[str, float],
                           num_features_to_show: int = None,
-                          print_unimportant_features: bool = False):
+                          print_unimportant_features: bool = False,
+                          show_only_most_important: bool = True):
     """Formats dict of label -> feature name -> feature_importance dicts to string.
 
     Arguments:
@@ -61,11 +62,13 @@ def textual_fi_relational(sig_coefs: Dict[str, float],
             comparative_string = "unimportant compared to"
         return comparative_string
 
-    output_text = "Here is a list of the attributes that are most important for the current prediction, starting with " \
-                  "the most important one: <br></br>"
+    output_text = ""
 
     previous_feature_importance = None
     for i, (current_feature_value, feature_importance) in enumerate(sig_coefs):
+        if show_only_most_important:
+            if i > 3:
+                break
         if i == 0:
             position = "most"
         else:

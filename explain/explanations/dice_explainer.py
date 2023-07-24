@@ -217,14 +217,14 @@ class TabularDice(Explanation):
         # output_string = f"{filtering_description}, the original prediction is "
         # output_string += f"<em>{original_label}</em>. "
         output_string = ""
-        output_string += "Here are some options to change the prediction of this instance."
+        output_string += "Here are some changes where the mpdel would predict the opposite class:"
         output_string += "<br><br>"
 
         additional_options = "Here are some more options to change the prediction of"
         additional_options += f" instance id {str(key)}.<br><br>"
 
-        output_string += "First, if you <em>"
-        transition_words = ["Further,", "Also,", "In addition,", "Furthermore,"]
+        output_string += ""
+        #transition_words = ["Further,", "Also,", "In addition,", "Furthermore,"]
 
         # Get all cfe strings and remove duplicates
         cfe_strings = [self.get_change_string(final_cfes.loc[[c_id]], original_instance) for c_id in final_cfe_ids]
@@ -233,12 +233,12 @@ class TabularDice(Explanation):
         for i, cfe_string in enumerate(cfe_strings):
             # Stop the summary in case its getting too large
             if i < self.num_in_short_summary:
-                if i != 0:
-                    output_string += f"{np.random.choice(transition_words)} if you <em>"
+                #if i != 0:
+                #    output_string += f"{np.random.choice(transition_words)} if you <em>"
                 output_string += cfe_string
                 # new_prediction = self.get_label_text(new_predictions[i])
                 # output_string += f"</em>, the model will predict {new_prediction}.<br><br>"
-                output_string += f"</em>, the model will predict the opposite class.<br><br>"
+                output_string += f".<br><br>"
             else:
                 additional_options += "If you <em>"
                 additional_options += cfe_string
@@ -277,7 +277,7 @@ class TabularDice(Explanation):
         final_cfes = cfe.cf_examples_list[0].final_cfs_df
         if final_cfes is None:
             return (
-                       f"There are no changes possible to the chosen attribute that would result in a different prediction."), 0
+                       f"There are no changes possible to the chosen attribute alone that would result in a different prediction."), 0
         final_cfe_ids = list(final_cfes.index)
 
         if self.temp_outcome_name in final_cfes.columns:
