@@ -18,6 +18,7 @@ import torch
 from flask import Flask
 import gin
 
+from create_experiment_data.experiment_helper import ExperimentHelper
 from explain.action import run_action, run_action_by_id
 from explain.actions.explanation import explain_cfe, explain_cfe_by_given_features
 from explain.conversation import Conversation
@@ -261,8 +262,10 @@ class ExplainBot:
         diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=data)
         message = (f"...loaded {len(diverse_instance_ids)} diverse instance ids "
                    "from cache!")
+
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         diverse_instances = [{"id": i, "values": data.loc[i].to_dict()} for i in diverse_instance_ids]
+
         app.logger.info(message)
 
         # Load anchor explanations
@@ -299,8 +302,13 @@ class ExplainBot:
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
         self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
+        # Load Experiment Helper
+        helper = ExperimentHelper(conversation=self.conversation)
+        helper.get_counterfactual_instance(diverse_instances[0])
+        self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
+
     def load_data_instances(self):
-        dataset_pd = self.conversation.get_var("dataset").contents['X']
+        # dataset_pd = self.conversation.get_var("dataset").contents['X']
         diverse_instances = self.conversation.get_var("diverse_instances").contents
         instance_results = []
         for instance in diverse_instances:
@@ -577,7 +585,7 @@ class ExplainBot:
     def update_state_dy_id(self,
                            question_id: int,
                            user_session_conversation: Conversation,
-                           feature_id:int =None):
+                           feature_id: int = None):
         """The main experiment driver.
 
                 The function controls state updates of the conversation. It accepts the
@@ -623,6 +631,7 @@ class ExplainBot:
         env = Environment(loader=file_loader)
         template = env.get_template('templates/exit_questionnaire_template.md')
         model = self.conversation.get_var("model").contents
+        exp_helper = self.conversation.get_var('experiment_helper').contents
 
         def get_features_by_avg_rank(lists):
             """
@@ -667,31 +676,6 @@ class ExplainBot:
                 person_dict[key] = value
             return person_dict
 
-        def change_slightly_attributes(instance):
-            """
-            Changes slightly the attributes of an instance and ensure that the new instance does not flip
-            the classifiers prediction.
-            """
-            changeable_features = ["Credit Purpose", "Gender", "Age Group"]
-            result_instance = None
-            for feature_name in changeable_features:
-                # randomly decide if this feature should be changed
-                if np.random.randint(0, 3) == 0:  # 66% chance to change
-                    continue
-                tmp_instance = instance.copy() if result_instance is None else result_instance.copy()
-
-                # Get random change value for this feature
-                random_change = np.random.randint(0,
-                                                  len(self.categorical_mapping[instance.columns.get_loc(feature_name)]))
-                tmp_instance.at[tmp_instance.index[0], feature_name] += random_change
-                tmp_instance.at[tmp_instance.index[0], feature_name] %= len(
-                    self.categorical_mapping[instance.columns.get_loc(feature_name)])
-                # Check if prediction stays the same
-                if model.predict(tmp_instance)[0] == \
-                        model.predict(instance)[0]:
-                    result_instance = tmp_instance.copy()
-            return result_instance
-
         # First, get most important feature across all instances
         feature_importances_list = []
         # iterate over data df and handle each row as an instance (pandas df)
@@ -713,7 +697,7 @@ class ExplainBot:
             instance = pd.DataFrame(instance['values'], index=[instance['id']])
             instance_copy = instance.copy()
             # change slightly the attributes of the instance
-            instance_copy = change_slightly_attributes(instance_copy)
+            instance_copy = exp_helper.get_similar_instances(instance_copy, model, self.changeable_features)
 
             # Turn instance into key-value dict
             a2_instance_dict = turn_df_instance_to_dict(instance_copy)
@@ -725,7 +709,6 @@ class ExplainBot:
             # Find such cfe's that only a single attribute is changed.
             feature_names_to_value_mapping = {}
             for feature in instance.columns:
-
                 cfe_string, _ = explain_cfe_by_given_features(self.conversation, instance, [feature])
                 if cfe_string != 'There are no changes possible to the chosen attribute alone that would result in a different prediction.':
                     try:
@@ -806,7 +789,7 @@ class ExplainBot:
             instance_copy = instance.copy()
 
             # Change some attributes that don't change the prediction
-            instance_copy = change_slightly_attributes(instance_copy)
+            instance_copy = exp_helper.get_similar_instances(instance_copy, model, self.changeable_features)
             if instance_copy is None:
                 continue
 
@@ -822,7 +805,7 @@ class ExplainBot:
             instance_copy = instance.copy()
 
             # Change some attributes that don't change the prediction
-            instance_copy = change_slightly_attributes(instance_copy)
+            instance_copy = exp_helper.get_similar_instances(instance_copy, model, self.changeable_features)
             if instance_copy is None:
                 continue
 
