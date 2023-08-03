@@ -217,7 +217,7 @@ class TabularDice(Explanation):
         # output_string = f"{filtering_description}, the original prediction is "
         # output_string += f"<em>{original_label}</em>. "
         output_string = ""
-        output_string += "Here are some changes where the mpdel would predict the opposite class:"
+        output_string += "Here are some changes where the model would predict the opposite class:"
         output_string += "<br><br>"
 
         additional_options = "Here are some more options to change the prediction of"
