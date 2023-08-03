@@ -5,11 +5,14 @@ outputs to the user. Actions in the conversation are called `operations` and
 are things like running an explanation or performing filtering.
 """
 from flask import Flask
+from jinja2 import Environment, FileSystemLoader
+import numpy as np
 
 from explain.actions.explanation import explain_feature_importances, explain_cfe, \
     get_feature_importance_by_feature_id, explain_cfe_by_given_features, \
     explain_anchor_changeable_attributes_without_effect, explain_feature_statistic
 from explain.actions.filter import filter_operation
+from explain.actions.prediction_likelihood import predict_likelihood
 from explain.conversation import Conversation
 from explain.actions.get_action_functions import get_all_action_functions_map
 
@@ -99,12 +102,13 @@ def run_action_by_id(conversation: Conversation,
     feature_name = data.columns[feature_id]
     parse_op = f"ID {instance_id}"
 
+    get_explanation_report(conversation, instance_id)
+
     if question_id == 0:
         # Which attributes does the model use to make predictions?
         return f"The model uses the following attributes to make predictions: {', '.join(list(data.columns))}."
     if question_id == 1:
         # Does the model include [feature X] when making the prediction?
-
         explanation = get_feature_importance_by_feature_id(conversation, data, regen, feature_id)
         answer = "Yes it does. "
         return answer + explanation[0]
@@ -177,3 +181,50 @@ def run_action_by_id(conversation: Conversation,
         # How does the prediction change when this attribute changes? Ceteris Paribus
         explanation = explain_ceteris_paribus(conversation, data, parse_op, regen)"""
 
+
+def get_explanation_report(conversation,
+                           instance_id: int):
+    """
+    Runs explanation methods on the current conversation and returns a static report.
+    """
+
+    parse_text = f"filter id {instance_id}".split(" ")
+    _ = filter_operation(conversation, parse_text, 0)
+    data = conversation.temp_dataset.contents['X']
+    regen = conversation.temp_dataset.contents['ids_to_regenerate']
+    parse_op = f"ID {instance_id}"
+
+    model_prediction_probas, _ = predict_likelihood(conversation, as_text=False)
+    model_prediction = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
+    opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction))
+    feature_importances, _ = explain_feature_importances(conversation, data, parse_op, regen, as_text=False)
+    feature_importances = feature_importances[0][0]
+    # Turn list of values into int
+    feature_importances = {key: round(float(value[0]), ndigits=3) for key, value in feature_importances.items()}
+    counterfactual_strings, _ = explain_cfe(conversation, data, parse_op, regen)
+    anchors_string, _ = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
+
+    # Fill static report template
+    # Load md file
+    file_loader = FileSystemLoader('.')
+    env = Environment(loader=file_loader)
+    template = env.get_template('templates/static_report_template.md')
+
+    markdown = template.render(
+        model_prediction=model_prediction,
+        instance_type="Applicant",
+        feature_importance=feature_importances,
+        opposite_class=opposite_class,
+        counterfactuals=counterfactual_strings,
+        anchors=anchors_string,
+    )
+
+    # Save the rendered Markdown to a file
+    output_file = f'static_report_{instance_id}.md'
+    with open(output_file, 'w') as file:
+        file.write(markdown)
+
+    new_point = data.copy()
+    new_point.at[instance_id, 'Checking account'] = 3
+
+    print()
