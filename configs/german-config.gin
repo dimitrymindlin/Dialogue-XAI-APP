@@ -23,7 +23,7 @@ ExplainBot.categorical_features = ['Age Group','Gender', 'Job Level', 'Housing T
 ExplainBot.numerical_features = ['Credit amount', 'Credit Duration']
 ExplainBot.remove_underscores = True
 ExplainBot.categorical_mapping_path = "./data/german_column_id_to_values_mapping.json"
-ExplainBot.changeable_features = ['Age Group', 'Job Level', 'Housing Type', 'Saving accounts', 'Checking account', 'Credit Purpose', 'Credit amount', 'Credit Duration']
+ExplainBot.actionable_features = ['Age Group', 'Job Level', 'Housing Type', 'Saving accounts', 'Checking account', 'Credit Purpose', 'Credit amount', 'Credit Duration']
 
 
 ExplainBot.prompt_metric = "cosine"

@@ -9,6 +9,7 @@ import pickle
 from random import seed as py_random_seed
 import secrets
 from typing import List
+import re
 
 from jinja2 import Environment, FileSystemLoader
 import numpy as np
@@ -68,7 +69,8 @@ class ExplainBot:
                  feature_definitions: dict = None,
                  skip_prompts: bool = False,
                  categorical_mapping_path: str = None,
-                 feature_tooltip_mapping=None):
+                 feature_tooltip_mapping=None,
+                 actionable_features=None):
         """The init routine.
 
         Arguments:
@@ -100,6 +102,9 @@ class ExplainBot:
             skip_prompts: Whether to skip prompt generation. This is mostly useful for running fine-tuned
                           models where generating prompts is not necessary.
             categorical_mapping_path: Path to json mapping for each col that assigns a categorical var to an int.
+            feature_tooltip_mapping: A mapping from feature names to tooltips. This is used to display tooltips
+                                        in the UI.
+            actionable_features: A list of features that can be changed (actionable features)
         """
 
         # Set seeds
@@ -116,6 +121,7 @@ class ExplainBot:
         self.categorical_features = categorical_features
         self.numerical_features = numerical_features
         self.feature_tooltip_mapping = feature_tooltip_mapping
+        self.actionable_features = actionable_features
 
         # A variable used to help file uploads
         self.manual_var_filename = None
@@ -303,8 +309,7 @@ class ExplainBot:
         self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
         # Load Experiment Helper
-        helper = ExperimentHelper(conversation=self.conversation)
-        helper.get_counterfactual_instance(diverse_instances[0])
+        helper = ExperimentHelper(self.conversation, self.categorical_mapping, self.categorical_features)
         self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
 
     def load_data_instances(self):
@@ -697,7 +702,7 @@ class ExplainBot:
             instance = pd.DataFrame(instance['values'], index=[instance['id']])
             instance_copy = instance.copy()
             # change slightly the attributes of the instance
-            instance_copy = exp_helper.get_similar_instances(instance_copy, model, self.changeable_features)
+            instance_copy = exp_helper.get_similar_instances(instance_copy, model, self.actionable_features)
 
             # Turn instance into key-value dict
             a2_instance_dict = turn_df_instance_to_dict(instance_copy)
