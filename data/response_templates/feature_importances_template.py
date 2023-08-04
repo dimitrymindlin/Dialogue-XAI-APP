@@ -15,6 +15,7 @@ def textual_fi_with_values(sig_coefs: Dict[str, float],
     """
     output_text = "Here is a list of the attributes that are most important for the current prediction, starting with " \
                   "the most important one: <br></br>"
+    output_text += "<ol>"
 
     for i, (current_feature_value, feature_importance_value) in enumerate(sig_coefs):
         if i == 0:
@@ -29,6 +30,7 @@ def textual_fi_with_values(sig_coefs: Dict[str, float],
         if num_features_to_show:
             if i == num_features_to_show:
                 break
+    output_text += "</ol>"
     return output_text
 
 
@@ -47,9 +49,9 @@ def textual_fi_relational(sig_coefs: Dict[str, float],
     def relational_percentage_to_comparative_language(percentage_number):
         comparative_string = ""
         if percentage_number > 95:
-            comparative_string = "as important as"
-        elif percentage_number > 80:
             comparative_string = "almost as important as"
+        elif percentage_number > 80:
+            comparative_string = "similarly important as"
         elif percentage_number > 60:
             comparative_string = "three fourth as important as"
         elif percentage_number > 40:
@@ -62,22 +64,22 @@ def textual_fi_relational(sig_coefs: Dict[str, float],
             comparative_string = "unimportant compared to"
         return comparative_string
 
-    output_text = ""
+    output_text = "<ol>"
 
-    previous_feature_importance = None
     for i, (current_feature_value, feature_importance) in enumerate(sig_coefs):
         if show_only_most_important:
-            if i > 3:
+            if i == 3:
                 break
         if i == 0:
             position = "most"
         else:
-            position = f"{i + 1}"
+            position = f"{i + 1}."
         increase_decrease = "increases" if feature_importance > 0 else "decreases"
 
         ### Get importance comparison strings
         # Most important can be printed as it is
-        new_text = (f"<b>{current_feature_value}</b> is the <b>{position}.</b> important attribute and it"
+        # TODO: Include this? is the <b>{position}</b> important attribute and it
+        new_text = (f"<b>{current_feature_value}</b> "
                     f" <em>{increase_decrease}</em> the likelihood of the current prediction.")
         previous_feature_importance = feature_importance
         # For the rest, we need to check the relation to the previous feature
@@ -102,6 +104,7 @@ def textual_fi_relational(sig_coefs: Dict[str, float],
         if num_features_to_show:
             if i == num_features_to_show:
                 break
+    output_text += "</ol>"
     return output_text
 
 
