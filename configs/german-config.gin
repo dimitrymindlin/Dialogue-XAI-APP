@@ -24,6 +24,8 @@ ExplainBot.numerical_features = ['Credit amount', 'Credit Duration']
 ExplainBot.remove_underscores = True
 ExplainBot.categorical_mapping_path = "./data/german_column_id_to_values_mapping.json"
 ExplainBot.actionable_features = ['Age Group', 'Job Level', 'Housing Type', 'Saving accounts', 'Checking account', 'Credit Purpose', 'Credit amount', 'Credit Duration']
+ExplainBot.feature_units = {'Credit amount': 'DM', 'Credit Duration': 'months'}
+
 
 
 ExplainBot.prompt_metric = "cosine"
@@ -54,6 +56,9 @@ TabularAnchor.cache_location = "./cache/german-anchor-tabular.pkl"
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/german-diverse-instances.pkl"
+
+# Test Instances
+TestInstances.cache_location = "./cache/german-test-instances.pkl"
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/german-ceteris-paribus.pkl"
