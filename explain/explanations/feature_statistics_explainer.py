@@ -1,5 +1,7 @@
 import pandas as pd
 
+from data.response_templates.feature_statistics_template import feature_statistics_template
+
 
 class FeatureStatisticsExplainer:
     def __init__(self,
@@ -8,12 +10,14 @@ class FeatureStatisticsExplainer:
                  feature_names: list,
                  categorical_mapping,
                  rounding_precision: int = 2,
+                 feature_units: dict = None
                  ):
         self.data = data
         self.numerical_features = numerical_features
         self.feature_names = feature_names
         self.rounding_precision = rounding_precision
         self.categorical_mapping = categorical_mapping
+        self.feature_units = feature_units
 
     def get_categorical_statistics(self, feature_name):
         """Returns a string with the frequencies of values of a categorical feature."""
@@ -29,17 +33,20 @@ class FeatureStatisticsExplainer:
         return result_text
 
     def get_numerical_statistics(self, feature_name):
-        mean = round(self.data[feature_name].mean(), self.rounding_precision)
-        std = round(self.data[feature_name].std(), self.rounding_precision)
-        min_v = round(self.data[feature_name].min(), self.rounding_precision)
-        max_v = round(self.data[feature_name].max(), self.rounding_precision)
-        return (f"Here are statistics for the feature <b>{feature_name}</b>: <br><br>"
-                f"The <b>mean</b> is {mean},<br> one <b>standard deviation</b> is {std},<br>"
-                f" the <b>minimum</b> value is {min_v},<br> and the <b>maximum</b> value is {max_v}.")
+        mean = round(self.data[feature_name].mean(), 2)
+        std = round(self.data[feature_name].std(), 2)
+        min_v = round(self.data[feature_name].min(), 2)
+        max_v = round(self.data[feature_name].max(), 2)
+        # make float values to strings where the . is replaced by a ,
+        mean = str(mean).replace(".", ",")
+        std = str(std).replace(".", ",")
+        min_v = str(min_v).replace(".", ",")
+        max_v = str(max_v).replace(".", ",")
+        return feature_statistics_template(feature_name, mean, std, min_v, max_v, self.feature_units)
 
     def get_single_feature_statistic(self, feature_name):
         # Check if feature is numerical or categorical
         if feature_name in self.numerical_features:
-            self.get_numerical_statistics(feature_name)
+            return self.get_numerical_statistics(feature_name)
         else:
             return self.get_categorical_statistics(feature_name)
