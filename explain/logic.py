@@ -70,7 +70,8 @@ class ExplainBot:
                  skip_prompts: bool = False,
                  categorical_mapping_path: str = None,
                  feature_tooltip_mapping=None,
-                 actionable_features=None):
+                 actionable_features=None,
+                 feature_units=None):
         """The init routine.
 
         Arguments:
@@ -105,6 +106,7 @@ class ExplainBot:
             feature_tooltip_mapping: A mapping from feature names to tooltips. This is used to display tooltips
                                         in the UI.
             actionable_features: A list of features that can be changed (actionable features)
+            feature_units: A mapping from feature names to units. This is used to display units in the UI.
         """
 
         # Set seeds
@@ -122,6 +124,7 @@ class ExplainBot:
         self.numerical_features = numerical_features
         self.feature_tooltip_mapping = feature_tooltip_mapping
         self.actionable_features = actionable_features
+        self.feature_units = feature_units
 
         # A variable used to help file uploads
         self.manual_var_filename = None
