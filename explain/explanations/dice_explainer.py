@@ -23,7 +23,8 @@ class TabularDice(Explanation):
                  desired_class: str = "opposite",
                  cache_location: str = "./cache/dice-tabular.pkl",
                  class_names: dict = None,
-                 categorical_mapping: dict = None):
+                 categorical_mapping: dict = None,
+                 background_dataset=None):
         """Init.
 
         Arguments:
@@ -47,6 +48,7 @@ class TabularDice(Explanation):
         self.categorical_mapping = categorical_mapping
         self.dice_model = dice_ml.Model(model=self.model, backend="sklearn")
         self.permitted_range_dict = None
+        self.background_data = background_dataset
 
         # Format data in dice accepted format
         predictions = self.model.predict(data)
@@ -103,7 +105,8 @@ class TabularDice(Explanation):
         if not self.permitted_range_dict:
             self.permitted_range_dict = {}
             for feature in self.num_features:
-                self.permitted_range_dict[feature] = [data[feature].min(), data[feature].max()]
+                self.permitted_range_dict[feature] = [self.background_data[feature].min(),
+                                                      self.background_data[feature].max()]
 
         cfes = {}
         for d in tqdm(list(data.index)):
