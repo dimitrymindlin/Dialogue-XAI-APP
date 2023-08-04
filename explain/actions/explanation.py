@@ -41,7 +41,11 @@ def explain_feature_importances(conversation, data, parse_op, regen, as_text=Tru
         return explanation_text, 1
     else:
         feature_importances = mega_explainer_exp.get_feature_importances(data=data, ids_to_regenerate=regen)
-        return feature_importances, 1
+        # Extract inner dict ... TODO: This is a hacky way to do this.
+        top_features_dict = feature_importances[0]
+        predicted_label = list(top_features_dict.keys())[0]
+        top_features_dict = top_features_dict[predicted_label]
+        return top_features_dict, 1
 
 
 def get_feature_importance_by_feature_id(conversation,
