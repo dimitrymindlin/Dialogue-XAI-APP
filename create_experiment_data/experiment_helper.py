@@ -18,10 +18,14 @@ class ExperimentHelper:
                                      features_to_vary="all"):
         dice_tabular = self.conversation.get_var('tabular_dice').contents
         # Turn original intstance into a dataframe
-        instance_df = pd.DataFrame.from_dict(original_instance["values"], orient="index").transpose()
-        instance_df.index = [original_instance["id"]]
-        cfes = dice_tabular.run_explanation(instance_df, "opposite", features_to_vary=features_to_vary)
-        return cfes[original_instance["id"]].cf_examples_list[0].final_cfs_df
+        if not isinstance(original_instance, pd.DataFrame):
+            original_instance = pd.DataFrame.from_dict(original_instance["values"], orient="index").transpose()
+        cfes = dice_tabular.run_explanation(original_instance, "opposite", features_to_vary=features_to_vary)
+        original_instance_id = original_instance.index[0]
+        final_cfs_df = cfes[original_instance_id].cf_examples_list[0].final_cfs_df
+        # drop y column
+        final_cfs_df = final_cfs_df.drop(columns=["y"])
+        return final_cfs_df
 
     def get_similar_instances(self,
                               original_instance,
