@@ -72,9 +72,19 @@ def get_datapoint():
     Get a new datapoint from the dataset.
     TODO: Check with michi where experiment handling will be.
     """
-    # get_next_instance returns tuple with (id, datapoint_dict)
-    resp = BOT.get_next_instance()[1]
-    return resp
+    # TODO: Which things are needed in frontent?
+    instance_id, instance_dict, prediction_proba = BOT.get_next_instance()
+    return instance_dict
+
+
+@bp.route('/get_current_prediction', methods=['GET'])
+def get_current_prediction():
+    """
+    For the current datapoint (Bot.current_instance), get the current prediction.
+    """
+    # TODO: Which things are needed in frontent?
+    current_prediction = BOT.get_current_prediction()
+    return current_prediction
 
 
 @bp.route('/get_feature_tooltips', methods=['GET'])
