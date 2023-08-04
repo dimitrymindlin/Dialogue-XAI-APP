@@ -749,11 +749,14 @@ class ExplainBot:
                 cfe_string, _ = explain_cfe_by_given_features(self.conversation, instance, [feature])
                 if cfe_string != 'There are no changes possible to the chosen attribute alone that would result in a different prediction.':
                     try:
-                        feature_name = cfe_string.split("change")[1].split("to")[0].strip()
-                        alternative_feature_value = cfe_string.split("change")[1].split("to")[1].split("<")[0].strip()
+                        feature_name = cfe_string.split("Changing")[1].split("to")[0].strip()
+                        alternative_feature_value = cfe_string.split("Changing")[1].split("to")[1].split("</em>")[0]
                     except IndexError:  # numerical feature
-                        feature_name = cfe_string.split("crease")[1].split("to")[0].strip()  # increase or decrease
-                        alternative_feature_value = cfe_string.split("crease")[1].split("to")[1].split("<")[0].strip()
+                        feature_name = cfe_string.split("creasing")[1].split("to")[0].strip()  # increase or decrease
+                        alternative_feature_value = cfe_string.split("creasing")[1].split("to")[1].split("</em>")[0]
+                    # remove html tags
+                    alternative_feature_value = re.sub('<[^<]+?>', '', alternative_feature_value).strip()
+                    feature_name = re.sub('<[^<]+?>', '', feature_name).strip()
                     feature_names_to_value_mapping[feature_name] = alternative_feature_value
                 if len(feature_names_to_value_mapping) > 1 and cf_count == 0:
                     break  # Stop for first CF. Only need one.
