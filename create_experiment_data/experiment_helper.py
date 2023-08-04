@@ -3,8 +3,6 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-from create_experiment_data.similar_instances import SimilarInstancesByExplanation
-
 
 class ExperimentHelper:
 
@@ -27,11 +25,11 @@ class ExperimentHelper:
         final_cfs_df = final_cfs_df.drop(columns=["y"])
         return final_cfs_df
 
-    def get_similar_instances(self,
-                              original_instance,
-                              model,
-                              actionable_features: List[int] = list(),
-                              max_features_to_vary=3):
+    def get_similar_instance(self,
+                             original_instance,
+                             model,
+                             actionable_features: List[int] = list(),
+                             max_features_to_vary=3):
         result_instance = None
         changed_features = 0
         for feature_name in actionable_features:
