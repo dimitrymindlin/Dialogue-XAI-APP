@@ -734,7 +734,7 @@ class ExplainBot:
             instance = pd.DataFrame(instance['values'], index=[instance['id']])
             instance_copy = instance.copy()
             # change slightly the attributes of the instance
-            instance_copy = exp_helper.get_similar_instances(instance_copy, model, self.actionable_features)
+            instance_copy = exp_helper.get_similar_instance(instance_copy, model, self.actionable_features)
 
             # Turn instance into key-value dict
             a2_instance_dict = turn_df_instance_to_dict(instance_copy)
@@ -829,7 +829,7 @@ class ExplainBot:
             instance_copy = instance.copy()
 
             # Change some attributes that don't change the prediction
-            instance_copy = exp_helper.get_similar_instances(instance_copy, model, self.changeable_features)
+            instance_copy = exp_helper.get_similar_instance(instance_copy, model, self.changeable_features)
             if instance_copy is None:
                 continue
 
@@ -845,7 +845,7 @@ class ExplainBot:
             instance_copy = instance.copy()
 
             # Change some attributes that don't change the prediction
-            instance_copy = exp_helper.get_similar_instances(instance_copy, model, self.changeable_features)
+            instance_copy = exp_helper.get_similar_instance(instance_copy, model, self.changeable_features)
             if instance_copy is None:
                 continue
 
