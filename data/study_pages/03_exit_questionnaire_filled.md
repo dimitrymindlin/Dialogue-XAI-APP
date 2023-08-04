@@ -1,7 +1,7 @@
 # A.1 Feature Importances
 
 **Question 1:**
-Among the following features, which one is the _most_ important in influencing our machine learning model’s prediction (that is, variations in the value of that feature will most likely change the model’s prediction)?
+Among the following features, which one is the <i>most</i> important in influencing our machine learning model’s prediction (that is, variations in the value of that feature will most likely change the model’s prediction)?
 
 1. Checking account
 2. Job Level
