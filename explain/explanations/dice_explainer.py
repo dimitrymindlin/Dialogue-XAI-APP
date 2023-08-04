@@ -253,9 +253,10 @@ class TabularDice(Explanation):
 
         return additional_options, output_string
 
-    def summarize_cfe(self,
-                      cfe: pd.DataFrame,
-                      data: pd.DataFrame):
+    def summarize_cfe_for_given_attribute(self,
+                                          cfe: pd.DataFrame,
+                                          data: pd.DataFrame,
+                                          attribute_to_vary: str):
         """Summarizes explanations for a given counterfactual by dice tabular.
 
         Arguments:
