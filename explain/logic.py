@@ -4,6 +4,7 @@ This file contains the core logic for facilitating conversations. It orchestrate
 routines for setting up conversations, controlling the state of the conversation, and running
 the functions to get the responses to user inputs.
 """
+import copy
 import json
 import pickle
 from random import seed as py_random_seed
@@ -20,18 +21,17 @@ from flask import Flask
 import gin
 
 from create_experiment_data.experiment_helper import ExperimentHelper
+from explain.explanations.test_instances import TestInstances
 from explain.action import run_action, run_action_by_id
-from explain.actions.explanation import explain_cfe, explain_cfe_by_given_features
+from explain.actions.explanation import explain_cfe_by_given_features
 from explain.conversation import Conversation
-from explain.decoder import Decoder
 from explain.explanation import MegaExplainer
 from explain.explanations.anchor_explainer import TabularAnchor
 from explain.explanations.ceteris_paribus import CeterisParibus
 from explain.explanations.dice_explainer import TabularDice
 from explain.explanations.diverse_instances import DiverseInstances
 from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
-from explain.parser import Parser, get_parse_tree
-from explain.prompts import Prompts
+from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
 from explain.write_to_log import log_dialogue_input
 
@@ -186,14 +186,37 @@ class ExplainBot:
                                y_values=background_y_values,
                                categorical_mapping=self.categorical_mapping)
 
+        # Load FeatureStatisticsExplainer with background data
+        feature_statistics_explainer = FeatureStatisticsExplainer(background_dataset,
+                                                                  self.numerical_features,
+                                                                  feature_names=list(background_dataset.columns),
+                                                                  rounding_precision=self.conversation.rounding_precision,
+                                                                  categorical_mapping=self.categorical_mapping,
+                                                                  feature_units=self.feature_units)
+        self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
+
     def get_next_instance(self):
         """
         Returns the next instance in the data_instances list if possible.
         """
         if len(self.data_instances) == 0:
             self.load_data_instances()  # TODO: Infinity loop - Where is experiment end determined?
+            self.load_test_instances()
         self.current_instance = self.data_instances.pop(0)
-        return self.current_instance
+        # Add units to the current instance
+        current_instance_with_units = copy.deepcopy(self.current_instance[1])  # triple(index, instance, prediction)
+        for feature, unit in self.feature_units.items():
+            current_instance_with_units[feature] = f"{current_instance_with_units[feature]} {unit}"
+        # Get triple back to original format
+        current_instance_with_units = (self.current_instance[0], current_instance_with_units, self.current_instance[2])
+        return current_instance_with_units
+
+    def get_current_prediction(self):
+        """
+        Returns the current prediction.
+        """
+        current_prediction = np.argmax(self.current_instance[2])
+        return current_prediction
 
     def get_feature_tooltips(self):
         """
@@ -258,7 +281,8 @@ class ExplainBot:
                                    data=data,
                                    num_features=numeric_f,
                                    class_names=self.conversation.class_names,
-                                   categorical_mapping=self.categorical_mapping)
+                                   categorical_mapping=self.categorical_mapping,
+                                   background_dataset=background_dataset)
         tabular_dice.get_explanations(ids=list(data.index),
                                       data=data)
         message = (f"...loaded {len(tabular_dice.cache)} dice tabular "
@@ -287,13 +311,6 @@ class ExplainBot:
         tabular_anchor.get_explanations(ids=list(data.index),
                                         data=data)
 
-        # Load feature statistics explanations
-        feature_statistics_explainer = FeatureStatisticsExplainer(data,
-                                                                  self.numerical_features,
-                                                                  feature_names=list(data.columns),
-                                                                  rounding_precision=self.conversation.rounding_precision,
-                                                                  categorical_mapping=self.categorical_mapping)
-
         # Load Ceteris Paribus Explanations
         """ceteris_paribus_explainer = CeterisParibus(model=model,
                                                    background_data=background_dataset,
@@ -309,17 +326,23 @@ class ExplainBot:
         self.conversation.add_var('tabular_anchor', tabular_anchor, 'explanation')
         # list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
-        self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
-
         # Load Experiment Helper
         helper = ExperimentHelper(self.conversation, self.categorical_mapping, self.categorical_features)
         self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
+        # Load test instances
+        test_instance_explainer = TestInstances(data, model, mega_explainer, helper,
+                                                diverse_instance_ids=diverse_instance_ids,
+                                                actionable_features=self.actionable_features)
+        test_instances = test_instance_explainer.get_test_instances()
+        self.conversation.add_var('test_instances', test_instances, 'test_instances')
 
     def load_data_instances(self):
         # dataset_pd = self.conversation.get_var("dataset").contents['X']
         diverse_instances = self.conversation.get_var("diverse_instances").contents
         instance_results = []
         for instance in diverse_instances:
+            instance_pd = pd.DataFrame(instance['values'], index=[0])
+            model_prediction = self.conversation.get_var("model_prob_predict").contents(instance_pd)[0]
             id = instance['id']
             # current_instance = list(dataset_pd.loc[id].values)
             instance_result_dict = {}
@@ -328,8 +351,14 @@ class ExplainBot:
                     instance_result_dict[feature_name] = self.categorical_mapping[i][val]
                 else:
                     instance_result_dict[feature_name] = val
-            instance_results.append((id, instance_result_dict))
+            # turn instance to pandas df for model prediction
+            instance_results.append((id, instance_result_dict, model_prediction))
         self.data_instances = instance_results
+
+    def load_test_instances(self):
+        test_instances = self.conversation.get_var("test_instances").contents
+        #TODO: FInish
+        return None
 
     def load_model(self, filepath: str):
         """Loads a model.
