@@ -67,7 +67,7 @@ def get_feature_importance_by_feature_id(conversation,
 
     # If the feature importance value is 0, then the feature is not important for the prediction
     if feature_importance_value == 0:
-        output_text = f"The feature <em>{feature_name}</em> is not important for the prediction."
+        output_text = f"The feature <b>{feature_name}</b> is not important for the prediction."
         return output_text, 1, 0
 
     feature_importance_ranking_name = feature_importance_ranking + 1
@@ -76,7 +76,7 @@ def get_feature_importance_by_feature_id(conversation,
     elif feature_importance_ranking_name == 2:
         feature_importance_ranking_name = 'second most'
 
-    output_text = f"The feature <em>{feature_name}</em> is the <em>{feature_importance_ranking_name}</em>. important feature with a value of {str(feature_importance_value)}. "
+    output_text = f"The feature <b>{feature_name}</b> is the <em>{feature_importance_ranking_name}</em>. important feature with a value of {str(feature_importance_value)}. "
     return output_text, 1, feature_importance_value
 
 
