@@ -275,10 +275,7 @@ class TabularDice(Explanation):
         ids = list(data.index)
         key = ids[0]
 
-        original_prediction = self.model.predict(data)[0]
-        original_label = self.get_label_text(original_prediction)
-
-        final_cfes = cfe.cf_examples_list[0].final_cfs_df
+        final_cfes = cfe[key].cf_examples_list[0].final_cfs_df
         if final_cfes is None:
             return (
                        f"There are no changes possible to the chosen attribute alone that would result in a different prediction."), 0
@@ -287,26 +284,21 @@ class TabularDice(Explanation):
         if self.temp_outcome_name in final_cfes.columns:
             final_cfes.pop(self.temp_outcome_name)
 
-        new_predictions = self.model.predict(final_cfes)
-
         original_instance = data.loc[[key]]
 
-        # output_string = f"The original prediction is "
-        # output_string += f"<em>{original_label}</em>. "
         output_string = ""
         output_string += "Here is how you could switch the attribute values to flip the prediction."
         output_string += "<br><br>"
 
-        output_string += "If you <em>"
-        transition_words = ["Further,", "Also,", "In addition,", "Furthermore,"]
+        # Get all cfe strings and remove duplicates
+        cfe_strings = [self.get_change_string(final_cfes.loc[[c_id]], original_instance) for c_id in final_cfe_ids]
+        cfe_strings = list(set(cfe_strings))
+        # Filter cfe strings that contain the attribute to vary
+        cfe_strings = [cfe_string for cfe_string in cfe_strings if attribute_to_vary in cfe_string]
 
-        for i, c_id in enumerate(final_cfe_ids):
+        for i, cfe_string in enumerate(cfe_strings):
             # Stop the summary in case its getting too large
             if i < self.num_in_short_summary:
-                if i != 0:
-                    output_string += f"{np.random.choice(transition_words)} if you <em>"
-                output_string += self.get_change_string(final_cfes.loc[[c_id]], original_instance)
-                new_prediction = self.get_label_text(new_predictions[i])
-                output_string += f"</em>, the model will predict {new_prediction}.<br><br>"
-
+                output_string += cfe_string
+                output_string += f".<br><br>"
         return output_string, 1
