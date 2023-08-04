@@ -17,7 +17,7 @@ from flask import Flask
 import gin
 import numpy as np
 
-from data.response_templates.feature_importances import textual_fi_with_values, textual_fi_relational, \
+from data.response_templates.feature_importances_template import textual_fi_with_values, textual_fi_relational, \
     visual_feature_importance_list
 from explain.mega_explainer.explainer import Explainer
 
@@ -247,7 +247,8 @@ class MegaExplainer(Explanation):
 
     def get_information_to_print_explanation(self,
                                              feature_importances: dict,
-                                             feature_values: pandas.DataFrame = None):
+                                             feature_values: pandas.DataFrame = None,
+                                             include_feature_value: bool = False):
         for label in feature_importances:
             sig_coefs = []
             for feature_imp in feature_importances[label]:
@@ -258,8 +259,12 @@ class MegaExplainer(Explanation):
                         decoded_feature_value = self.categorical_mapping[column_id][int(feature_value)]
                     except KeyError:
                         decoded_feature_value = feature_value
-                    sig_coefs.append([feature_imp + " = " + str(decoded_feature_value),
-                                      np.mean(feature_importances[label][feature_imp])])
+                    if include_feature_value:
+                        sig_coefs.append([feature_imp + f" ({str(decoded_feature_value)})",
+                                          np.mean(feature_importances[label][feature_imp])])
+                    else:
+                        sig_coefs.append([feature_imp,
+                                          np.mean(feature_importances[label][feature_imp])])
                 else:
                     sig_coefs.append([feature_imp,
                                       np.mean(feature_importances[label][feature_imp])])
