@@ -102,7 +102,7 @@ def run_action_by_id(conversation: Conversation,
     feature_name = data.columns[feature_id]
     parse_op = f"ID {instance_id}"
 
-    get_explanation_report(conversation, instance_id)
+    # get_explanation_report(conversation, instance_id)
 
     if question_id == 0:
         # Which attributes does the model use to make predictions?
@@ -126,7 +126,7 @@ def run_action_by_id(conversation: Conversation,
         # What are the top 3 important attributes for this prediction?
         parse_op = "top 3"
         explanation = explain_feature_importances(conversation, data, parse_op, regen)
-        answer = "The top 3 attributes for this prediction are: "
+        answer = "Here are the 3 most important attributes for this prediction: <br><br>"
         return answer + explanation[0]
     """if question_id == 5:
         # Why did the model give this particular prediction for this person?
@@ -140,22 +140,23 @@ def run_action_by_id(conversation: Conversation,
         explanation = explain_feature_importances(conversation, data, parse_op, regen)
         answer = "The following attributes were most important for the prediction. "
         return answer + explanation[0]
-    if question_id == 6:
+    """if question_id == 6:
         # What would happen to the prediction if we changed [feature] for this person?
         explanation = explain_cfe_by_given_features(conversation, data, [feature_name])
         if explanation[1] == 0:
             answer = explanation[0] + feature_name + "."
         else:
             answer = explanation[0]
-        return answer
+        return answer"""
     if question_id == 7:
         # How should this person change to get a different prediction?
         explanation = explain_cfe(conversation, data, parse_op, regen)
         return explanation[0]
     if question_id == 8:
         # How should this attribute change to get a different prediction?
-        explanation = explain_cfe_by_given_features(conversation, data, [feature_name])
-        return explanation[0]
+        top_features_dict, _ = explain_feature_importances(conversation, data, parse_op, regen, as_text=False)
+        explanation = explain_cfe_by_given_features(conversation, data, [feature_name], top_features_dict)
+        return explanation
     if question_id == 9:
         # Which changes to this person would still get the same prediction?
         explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
@@ -198,7 +199,6 @@ def get_explanation_report(conversation,
     model_prediction = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
     opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction))
     feature_importances, _ = explain_feature_importances(conversation, data, parse_op, regen, as_text=False)
-    feature_importances = feature_importances[0][0]
     # Turn list of values into int
     feature_importances = {key: round(float(value[0]), ndigits=3) for key, value in feature_importances.items()}
     counterfactual_strings, _ = explain_cfe(conversation, data, parse_op, regen)
