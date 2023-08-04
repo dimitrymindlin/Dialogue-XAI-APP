@@ -93,18 +93,31 @@ def explain_cfe(conversation, data, parse_op, regen):
 
 def explain_cfe_by_given_features(conversation,
                                   data,
-                                  feature_names_list):
+                                  feature_names_list,
+                                  top_features):
     """Get CFE explanation when changing the features in the feature_names_list
     Args:
         conversation: Conversation object
         data: Dataframe of data to explain
         feature_names_list: List of feature names to change
+        top_features: dict sorted by most important feature
     """
     dice_tabular = conversation.get_var('tabular_dice').contents
     cfes = dice_tabular.run_explanation(data, "opposite", features_to_vary=feature_names_list)
-    for instance_id, cfe in cfes.items():
-        change_string = dice_tabular.summarize_cfe(cfe, data)
-    conversation.store_followup_desc(change_string[0])
+    initial_feature_to_vary = feature_names_list[0]  # TODO: So far expecting that user only selects one feature.
+    change_string_prefix = ""
+    if cfes[data.index[0]].cf_examples_list[0].final_cfs_df is None:
+        change_string_prefix = "There are no possible changes to the attribute <b>alone</b> to shift the prediction. <br><br>"
+        # Find cfs with more features than just one feature by iterating over the top features and adding them
+        for new_feature, importance in top_features.items():
+            if new_feature not in feature_names_list:
+                feature_names_list.append(new_feature)
+                cfes = dice_tabular.run_explanation(data, "opposite", features_to_vary=feature_names_list)
+                if cfes[data.index[0]].cf_examples_list[0].final_cfs_df is not None:
+                    break
+    change_string, _ = dice_tabular.summarize_cfe_for_given_attribute(cfes, data, initial_feature_to_vary)
+    conversation.store_followup_desc(change_string)
+    change_string = change_string_prefix + change_string
     return change_string
 
 
