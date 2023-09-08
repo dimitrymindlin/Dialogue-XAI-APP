@@ -201,7 +201,6 @@ class ExplainBot:
         """
         if len(self.data_instances) == 0:
             self.load_data_instances()  # TODO: Infinity loop - Where is experiment end determined?
-            self.load_test_instances()
         self.current_instance = self.data_instances.pop(0)
         # Add units to the current instance
         current_instance_with_units = copy.deepcopy(self.current_instance[1])  # triple(index, instance, prediction)
