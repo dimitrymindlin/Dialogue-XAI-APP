@@ -75,8 +75,12 @@ def get_feature_importance_by_feature_id(conversation,
         feature_importance_ranking_name = 'most'
     elif feature_importance_ranking_name == 2:
         feature_importance_ranking_name = 'second most'
+    elif feature_importance_ranking_name == 3:
+        feature_importance_ranking_name = 'third most'
+    else:
+        feature_importance_ranking_name = str(feature_importance_ranking_name) + "th most"
 
-    output_text = f"The feature <b>{feature_name}</b> is the <em>{feature_importance_ranking_name}</em>. important feature with a value of {str(feature_importance_value)}. "
+    output_text = f"The feature <b>{feature_name}</b> is the {feature_importance_ranking_name} important feature."
     return output_text, 1, feature_importance_value
 
 
