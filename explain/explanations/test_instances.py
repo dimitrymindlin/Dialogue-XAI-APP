@@ -79,15 +79,24 @@ class TestInstances:
             # Get the least complex instance (i.e. the last one in the df)
             least_complex_instance = similar_instances.tail(1)
             # get a list of counterfactual instance by varying the easiest instance
-            """counterfactual_instances = self.experiment_helper.get_counterfactual_instances(least_complex_instance)
+            counterfactual_instances = self.experiment_helper.get_counterfactual_instances(least_complex_instance)
             # Restructure counterfactual instances list to be list of one row dataframes
 
             # Sort instances by complexity
             counterfactual_instances = sort_instances_by_complexity(original_instance, counterfactual_instances,
-                                                                    feature_importances, self.model.predict_proba)"""
+                                                                    feature_importances, self.model.predict_proba)
+
+            # get an easy counterfactual instance
+            easy_counterfactual_instance = counterfactual_instances.tail(1)
+
+            # get a hard counterfactual instance
+            hard_counterfactual_instance = counterfactual_instances.head(1)
+
             # Save most_complex, least_complex and counterfactual instance in dict
             test_instances[original_instance.index[0]] = {"most_complex_instance": most_complex_instance,
-                                                          "least_complex_instance": least_complex_instance}
+                                                          "least_complex_instance": least_complex_instance,
+                                                          "easy_counterfactual_instance": easy_counterfactual_instance,
+                                                          "hard_counterfactual_instance": hard_counterfactual_instance}
         # Save dict to pkl file
         if save_to_cache:
             with open(self.cache_location, 'wb') as file:
