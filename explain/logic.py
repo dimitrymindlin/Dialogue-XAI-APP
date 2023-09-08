@@ -209,6 +209,13 @@ class ExplainBot:
             current_instance_with_units[feature] = f"{current_instance_with_units[feature]} {unit}"
         # Get triple back to original format
         current_instance_with_units = (self.current_instance[0], current_instance_with_units, self.current_instance[2])
+        """# TODO: Put this somewhere else!  WAS ONLY FOR TESTING.
+        # Get test instances
+        #self.load_test_instances()
+        current_test_instances = self.test_instances[self.current_instance[0]]
+        # Print current test instances as json
+        for instance_category, test_instance in current_test_instances.items():
+            print(test_instance.transpose().to_json(indent=4))"""
         return current_instance_with_units
 
     def get_current_prediction(self):
