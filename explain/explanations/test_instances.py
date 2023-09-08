@@ -131,10 +131,8 @@ def calculate_prediction_task_complexity(original_instance,
         new_instance = new_instance.transpose()
 
     # Calculate distance between original and new instance
-    similarity = cosine_similarity(original_instance, new_instance)[0][0]
+    similarity = cosine_similarity(original_instance, new_instance)[0][0]  # cos similarity, 0 = different, 1 = same
     # distance = np.linalg.norm(original_instance_scaled - new_instance_scaled)  # Euclidean distance
-    distance = 1 - similarity
-    print(distance)
 
     # Calculate sparsity of changes (i.e. how many features were changed) weighted by feature importance
     # Get the absolute values of the feature importances
@@ -145,14 +143,14 @@ def calculate_prediction_task_complexity(original_instance,
             for feature in new_instance)[0]
     print(weighted_diff)
 
-    # Calculate difference in certainty of model prediction, considering if the class changed
+    """# Calculate difference in certainty of model prediction, considering if the class changed
     prediction_certainty_difference = abs(model_certainty_old[0] - model_certainty_new[0]) + \
                                       abs(model_certainty_old[1] - model_certainty_new[1])
 
-    print(prediction_certainty_difference)
+    print(prediction_certainty_difference)"""
 
     # Calculate prediction task complexity
-    prediction_task_complexity = distance + weighted_diff + prediction_certainty_difference
+    prediction_task_complexity = similarity + weighted_diff
     return prediction_task_complexity
 
 
