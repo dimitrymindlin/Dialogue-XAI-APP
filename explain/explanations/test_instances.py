@@ -184,7 +184,8 @@ def sort_instances_by_complexity(original_instance,
         try:
             new_instance_logits = pred_f(new_instance)[0]
         except ValueError:
-            continue
+            new_instance = new_instance.astype('float64')
+            new_instance_logits = pred_f(new_instance)[0]
         # calculate prediction task complexity
         instance_complexity = calculate_prediction_task_complexity(original_instance, new_instance,
                                                                    feature_importances, original_logits,
