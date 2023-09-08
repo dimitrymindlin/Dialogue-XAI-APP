@@ -362,9 +362,28 @@ class ExplainBot:
         self.data_instances = instance_results
 
     def load_test_instances(self):
+        # TODO: How do I want to store them?
         test_instances = self.conversation.get_var("test_instances").contents
-        #TODO: FInish
-        return None
+        instance_results = {}
+
+        for instance_id, instances_dict in test_instances.items():
+            for complexity_string, instance_df in instances_dict.items():
+                mapping_dict_with_names = {
+                    instance_df.columns[pos]: values for pos, values in self.categorical_mapping.items()
+                }
+
+                # Apply the mapping to the entire DataFrame using nested loops
+                for column_index, column in enumerate(instance_df.columns):
+                    for row_index, cell_value in enumerate(instance_df[column]):
+                        if isinstance(cell_value, int):
+                            categorical_value = mapping_dict_with_names[column][cell_value]
+                            instance_df.iat[row_index, column_index] = categorical_value
+
+                # Update the DataFrame in the instances_dict with the modified DataFrame
+                instances_dict[complexity_string] = instance_df
+            # Update the instances_dict in the instance_results dict
+            instance_results[instance_id] = instances_dict
+        self.test_instances = instance_results
 
     def load_model(self, filepath: str):
         """Loads a model.
