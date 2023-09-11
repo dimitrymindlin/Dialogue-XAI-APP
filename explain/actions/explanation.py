@@ -2,6 +2,9 @@
 
 This action controls the explanation generation operations.
 """
+import base64
+import io
+
 from explain.actions.utils import gen_parse_op_text
 
 
@@ -46,6 +49,38 @@ def explain_feature_importances(conversation, data, parse_op, regen, as_text=Tru
         predicted_label = list(top_features_dict.keys())[0]
         top_features_dict = top_features_dict[predicted_label]
         return top_features_dict, 1
+
+
+def explain_feature_importances_as_plot(conversation, data, parse_op, regen):
+    import matplotlib.pyplot as plt
+    data_dict, _ = explain_feature_importances(conversation, data, parse_op, regen, as_text=False)
+    labels = list(data_dict.keys())
+    values = [val[0] for val in data_dict.values()]
+
+    # Reverse the order
+    labels = labels[::-1]
+    values = values[::-1]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars = ax.barh(labels, values, color=['red' if v < 0 else 'blue' for v in values])
+
+    # Increase the y-axis label size
+    plt.yticks(fontsize=16)  # Adjust the '12' to whatever size you find appropriate
+    plt.tight_layout()
+
+    # Save the plot to a BytesIO object
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+    buf.close()
+
+    # Clear the current plot to free memory
+    plt.close()
+
+    html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot"><span>THis is a test text. </span>'
+
+    return html_string, 1
 
 
 def get_feature_importance_by_feature_id(conversation,

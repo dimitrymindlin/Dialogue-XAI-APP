@@ -10,7 +10,7 @@ import numpy as np
 
 from explain.actions.explanation import explain_feature_importances, explain_cfe, \
     get_feature_importance_by_feature_id, explain_cfe_by_given_features, \
-    explain_anchor_changeable_attributes_without_effect, explain_feature_statistic
+    explain_anchor_changeable_attributes_without_effect, explain_feature_statistic, explain_feature_importances_as_plot
 from explain.actions.filter import filter_operation
 from explain.actions.prediction_likelihood import predict_likelihood
 from explain.conversation import Conversation

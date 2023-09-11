@@ -372,7 +372,7 @@ class ExplainBot:
                     instance_df.columns[pos]: values for pos, values in self.categorical_mapping.items()
                 }
 
-                # Apply the mapping to the entire DataFrame using nested loops
+                # Map int feature values to strings using nested loops
                 for column_index, column in enumerate(instance_df.columns):
                     for row_index, cell_value in enumerate(instance_df[column]):
                         if isinstance(cell_value, int):
