@@ -79,7 +79,9 @@ def explain_feature_importances_as_plot(conversation, data, parse_op, regen):
     # Clear the current plot to free memory
     plt.close()
 
-    html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot"><span>THis is a test text. </span>'
+    html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
+                  f'<span>The blue bars show that the variable contributes to the current prediction,' \
+                  f'and the red bars show attributes that count towards the opposite prediction.</span>'
 
     return html_string, 1
 
