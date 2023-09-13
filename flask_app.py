@@ -74,6 +74,7 @@ def get_datapoint():
     """
     # TODO: Which things are needed in frontent?
     instance_id, instance_dict, prediction_proba = BOT.get_next_instance()
+    instance_dict["id"] = str(instance_id)
     return instance_dict
 
 
