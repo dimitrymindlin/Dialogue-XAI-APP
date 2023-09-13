@@ -65,7 +65,8 @@ def explain_feature_importances_as_plot(conversation, data, parse_op, regen):
     bars = ax.barh(labels, values, color=['red' if v < 0 else 'blue' for v in values])
 
     # Increase the y-axis label size
-    plt.yticks(fontsize=16)  # Adjust the '12' to whatever size you find appropriate
+    plt.yticks(fontsize=18)
+    plt.xticks(fontsize=18)
     plt.tight_layout()
 
     # Save the plot to a BytesIO object
