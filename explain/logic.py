@@ -202,13 +202,19 @@ class ExplainBot:
         """
         if len(self.data_instances) == 0:
             self.load_data_instances()  # TODO: Infinity loop - Where is experiment end determined?
+            self.load_test_instances()
 
         if not self.showed_teaching:
             self.current_instance = self.data_instances.pop(0)
             self.showed_teaching = True
         else:
-            self.current_instance = self.test_instances.pop(0)["least_complex_instance"]
+            test_id = self.current_instance[0]
+            self.current_instance = self.test_instances.pop(test_id)["least_complex_instance"].to_dict()
             self.showed_teaching = False
+            # turn to correct format
+            self.current_instance = {name: value_dict[test_id] for name, value_dict in
+                                     self.current_instance.items()}  # unpack dict
+            self.current_instance = (test_id, self.current_instance, None)
         # Add units to the current instance
         current_instance_with_units = copy.deepcopy(self.current_instance[1])  # triple(index, instance, prediction)
         for feature, unit in self.feature_units.items():
