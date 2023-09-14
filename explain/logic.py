@@ -130,6 +130,7 @@ class ExplainBot:
         self.manual_var_filename = None
 
         self.decoding_model_name = parsing_model_name
+        self.showed_teaching = False  # track if we showed teaching instance or test instance in experiment
 
         # Initialize completion + parsing modules
         """
@@ -201,7 +202,13 @@ class ExplainBot:
         """
         if len(self.data_instances) == 0:
             self.load_data_instances()  # TODO: Infinity loop - Where is experiment end determined?
-        self.current_instance = self.data_instances.pop(0)
+
+        if not self.showed_teaching:
+            self.current_instance = self.data_instances.pop(0)
+            self.showed_teaching = True
+        else:
+            self.current_instance = self.test_instances.pop(0)["least_complex_instance"]
+            self.showed_teaching = False
         # Add units to the current instance
         current_instance_with_units = copy.deepcopy(self.current_instance[1])  # triple(index, instance, prediction)
         for feature, unit in self.feature_units.items():
@@ -222,7 +229,9 @@ class ExplainBot:
         Returns the current prediction.
         """
         current_prediction = np.argmax(self.current_instance[2])
-        return current_prediction
+        # Turn to string
+        prediction_string = self.conversation.class_names[current_prediction]
+        return prediction_string
 
     def get_feature_tooltips(self):
         """
