@@ -74,6 +74,7 @@ def get_datapoint():
     """
     # TODO: Which things are needed in frontent?
     instance_id, instance_dict, prediction_proba = BOT.get_next_instance()
+    instance_dict["id"] = str(instance_id)
     return instance_dict
 
 
@@ -84,7 +85,8 @@ def get_current_prediction():
     """
     # TODO: Which things are needed in frontent?
     current_prediction = BOT.get_current_prediction()
-    return current_prediction
+    prediction_dict = {"prediction": current_prediction}
+    return prediction_dict
 
 
 @bp.route('/get_feature_tooltips', methods=['GET'])
