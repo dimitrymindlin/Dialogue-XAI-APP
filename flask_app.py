@@ -85,7 +85,8 @@ def get_current_prediction():
     """
     # TODO: Which things are needed in frontent?
     current_prediction = BOT.get_current_prediction()
-    return current_prediction
+    prediction_dict = {"prediction": current_prediction}
+    return prediction_dict
 
 
 @bp.route('/get_feature_tooltips', methods=['GET'])
