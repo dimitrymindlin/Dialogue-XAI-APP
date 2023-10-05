@@ -51,6 +51,7 @@ class ExplainBot:
     """The ExplainBot Class."""
 
     def __init__(self,
+                 user_id: str,
                  model_file_path: str,
                  dataset_file_path: str,
                  background_dataset_file_path: str,
