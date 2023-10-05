@@ -39,7 +39,7 @@ class TabularAnchor(Explanation):
         self.data = data.to_numpy()
         self.mode = mode
         self.model = model
-        self.categorical_names = categorical_names
+        self.categorical_names = categorical_names if categorical_names is not None else {}
         self.class_names = list(class_names.values())
         self.feature_names = feature_names
 

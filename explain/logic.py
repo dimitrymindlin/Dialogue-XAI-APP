@@ -215,7 +215,10 @@ class ExplainBot:
             self.current_instance = {name: value_dict[test_id] for name, value_dict in
                                      self.current_instance.items()}  # unpack dict
             self.current_instance = (test_id, self.current_instance, None)
-        # Add units to the current instance
+        # Add units to the current instance if they exist
+        if self.feature_units is None:
+            return self.current_instance
+
         current_instance_with_units = copy.deepcopy(self.current_instance[1])  # triple(index, instance, prediction)
         for feature, unit in self.feature_units.items():
             current_instance_with_units[feature] = f"{current_instance_with_units[feature]} {unit}"
@@ -368,7 +371,7 @@ class ExplainBot:
             # current_instance = list(dataset_pd.loc[id].values)
             instance_result_dict = {}
             for i, (feature_name, val) in enumerate(instance['values'].items()):
-                if i in self.categorical_mapping:
+                if self.categorical_mapping is not None and i in self.categorical_mapping:
                     instance_result_dict[feature_name] = self.categorical_mapping[i][val]
                 else:
                     instance_result_dict[feature_name] = val
@@ -382,20 +385,27 @@ class ExplainBot:
         instance_results = {}
 
         for instance_id, instances_dict in test_instances.items():
-            for complexity_string, instance_df in instances_dict.items():
-                mapping_dict_with_names = {
-                    instance_df.columns[pos]: values for pos, values in self.categorical_mapping.items()
+            # Map categorical feature values to strings if categorical_mapping is not None
+            if self.categorical_mapping is not None:
+                for complexity_string, instance_df in instances_dict.items():
+                    mapping_dict_with_names = {
+                        instance_df.columns[pos]: values for pos, values in self.categorical_mapping.items()
+                    }
+                    # Map int feature values to strings using nested loops
+                    for column_index, column in enumerate(instance_df.columns):
+                        for row_index, cell_value in enumerate(instance_df[column]):
+                            if isinstance(cell_value, int):
+                                categorical_value = mapping_dict_with_names[column][cell_value]
+                                instance_df.iat[row_index, column_index] = categorical_value
+
+                    # Update the DataFrame in the instances_dict with the modified DataFrame
+                    instances_dict[complexity_string] = instance_df
+            else:
+                # If categorical_mapping is None, just convert all values to strings
+                instances_dict = {
+                    complexity_string: instance_df.astype(str) for complexity_string, instance_df in
+                    instances_dict.items()
                 }
-
-                # Map int feature values to strings using nested loops
-                for column_index, column in enumerate(instance_df.columns):
-                    for row_index, cell_value in enumerate(instance_df[column]):
-                        if isinstance(cell_value, int):
-                            categorical_value = mapping_dict_with_names[column][cell_value]
-                            instance_df.iat[row_index, column_index] = categorical_value
-
-                # Update the DataFrame in the instances_dict with the modified DataFrame
-                instances_dict[complexity_string] = instance_df
             # Update the instances_dict in the instance_results dict
             instance_results[instance_id] = instances_dict
         self.test_instances = instance_results

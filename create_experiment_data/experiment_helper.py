@@ -28,9 +28,10 @@ class ExperimentHelper:
     def get_similar_instance(self,
                              original_instance,
                              model,
-                             actionable_features: List[int] = list(),
+                             actionable_features: List[int],
                              max_features_to_vary=3):
         result_instance = None
+        actionable_features = actionable_features if actionable_features is not None else list()
         changed_features = 0
         for feature_name in actionable_features:
             # randomly decide if this feature should be changed
@@ -39,7 +40,7 @@ class ExperimentHelper:
             tmp_instance = original_instance.copy() if result_instance is None else result_instance.copy()
 
             # Get random change value for this feature
-            if feature_name in self.categorical_features:
+            if self.categorical_features is not None and feature_name in self.categorical_features:
                 max_feature_value = len(
                     self.categorical_mapping[original_instance.columns.get_loc(feature_name)])
                 random_change = np.random.randint(0, max_feature_value)
