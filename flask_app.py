@@ -101,8 +101,8 @@ def get_init_prompt():
         user_id = "TEST"
     current_prediction = bot_dict[user_id].get_current_prediction()
     prompt = f"""
-    Hello, the model predicted {current_prediction}? <br>
-    Pick a question from the right. 
+    Hello, the model predicted {current_prediction}. <br>
+    Pick a question from the right.
     You can find general questions in the upper half and questions that only work in combination with selecting an 
     attribute from the drop down box in the lower part. Once selected, press <b>Ask question</b>.
     """

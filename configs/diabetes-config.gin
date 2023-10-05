@@ -35,20 +35,6 @@ ExplainBot.numerical_features = None
 ExplainBot.remove_underscores = True
 ExplainBot.actionable_features = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction']
 
-
-# Few-shot settings
-ExplainBot.prompt_metric = "cosine"
-ExplainBot.prompt_ordering = "ascending"
-
-# Prompt params
-Prompts.prompt_cache_size = 1_000_000
-Prompts.prompt_cache_location = "./cache/diabetes-prompts.pkl"
-Prompts.max_values_per_feature = 2
-Prompts.sentence_transformer_model_name = "all-mpnet-base-v2"
-Prompts.prompt_folder = "./explain/prompts"
-Prompts.num_per_knn_prompt_template = 1
-Prompts.num_prompt_template = 7
-
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
 
