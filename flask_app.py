@@ -75,7 +75,25 @@ def get_datapoint():
     # TODO: Which things are needed in frontent?
     instance_id, instance_dict, prediction_proba = BOT.get_next_instance()
     instance_dict["id"] = str(instance_id)
+    # Make sure all values are strings
+    for key, value in instance_dict.items():
+        # turn floats to strings if float has zeroes after decimal point
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+        instance_dict[key] = str(value)
     return instance_dict
+
+
+@bp.route('/get_initial_prompt', methods=['GET'])
+def get_init_prompt():
+    current_prediction = BOT.get_current_prediction()
+    prompt = f"""
+    Hello, the model predicted {current_prediction}? <br>
+    Pick a question from the right. 
+    You can find general questions in the upper half and questions that only work in combination with selecting an 
+    attribute from the drop down box in the lower part. Once selected, press <b>Ask question</b>.
+    """
+    return prompt
 
 
 @bp.route('/get_current_prediction', methods=['GET'])
