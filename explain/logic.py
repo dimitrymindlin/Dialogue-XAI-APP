@@ -297,34 +297,36 @@ class ExplainBot:
                                        cat_features=categorical_f,
                                        class_names=self.conversation.class_names,
                                        categorical_mapping=self.categorical_mapping)
-        mega_explainer.get_explanations(ids=list(data.index),
+
+        # Load diverse instances (explanations)
+        diverse_instances_explainer = DiverseInstances(
+            lime_explainer=mega_explainer.mega_explainer.explanation_methods['lime_0.75'])
+        diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=data)
+        # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
+        diverse_instances = [{"id": i, "values": data.loc[i].to_dict()} for i in diverse_instance_ids]
+
+        message = (f"...loaded {len(diverse_instance_ids)} diverse instance ids "
+                   "from cache!")
+        app.logger.info(message)
+        # Compute explanations for diverse instances
+        mega_explainer.get_explanations(ids=diverse_instance_ids,
                                         data=data)
         message = (f"...loaded {len(mega_explainer.cache)} mega explainer "
                    "explanations from cache!")
         app.logger.info(message)
-        # Load lime dice explanations
+
+        # Load dice explanations
         tabular_dice = TabularDice(model=model,
                                    data=data,
                                    num_features=numeric_f,
                                    class_names=self.conversation.class_names,
                                    categorical_mapping=self.categorical_mapping,
                                    background_dataset=background_dataset)
-        tabular_dice.get_explanations(ids=list(data.index),
+        tabular_dice.get_explanations(ids=diverse_instance_ids,
                                       data=data)
+
         message = (f"...loaded {len(tabular_dice.cache)} dice tabular "
                    "explanations from cache!")
-        app.logger.info(message)
-
-        # Load diverse instances (explanations)
-        diverse_instances_explainer = DiverseInstances(
-            lime_explainer=mega_explainer.mega_explainer.explanation_methods['lime_0.75'])
-        diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=data)
-        message = (f"...loaded {len(diverse_instance_ids)} diverse instance ids "
-                   "from cache!")
-
-        # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
-        diverse_instances = [{"id": i, "values": data.loc[i].to_dict()} for i in diverse_instance_ids]
-
         app.logger.info(message)
 
         # Load anchor explanations
@@ -334,7 +336,7 @@ class ExplainBot:
                                        categorical_names=self.categorical_mapping,
                                        class_names=self.conversation.class_names,
                                        feature_names=list(data.columns))
-        tabular_anchor.get_explanations(ids=list(data.index),
+        tabular_anchor.get_explanations(ids=diverse_instance_ids,
                                         data=data)
 
         # Load Ceteris Paribus Explanations
