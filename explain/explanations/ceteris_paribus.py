@@ -3,7 +3,6 @@ import warnings
 import gin
 import numpy as np
 import pandas as pd
-from anchor.anchor_explanation import AnchorExplanation
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
@@ -75,7 +74,7 @@ class CeterisParibus(Explanation):
         for d in tqdm(list(current_data.index)):
             instance = current_data.loc[[d]]
             # Explain here
-            #observation = pd.DataFrame(instance).T
+            # observation = pd.DataFrame(instance).T
             # pred = np.array([np.argmax(self.model.predict(instance))])
             exp = dx.Explainer(self.model, self.background_data, y=self.ys)
             """bd = exp.predict_parts(observation, type='break_down', label=ys.iloc[0])
@@ -96,46 +95,3 @@ class CeterisParibus(Explanation):
 
             cps[d] = cur_cp
         return cps
-
-    def summarize_explanations(self,
-                               data: pd.DataFrame,
-                               ids_to_regenerate: list[int] = None,
-                               filtering_text: str = None,
-                               save_to_cache: bool = False):
-        """Summarizes explanations for Anchor tabular.
-
-        Arguments:
-            data: pandas df containing data.
-            ids_to_regenerate:
-            filtering_text:
-            save_to_cache:
-        Returns:
-            summary: a string containing the summary.
-        """
-
-        if ids_to_regenerate is None:
-            ids_to_regenerate = []
-        # Not needed in question selection case
-        """if data.shape[0] > 1:
-            return ("", "I can only compute Anchors for single instances at a time."
-                        " Please narrow down your selection to a single instance. For example, you"
-                        " could specify the id of the instance to want to figure out how to change.")"""
-
-        ids = list(data.index)
-        key = ids[0]
-
-        explanation = self.get_explanations(ids,
-                                            data,
-                                            ids_to_regenerate=ids_to_regenerate,
-                                            save_to_cache=save_to_cache)
-        exp = explanation[key]
-        output_string = ""
-        output_string += "By fixing the following attributes, the prediction stays the same even though other attributes are changed:"
-        output_string += "<br><br>"
-
-        additional_options = "Here are some more options to change the prediction of"
-        additional_options += f" instance id {str(key)}.<br><br>"
-
-        output_string += ' AND <br><br>'.join(exp.names())
-
-        return additional_options, output_string
