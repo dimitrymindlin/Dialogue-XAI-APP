@@ -15,7 +15,7 @@ ExplainBot.skip_prompts = True
 ExplainBot.t5_config = "./parsing/t5/gin_configs/t5-large.gin"
 
 # User provided prediction model file path
-ExplainBot.model_file_path = "./data/diabetes_model_grad_tree.pkl"
+ExplainBot.model_file_path = "./data/diabetes_model_logistic_regression.pkl"
 
 # Seed
 ExplainBot.seed = 0

@@ -29,19 +29,11 @@ for train_index, val_index in kf.split(X_values, y_values):
     X_train, X_val = X_values.iloc[train_index], X_values.iloc[val_index]
     y_train, y_val = y_values.iloc[train_index], y_values.iloc[val_index]
 
-    # Standardize data
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_val = scaler.transform(X_val)
-
-
-    # Train model
-    model = model_instance
-    model.fit(X_train, y_train)
+    lr_pipeline.fit(X_train, y_train)
 
     # Evaluate and store scores
-    train_scores.append(model.score(X_train, y_train))
-    validation_scores.append(model.score(X_val, y_val))
+    train_scores.append(lr_pipeline.score(X_train, y_train))
+    validation_scores.append(lr_pipeline.score(X_val, y_val))
 
 # Print average scores for the Ridge Classifier
 print(f"Model: {model_name}")
@@ -49,11 +41,11 @@ print("Average Train Score:", np.mean(train_scores))
 print("Average Validation Score:", np.mean(validation_scores))
 print("-" * 50)
 
-# Sort and print feature importances for the Ridge Classifier
-importances = lr_pipeline.named_steps['lr'].coef_
+# Sort and print feature importances (coefficients) for the Logistic Regression model
+importances = lr_pipeline.named_steps['lr'].coef_[0]  # Access the first row for binary classification
 sorted_indices = np.argsort(np.abs(importances))[::-1]  # Sort by absolute value
 
-print("Sorted feature importances for Ridge Classifier:")
+print(f"Sorted feature importances for {model_name}:")
 for i in sorted_indices:
     print(f"    {X_values.columns[i]}: {importances[i]}")
 
