@@ -126,7 +126,7 @@ def run_action_by_id(conversation: Conversation,
     if question_id == 4:
         # What are the top 3 important attributes for this prediction?
         parse_op = "top 3"
-        explanation = explain_feature_importances(conversation, data, parse_op, regen, as_text=False)
+        explanation = explain_feature_importances(conversation, data, parse_op, regen, as_text=True)
         answer = "Here are the 3 most important attributes for this prediction: <br><br>"
         return answer + explanation[0]
     """if question_id == 5:
