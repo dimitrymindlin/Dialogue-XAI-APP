@@ -1,8 +1,6 @@
 """The app main."""
 import json
 import logging
-import sys
-from logging.config import dictConfig
 import os
 import traceback
 
@@ -32,22 +30,6 @@ bp = Blueprint('host', __name__, template_folder='templates')
 
 CORS(bp)
 
-dictConfig({
-    'version': 1,
-    'formatters': {'default': {
-        'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
-    }},
-    'handlers': {'wsgi': {
-        'class': 'logging.StreamHandler',
-        'stream': 'ext://flask.logging.wsgi_errors_stream',
-        'formatter': 'default'
-    }},
-    'root': {
-        'level': 'INFO',
-        'handlers': ['wsgi']
-    }
-})
-
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # Parse application level configs
@@ -70,7 +52,7 @@ def home():
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
     objective = bot_dict[user_id].conversation.describe.get_dataset_objective()
-    return render_template("new.html", currentUserId="user", datasetObjective=objective)
+    return render_template("new.html", currentUserId=user_id, datasetObjective=objective)
 
 
 @bp.route('/get_datapoint', methods=['GET'])
@@ -156,6 +138,8 @@ def get_questions():
 def get_bot_response():
     """Load the box response."""
     user_id = request.args.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
     if request.method == "POST":
         app.logger.info("generating the bot response")
         try:

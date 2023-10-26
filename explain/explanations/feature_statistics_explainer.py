@@ -1,11 +1,14 @@
 import pandas as pd
 
 from data.response_templates.feature_statistics_template import feature_statistics_template
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 class FeatureStatisticsExplainer:
     def __init__(self,
                  data: pd.DataFrame,
+                 y_labels: pd.Series,
                  numerical_features: list,
                  feature_names: list,
                  categorical_mapping,
@@ -13,6 +16,7 @@ class FeatureStatisticsExplainer:
                  feature_units: dict = None
                  ):
         self.data = data
+        self.y_labels = y_labels
         self.numerical_features = numerical_features
         self.feature_names = feature_names
         self.rounding_precision = rounding_precision
@@ -32,7 +36,11 @@ class FeatureStatisticsExplainer:
             result_text += f"The value <b>{value}</b> occurs <b>{frequency}</b> times.<br>"
         return result_text
 
-    def get_numerical_statistics(self, feature_name):
+    def get_numerical_statistics(self, feature_name, as_string=True):
+        if not as_string:
+            #return self.explain_numerical_statistics_as_plot(self.data[feature_name], feature_name)
+            return self.plot_binary_class_kde(self.data[feature_name], self.y_labels, feature_name)
+
         mean = round(self.data[feature_name].mean(), 2)
         std = round(self.data[feature_name].std(), 2)
         min_v = round(self.data[feature_name].min(), 2)
@@ -47,6 +55,64 @@ class FeatureStatisticsExplainer:
     def get_single_feature_statistic(self, feature_name):
         # Check if feature is numerical or categorical
         if feature_name in self.numerical_features:
-            return self.get_numerical_statistics(feature_name)
+            return self.get_numerical_statistics(feature_name, as_string=False)
         else:
             return self.get_categorical_statistics(feature_name)
+
+    def explain_numerical_statistics_as_plot(self, feature_data, feature_name):
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import io
+        import base64
+
+        # Create the KDE plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.kdeplot(feature_data, ax=ax, color='blue', shade=True)
+
+        # Setting labels and title
+        ax.set_title(f"Data Density Plot of {feature_name}", fontsize=20)
+        ax.set_xlabel(feature_name, fontsize=18)
+        ax.set_ylabel("Density", fontsize=18)
+
+        # Save the plot to a BytesIO object
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        buf.close()
+
+        # Clear the current plot to free memory
+        plt.close()
+
+        html_string = f'<img src="data:image/png;base64,{image_base64}" alt="KDE Plot">' \
+                      f'<span>A smoothed representation showing where most of the data points are concentrated.</span>'
+
+        return html_string
+
+    def plot_binary_class_kde(self, data, labels, feature_name,
+                              class_names=['unlikely to have diabetes', 'likely to have diabetes']):
+        """
+        Plots KDEs for a binary class feature.
+
+        Parameters:
+        - data (pd.Series or np.array): The feature data.
+        - labels (pd.Series or np.array): Binary labels corresponding to the data.
+        - feature_name (str): Name of the feature for labeling the x-axis.
+        - class_names (list): Names of the two classes. Default is ['Class 0', 'Class 1'].
+        """
+
+        # Split the data based on the labels
+        class_0_data = data[labels == 0]
+        class_1_data = data[labels == 1]
+
+        # Plotting the KDEs
+        plt.figure(figsize=(10, 6))
+        sns.kdeplot(class_0_data, shade=True, label=class_names[0], color='blue')
+        sns.kdeplot(class_1_data, shade=True, label=class_names[1], color='red')
+
+        # Setting title and labels
+        plt.title("Data Density Plot by Class")
+        plt.xlabel(feature_name)
+        plt.ylabel("Density")
+        plt.legend()
+        plt.show()
