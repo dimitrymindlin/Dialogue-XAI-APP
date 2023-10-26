@@ -67,7 +67,7 @@ def init():
     # Questions
     questions = bot_dict[user_id].get_questions_and_attributes()
     # Feature tooltip
-    feature_tooltip = bot_dict[user_id].get_feature_tooltip()
+    feature_tooltip = bot_dict[user_id].get_feature_tooltips()
     result = {
         "questions": questions,
         "feature_tooltip": feature_tooltip
