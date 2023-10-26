@@ -55,6 +55,26 @@ def home():
     return render_template("new.html", currentUserId=user_id, datasetObjective=objective)
 
 
+@bp.route('/init', methods=['GET'])
+def init():
+    """Load the explanation interface."""
+    user_id = request.args.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
+    BOT = ExplainBot(user_id)
+    bot_dict[user_id] = BOT
+    app.logger.info("Loaded Login and created bot")
+    # Questions
+    questions = bot_dict[user_id].get_questions_and_attributes()
+    # Feature tooltip
+    feature_tooltip = bot_dict[user_id].get_feature_tooltip()
+    result = {
+        "questions": questions,
+        "feature_tooltip": feature_tooltip
+    }
+    return result
+
+
 @bp.route('/get_train_datapoint', methods=['GET'])
 def get_train_datapoint():
     """
@@ -105,17 +125,6 @@ def get_test_datapoint():
             value = int(value)
         instance_dict[key] = str(value)
     return instance_dict
-
-@bp.route('/get_feature_tooltips', methods=['GET'])
-def get_feature_tooltips():
-    """
-    Get feature tooltips from the dataset.
-    """
-    user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    resp = bot_dict[user_id].feature_tooltip_mapping()
-    return resp
 
 
 @bp.route("/get_questions", methods=['POST'])
