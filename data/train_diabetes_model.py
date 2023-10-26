@@ -1,52 +1,63 @@
-"""Train compas model."""
 import numpy as np
 import pandas as pd
 import pickle as pkl
-
-from sklearn.ensemble import GradientBoostingClassifier
-# from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-
-from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 
 np.random.seed(3)
 
 X_values = pd.read_csv("./data/diabetes.csv")
 y_values = X_values.pop("y")
 
-scalar = StandardScaler()
+# Create Pipeline
+model_name = "Linear Regression"
+model_instance = LogisticRegression()
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X_values, y_values, test_size=0.40)
-cols = X_train.columns
-# Save data before transformations
-X_train['y'] = y_train
-X_test['y'] = y_test
-X_train.to_csv('./data/diabetes_train.csv')
-X_test.to_csv('./data/diabetes_test.csv')
-X_train.pop("y")
-X_test.pop("y")
-
-X_train = X_train.values
-X_test = X_test.values
-
-# Setup pipeline
-# lr_pipeline = Pipeline([('scaler', StandardScaler()),
-#                         ('lr', LogisticRegression(C=1.0, max_iter=10_000))])
 lr_pipeline = Pipeline([('scaler', StandardScaler()),
-                        ('lr', GradientBoostingClassifier())])
-lr_pipeline.fit(X_train, y_train)
+                        ('lr', model_instance)])
 
-print("Train Score:", lr_pipeline.score(X_train, y_train))
-print("Score:", lr_pipeline.score(X_test, y_test))
-print("Portion y==0:", np.sum(y_test.values == 0)
-      * 1. / y_test.values.shape[0])
+# KFold instance with k = 5
+kf = KFold(n_splits=5, shuffle=True, random_state=3)
 
-print("Column names: ", cols)
-# print("Coefficients: ", lr_pipeline.named_steps["lr"].coef_)
+train_scores = []
+validation_scores = []
 
-with open("./data/diabetes_model_grad_tree.pkl", "wb") as f:
+# Loop through each fold
+for train_index, val_index in kf.split(X_values, y_values):
+    X_train, X_val = X_values.iloc[train_index], X_values.iloc[val_index]
+    y_train, y_val = y_values.iloc[train_index], y_values.iloc[val_index]
+
+    # Standardize data
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_val = scaler.transform(X_val)
+
+
+    # Train model
+    model = model_instance
+    model.fit(X_train, y_train)
+
+    # Evaluate and store scores
+    train_scores.append(model.score(X_train, y_train))
+    validation_scores.append(model.score(X_val, y_val))
+
+# Print average scores for the Ridge Classifier
+print(f"Model: {model_name}")
+print("Average Train Score:", np.mean(train_scores))
+print("Average Validation Score:", np.mean(validation_scores))
+print("-" * 50)
+
+# Sort and print feature importances for the Ridge Classifier
+importances = lr_pipeline.named_steps['lr'].coef_
+sorted_indices = np.argsort(np.abs(importances))[::-1]  # Sort by absolute value
+
+print("Sorted feature importances for Ridge Classifier:")
+for i in sorted_indices:
+    print(f"    {X_values.columns[i]}: {importances[i]}")
+
+with open("./data/diabetes_model_logistic_regression.pkl", "wb") as f:
     pkl.dump(lr_pipeline, f)
 
 print("Saved model!")
