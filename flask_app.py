@@ -67,7 +67,7 @@ def init():
     # Questions
     questions = bot_dict[user_id].get_questions_and_attributes()
     # Feature tooltip
-    feature_tooltip = bot_dict[user_id].get_feature_tooltip()
+    feature_tooltip = bot_dict[user_id].get_feature_tooltips()
     result = {
         "questions": questions,
         "feature_tooltip": feature_tooltip
@@ -95,10 +95,8 @@ def get_train_datapoint():
     # Get initial prompt
     current_prediction = bot_dict[user_id].get_current_prediction()
     prompt = f"""
-        Hello, the model predicted {current_prediction}. <br>
-        Pick a question from the right.
-        You can find general questions in the upper half and questions that only work in combination with selecting an 
-        attribute from the drop down box in the lower part. Once selected, press <b>Ask question</b>.
+        Hello, the model predicted that the current Person is {current_prediction}. <br>
+        If you have questions about the prediction, select questions on the right an press <b>Ask question</b>.
         """
     instance_dict["initial_prompt"] = prompt
 
