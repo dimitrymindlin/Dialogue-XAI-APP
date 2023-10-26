@@ -190,6 +190,7 @@ class ExplainBot:
 
         # Load FeatureStatisticsExplainer with background data
         feature_statistics_explainer = FeatureStatisticsExplainer(background_dataset,
+                                                                  background_y_values,
                                                                   self.numerical_features,
                                                                   feature_names=list(background_dataset.columns),
                                                                   rounding_precision=self.conversation.rounding_precision,
@@ -481,6 +482,9 @@ class ExplainBot:
                                                                        cat_features,
                                                                        num_features,
                                                                        remove_underscores)
+
+        self.numerical_features = numeric
+        self.categorical_features = categorical
 
         if store_to_conversation:
 
