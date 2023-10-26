@@ -55,13 +55,11 @@ def home():
     return render_template("new.html", currentUserId=user_id, datasetObjective=objective)
 
 
-@bp.route('/get_datapoint', methods=['GET'])
-def get_datapoint():
+@bp.route('/get_train_datapoint', methods=['GET'])
+def get_train_datapoint():
     """
     Get a new datapoint from the dataset.
-    TODO: Check with michi where experiment handling will be.
     """
-    # TODO: Which things are needed in frontent?
     user_id = request.args.get("user_id")
     if user_id is None:
         user_id = "TEST"
@@ -73,37 +71,40 @@ def get_datapoint():
         if isinstance(value, float) and value.is_integer():
             value = int(value)
         instance_dict[key] = str(value)
+
+    # Get initial prompt
+    current_prediction = bot_dict[user_id].get_current_prediction()
+    prompt = f"""
+        Hello, the model predicted {current_prediction}. <br>
+        Pick a question from the right.
+        You can find general questions in the upper half and questions that only work in combination with selecting an 
+        attribute from the drop down box in the lower part. Once selected, press <b>Ask question</b>.
+        """
+    instance_dict["initial_prompt"] = prompt
+
+    # get the current prediction
+    current_prediction = bot_dict[user_id].get_current_prediction()
+    instance_dict["current_prediction"] = current_prediction
     return instance_dict
 
 
-@bp.route('/get_initial_prompt', methods=['GET'])
-def get_init_prompt():
+@bp.route('/get_test_datapoint', methods=['GET'])
+def get_test_datapoint():
+    """
+    Get a new datapoint from the dataset.
+    """
     user_id = request.args.get("user_id")
     if user_id is None:
         user_id = "TEST"
-    current_prediction = bot_dict[user_id].get_current_prediction()
-    prompt = f"""
-    Hello, the model predicted {current_prediction}. <br>
-    Pick a question from the right.
-    You can find general questions in the upper half and questions that only work in combination with selecting an 
-    attribute from the drop down box in the lower part. Once selected, press <b>Ask question</b>.
-    """
-    return prompt
-
-
-@bp.route('/get_current_prediction', methods=['GET'])
-def get_current_prediction():
-    """
-    For the current datapoint (Bot.current_instance), get the current prediction.
-    """
-    # TODO: Which things are needed in frontent?
-    user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    current_prediction = bot_dict[user_id].get_current_prediction()
-    prediction_dict = {"prediction": current_prediction}
-    return prediction_dict
-
+    instance_id, instance_dict, prediction_proba = bot_dict[user_id].get_next_instance(train=False)
+    instance_dict["id"] = str(instance_id)
+    # Make sure all values are strings
+    for key, value in instance_dict.items():
+        # turn floats to strings if float has zeroes after decimal point
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+        instance_dict[key] = str(value)
+    return instance_dict
 
 @bp.route('/get_feature_tooltips', methods=['GET'])
 def get_feature_tooltips():

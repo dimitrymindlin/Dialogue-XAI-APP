@@ -131,7 +131,6 @@ class ExplainBot:
         self.manual_var_filename = None
 
         self.decoding_model_name = parsing_model_name
-        self.showed_teaching = False  # track if we showed teaching instance or test instance in experiment
 
         # Initialize completion + parsing modules
         """
@@ -198,26 +197,24 @@ class ExplainBot:
                                                                   feature_units=self.feature_units)
         self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
-    def get_next_instance(self):
+    def get_next_instance(self, train=True):
         """
         Returns the next instance in the data_instances list if possible.
+        param train: Whether to return a training instance or a test instance
         """
         if len(self.data_instances) == 0:
             self.load_data_instances()  # TODO: Infinity loop - Where is experiment end determined?
             self.load_test_instances()
 
-        if not self.showed_teaching:
+        if train:
             self.current_instance = self.data_instances.pop(0)
-            self.showed_teaching = True
         else:
             test_id = self.current_instance[0]
             self.current_instance = self.test_instances.pop(test_id)["least_complex_instance"].to_dict()
-            self.showed_teaching = False
-            # turn to correct format
             self.current_instance = {name: value_dict[test_id] for name, value_dict in
                                      self.current_instance.items()}  # unpack dict
             self.current_instance = (test_id, self.current_instance, None)
-        # Add units to the current instance if they exist
+
         if self.feature_units is None:
             return self.current_instance
 
@@ -226,13 +223,6 @@ class ExplainBot:
             current_instance_with_units[feature] = f"{current_instance_with_units[feature]} {unit}"
         # Get triple back to original format
         current_instance_with_units = (self.current_instance[0], current_instance_with_units, self.current_instance[2])
-        """# TODO: Put this somewhere else!  WAS ONLY FOR TESTING.
-        # Get test instances
-        #self.load_test_instances()
-        current_test_instances = self.test_instances[self.current_instance[0]]
-        # Print current test instances as json
-        for instance_category, test_instance in current_test_instances.items():
-            print(test_instance.transpose().to_json(indent=4))"""
         return current_instance_with_units
 
     def get_current_prediction(self):
