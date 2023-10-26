@@ -45,6 +45,16 @@ MegaExplainer.use_selection = False
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/diabetes-dice-tabular.pkl"
 
+# Diverse Instances
+DiverseInstances.cache_location = "./cache/diabetes-diverse-instances.pkl"
+
+# Test Instances
+TestInstances.cache_location = "./cache/diabetes-test-instances.pkl"
+
+
+# Tabular Anchor Params
+TabularAnchor.cache_location = "./cache/diabetes-anchor-tabular.pkl"
+
 # Conversation params
 Conversation.class_names = {0: "unlikely to have diabetes", 1: "likely to have diabetes"}
 Conversation.question_bank_path =  "./data/question_bank.csv"
