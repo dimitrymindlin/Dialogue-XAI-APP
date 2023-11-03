@@ -64,8 +64,8 @@ DatasetDescription.dataset_objective = "predict whether someone has diabetes"
 DatasetDescription.dataset_description = "diabetes prediction"
 DatasetDescription.model_description = "gradient boosted tree"
 
-# Feature definitions
-ExplainBot.feature_definitions = {
+# Feature Tooltip
+ExplainBot.feature_tooltip_mapping = {
     "age": "age (years)",
     "pregnancies": "Number of times pregnant",
     "glucose": "Plasma glucose concentration a 2 hours in an oral glucose tolerance test",
