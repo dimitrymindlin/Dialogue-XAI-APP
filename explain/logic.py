@@ -21,6 +21,7 @@ from flask import Flask
 import gin
 
 from create_experiment_data.experiment_helper import ExperimentHelper
+from explain.explanations.shap_global_explainer import ShapGlobalExplainer
 from explain.explanations.test_instances import TestInstances
 from explain.action import run_action, run_action_by_id
 from explain.actions.explanation import explain_cfe_by_given_features
@@ -281,12 +282,13 @@ class ExplainBot:
         categorical_f = self.conversation.get_var('dataset').contents['cat']
         numeric_f = self.conversation.get_var('dataset').contents['numeric']
 
-        # Load lime tabular explanations
+        # Load local FI explanations
         mega_explainer = MegaExplainer(prediction_fn=pred_f,
                                        data=background_dataset,
                                        cat_features=categorical_f,
                                        class_names=self.conversation.class_names,
-                                       categorical_mapping=self.categorical_mapping)
+                                       categorical_mapping=self.categorical_mapping,
+                                       use_selection=True)
 
         # Load diverse instances (explanations)
         diverse_instances_explainer = DiverseInstances(
@@ -330,18 +332,27 @@ class ExplainBot:
                                         data=data)
 
         # Load Ceteris Paribus Explanations
-        """ceteris_paribus_explainer = CeterisParibus(model=model,
+        ceteris_paribus_explainer = CeterisParibus(model=model,
                                                    background_data=background_dataset,
                                                    ys=y_values,
                                                    class_names=self.conversation.class_names,
                                                    feature_names=list(data.columns))
         ceteris_paribus_explainer.get_explanations(ids=list(data.index),
-                                                   data=data)"""
+                                                   data=data)
+
+        # Load global explanation via shap explainer
+        shap_explainer = ShapGlobalExplainer(model=model,
+                                             data=data,
+                                             class_names=self.conversation.class_names)
+
+        shap_explainer.get_explanations()
 
         # Add all the explanations to the conversation
         self.conversation.add_var('mega_explainer', mega_explainer, 'explanation')
         self.conversation.add_var('tabular_dice', tabular_dice, 'explanation')
         self.conversation.add_var('tabular_anchor', tabular_anchor, 'explanation')
+        self.conversation.add_var('global_shap', shap_explainer, 'explanation')
+        self.conversation.add_var('ceteris_paribus', ceteris_paribus_explainer, 'explanation')
         # list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
         # Load Experiment Helper
