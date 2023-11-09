@@ -4,6 +4,8 @@ This action controls the explanation generation operations.
 """
 import base64
 import io
+import matplotlib.pyplot as plt
+import shap
 
 from explain.actions.utils import gen_parse_op_text
 
@@ -24,7 +26,7 @@ def explain_operation(conversation, parse_text, i, **kwargs):
     # Note, do we want to remove parsing for lime -> mega_explainer here?
     if parse_text[i + 1] == 'features' or parse_text[i + 1] == 'lime':
         # mega explainer explanation case
-        return explain_feature_importances(conversation, data, parse_op, regen)
+        return explain_local_feature_importances(conversation, data, parse_op, regen)
     if parse_text[i + 1] == 'cfe':
         return explain_cfe(conversation, data, parse_op, regen)
     if parse_text[i + 1] == 'shap':
@@ -33,7 +35,7 @@ def explain_operation(conversation, parse_text, i, **kwargs):
     raise NameError(f"No explanation operation defined for {parse_text}")
 
 
-def explain_feature_importances(conversation, data, parse_op, regen, as_text=True):
+def explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True):
     """Get Lime or SHAP explanation, considering fidelity (mega explainer functionality)"""
     mega_explainer_exp = conversation.get_var('mega_explainer').contents
     if as_text:
@@ -51,9 +53,50 @@ def explain_feature_importances(conversation, data, parse_op, regen, as_text=Tru
         return top_features_dict, 1
 
 
+def explain_global_feature_importances(conversation, as_plot=True):
+    global_shap_explainer = conversation.get_var('global_shap').contents
+    # get shap explainer
+    explanation = global_shap_explainer.get_explanations()
+    if as_plot:
+        shap.plots.bar(explanation, show=False)
+
+        # Get current figure and axis
+        fig = plt.gcf()
+        ax = plt.gca()
+
+        # Get x-tick labels
+        xticks = ax.get_xticklabels()
+
+        # Show only every second x-tick
+        for i in range(len(xticks)):
+            if i % 2 == 1:  # Skip every second tick
+                xticks[i].set_visible(False)
+
+        # Change x label
+        ax.set_xlabel('Average Importance', fontsize=18)
+
+        # Increase the y-axis label size
+        plt.yticks(fontsize=18)
+        plt.xticks(fontsize=18)
+        plt.tight_layout()
+
+        # Save the plot to a BytesIO object
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        buf.close()
+
+        # Clear the current plot to free memory
+        plt.close()
+
+        html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
+                      f'<span>This is a general trend and might change for individual instances.</span>'
+        return html_string, 1
+
+
 def explain_feature_importances_as_plot(conversation, data, parse_op, regen):
-    import matplotlib.pyplot as plt
-    data_dict, _ = explain_feature_importances(conversation, data, parse_op, regen, as_text=False)
+    data_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
     labels = list(data_dict.keys())
     values = [val[0] for val in data_dict.values()]
 
@@ -149,7 +192,7 @@ def explain_cfe_by_given_features(conversation,
     initial_feature_to_vary = feature_names_list[0]  # TODO: So far expecting that user only selects one feature.
     change_string_prefix = ""
     if cfes[data.index[0]].cf_examples_list[0].final_cfs_df is None:
-        change_string_prefix = "There are no possible changes to the attribute <b>alone</b> to shift the prediction. <br><br>"
+        change_string_prefix = f"The attribute {initial_feature_to_vary} cannot be changed <b>by itself</b> to alter the prediction. <br><br>"
         # Find cfs with more features than just one feature by iterating over the top features and adding them
         for new_feature, importance in top_features.items():
             if new_feature not in feature_names_list:
@@ -178,3 +221,24 @@ def explain_feature_statistic(conversation, feature_name):
     feature_stats_exp = conversation.get_var('feature_statistics_explainer').contents
     explanation = feature_stats_exp.get_single_feature_statistic(feature_name)
     return explanation
+
+
+def explain_ceteris_paribus(conversation, data, feature_name):
+    ceteris_paribus_exp = conversation.get_var('ceteris_paribus').contents
+    # Plotly figure
+    fig = ceteris_paribus_exp.get_explanation(data, feature_name)
+
+    # Convert the figure to PNG as a BytesIO object
+    buf = io.BytesIO()
+    fig.write_image(buf, format='png')
+    buf.seek(0)
+    image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+    buf.close()
+
+    # Create the HTML string with the base64 image
+    html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
+                  f'<span>When the prediction value is on the Y-axis above 0.5 , ' \
+                  f'the model would predict likely to have diabetes and,' \
+                  f'when it is below 0.5, unlikely to have diabetes..</span>'
+
+    return html_string, 1
