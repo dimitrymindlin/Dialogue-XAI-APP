@@ -51,6 +51,11 @@ DiverseInstances.cache_location = "./cache/diabetes-diverse-instances.pkl"
 # Test Instances
 TestInstances.cache_location = "./cache/diabetes-test-instances.pkl"
 
+# Global Explanations
+ShapGlobalExplainer.cache_location = "./cache/diabetes-global.pkl"
+
+# Ceteris Paribus
+CeterisParibus.cache_location = "./cache/diabetes-ceteris-paribus.pkl"
 
 # Tabular Anchor Params
 TabularAnchor.cache_location = "./cache/diabetes-anchor-tabular.pkl"
