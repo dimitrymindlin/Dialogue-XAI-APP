@@ -1,9 +1,7 @@
 ﻿q_id;question;paraphrased;method;method_category;question_type
-2;How does it weight different features?;How important is each attribute for the current prediction?;shap/lime;Feature Importance;general
-3;How does [feature X] impact the prediction?;How strong does the following attribute affect the prediction?;shap/lime;Feature Importance;feature
-4;What are the top rules/features it uses?;What are the most important attributes for this prediction?;shap/lime;Feature Importance;general
-6;What would the system predict if this feature of the instance changes to …?;What would happen to the prediction if we changed [feature] for this person?;predict;Prediction;feature_assignment
-7;How should this instance change to get a different prediction?;How should this person change to get a different prediction?;cfproto;Counterfactual Explanation;general
-8;How should this feature change to get a different prediction?;Which changes to the attribute can shift the model prediction?;dice;Counterfactual Explanation;feature
-11;What is the necessary feature(s) present or absent to guarantee this prediction?;What attributes must be present to guarantee this prediction?;Semi-Factual Explanations;Semi-Factual Explanations;general
-13;How common is the current values for this attribute?;How common is the current values for this attribute?;Feature statistics; feature;feature
+20;Why is this instance predicted as [class]?;Why is this person predicted as [current prediction]?;shap/lime;Feature Importance;general
+22;How the model is using features to come up with results in general?; How is the model using the attributes in general to give an answer?;shap/lime;Feature Importance;general
+23;Which are the most important attributes for the outcome of the current instance?; Which are the most important attributes for the outcome of the person?;shap/lime;Feature Importance;general
+24;Give me a list of features and their impact for predicting the current instance.; How do the attributes influence the prediction of the current person? ;shap/lime;Feature Importance;general
+25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus;Feature Change;feature
+27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the person?;shap/lime;Feature Importance;general
