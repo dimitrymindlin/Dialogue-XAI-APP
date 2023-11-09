@@ -44,6 +44,7 @@ class Lime(BaseExplainer):
                                                                mode="classification",
                                                                categorical_features=self.discrete_features,
                                                                sample_around_instance=self.sample_around_instance,
+                                                               feature_names=feature_names,
                                                                discretize_continuous=self.discretize_continuous,
                                                                kernel_width=kernel_width * np.sqrt(
                                                                    self.data.shape[1]),
