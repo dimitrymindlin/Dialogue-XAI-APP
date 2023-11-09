@@ -3,8 +3,10 @@ import numpy as np
 from typing import Dict
 import io
 
+
 def textual_fi_with_values(sig_coefs: Dict[str, float],
-                           num_features_to_show: int = None):
+                           num_features_to_show: int = None,
+                           filtering_text: str = None):
     """Formats dict of label -> feature name -> feature_importance dicts to string.
 
     Arguments:
@@ -13,18 +15,23 @@ def textual_fi_with_values(sig_coefs: Dict[str, float],
     Returns:
         output_text: String with the formatted feature importances to show in the dialog.
     """
-    output_text = "Here is a list of the attributes that are most important for the current prediction, starting with " \
-                  "the most important one: <br></br>"
-    output_text += "<ol>"
+    output_text = "<ol>"
 
-    for i, (current_feature_value, feature_importance_value) in enumerate(sig_coefs):
+    for i, (feature_name, feature_importance) in enumerate(sig_coefs):
+        if filtering_text == "top 3":
+            if i == 3:
+                break
+        elif filtering_text == "least 3":
+            if i < len(sig_coefs) - 3:
+                continue
+
         if i == 0:
             position = "most"
         else:
             position = f"{i + 1}."
-        increase_decrease = "increases" if feature_importance_value > 0 else "decreases"
-        new_text = (f"<b>{current_feature_value}</b> is the <b>{position}</b> important attribute and it"
-                    f" <em>{increase_decrease}</em> the likelihood of the current prediction by <b>{str(feature_importance_value)}.</b>")
+        increase_decrease = "increases" if feature_importance > 0 else "decreases"
+        new_text = (f"<b>{feature_name}</b> is the <b>{position}</b> important attribute and it"
+                    f" <em>{increase_decrease}</em> the likelihood of the current prediction by <b>{str(feature_importance)}.</b>")
         if new_text != "":
             output_text += "<li>" + new_text + "</li>"
         if num_features_to_show:
@@ -37,7 +44,7 @@ def textual_fi_with_values(sig_coefs: Dict[str, float],
 def textual_fi_relational(sig_coefs: Dict[str, float],
                           num_features_to_show: int = None,
                           print_unimportant_features: bool = False,
-                          show_only_most_important: bool = True):
+                          filtering_text: str = None):
     """Formats dict of label -> feature name -> feature_importance dicts to string.
 
     Arguments:
@@ -67,9 +74,12 @@ def textual_fi_relational(sig_coefs: Dict[str, float],
     output_text = "<ol>"
 
     for i, (current_feature_value, feature_importance) in enumerate(sig_coefs):
-        if show_only_most_important:
+        if filtering_text == "top 3":
             if i == 3:
                 break
+        elif filtering_text == "least 3":
+            if i < len(sig_coefs) - 3:
+                continue
         if i == 0:
             position = "most"
         else:
