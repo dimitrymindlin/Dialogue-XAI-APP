@@ -8,9 +8,10 @@ from flask import Flask
 from jinja2 import Environment, FileSystemLoader
 import numpy as np
 
-from explain.actions.explanation import explain_feature_importances, explain_cfe, \
+from explain.actions.explanation import explain_local_feature_importances, explain_cfe, \
     get_feature_importance_by_feature_id, explain_cfe_by_given_features, \
-    explain_anchor_changeable_attributes_without_effect, explain_feature_statistic, explain_feature_importances_as_plot
+    explain_anchor_changeable_attributes_without_effect, explain_feature_statistic, explain_feature_importances_as_plot, \
+    explain_global_feature_importances, explain_ceteris_paribus
 from explain.actions.filter import filter_operation
 from explain.actions.prediction_likelihood import predict_likelihood
 from explain.conversation import Conversation
@@ -101,6 +102,7 @@ def run_action_by_id(conversation: Conversation,
     regen = conversation.temp_dataset.contents['ids_to_regenerate']
     feature_name = data.columns[feature_id]
     parse_op = f"ID {instance_id}"
+    current_prediction = conversation.get_class_name_from_label(np.argmax(conversation.temp_dataset.contents['y']))
 
     # get_explanation_report(conversation, instance_id)
 
@@ -115,18 +117,17 @@ def run_action_by_id(conversation: Conversation,
     if question_id == 2:
         # How important is each attribute to the model's predictions?
         # Create full feature explanations
-        #explanation = explain_feature_importances(conversation, data, parse_op, regen)
+        # explanation = explain_feature_importances(conversation, data, parse_op, regen)
         explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen)
         return explanation[0]
     if question_id == 3:
         # How strong does [feature X] affect the prediction?
         explanation = get_feature_importance_by_feature_id(conversation, data, regen, feature_id)
         return explanation[0]
-
     if question_id == 4:
         # What are the top 3 important attributes for this prediction?
         parse_op = "top 3"
-        explanation = explain_feature_importances(conversation, data, parse_op, regen, as_text=True)
+        explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
         answer = "Here are the 3 most important attributes for this prediction: <br><br>"
         return answer + explanation[0]
     """if question_id == 5:
@@ -138,7 +139,7 @@ def run_action_by_id(conversation: Conversation,
         return answer + explanation[0]"""
     if question_id == 5:
         # What attributes of this person led the model to make this prediction?
-        explanation = explain_feature_importances(conversation, data, parse_op, regen)
+        explanation = explain_local_feature_importances(conversation, data, parse_op, regen)
         answer = "The following attributes were most important for the prediction. "
         return answer + explanation[0]
     """if question_id == 6:
@@ -155,7 +156,7 @@ def run_action_by_id(conversation: Conversation,
         return explanation[0]
     if question_id == 8:
         # How should this attribute change to get a different prediction?
-        top_features_dict, _ = explain_feature_importances(conversation, data, parse_op, regen, as_text=False)
+        top_features_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
         explanation = explain_cfe_by_given_features(conversation, data, [feature_name], top_features_dict)
         return explanation
     if question_id == 9:
@@ -177,6 +178,39 @@ def run_action_by_id(conversation: Conversation,
         # 13;How common is the current values for this attribute?
         explanation = explain_feature_statistic(conversation, feature_name)
         return explanation
+    if question_id == 20:
+        # 20;Why is this person predicted as [current prediction]?
+        explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
+        result_text = f"The person was classified as <it>{current_prediction}</it>, because of the following attribute values: <br>"
+        return result_text + explanation[0]
+    if question_id == 22:
+        # 22;How is the model using the attributes in general to give an answer?
+        explanation = explain_global_feature_importances(conversation)
+        explanation_intro = "Tho model weights features differently and uses them to make a prediction.<br>" \
+                            "Here is the feature weighting with the most important ones having the highest values:"
+        return explanation_intro + explanation[0]
+    if question_id == 23:
+        # 23;Which are the most important attributes for the outcome of the person?
+        parse_op = "top 3"
+        explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
+        answer = f"Here are the 3 <b>most</b> important attributes for this person: <br><br>"
+        return answer + explanation[0]
+
+    if question_id == 24:
+        # 24;What are the attributes and their impact for the current prediction of [curent prediction]?
+        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen)
+        return explanation[0]
+    if question_id == 25:
+        # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
+        explanation = explain_ceteris_paribus(conversation, data, feature_name)
+        intro = "The following graph shows the prediction score when changing the selected attribute. <br>"
+        return intro + explanation[0]
+    if question_id == 27:
+        # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the person?
+        parse_op = "least 3"
+        explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
+        answer = "Here are the 3 <b>least</b> important attributes for this person: <br>"
+        return answer + explanation[0]
     else:
         return f"This is a mocked answer to your question with id {question_id}."
     """if question_id == 12:
@@ -199,7 +233,7 @@ def get_explanation_report(conversation,
     model_prediction_probas, _ = predict_likelihood(conversation, as_text=False)
     model_prediction = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
     opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction))
-    feature_importances, _ = explain_feature_importances(conversation, data, parse_op, regen, as_text=False)
+    feature_importances, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
     # Turn list of values into int
     feature_importances = {key: round(float(value[0]), ndigits=3) for key, value in feature_importances.items()}
     counterfactual_strings, _ = explain_cfe(conversation, data, parse_op, regen)
