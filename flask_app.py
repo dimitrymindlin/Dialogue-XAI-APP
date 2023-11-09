@@ -95,8 +95,8 @@ def get_train_datapoint():
     # Get initial prompt
     current_prediction = bot_dict[user_id].get_current_prediction()
     prompt = f"""
-        Hello, the model predicted that the current Person is {current_prediction}. <br>
-        If you have questions about the prediction, select questions on the right an press <b>Ask question</b>.
+        The model predicted that the current Person is <i>{current_prediction}</i>. <br>
+        If you have questions about the prediction, select questions from the right and I will answer them.
         """
     instance_dict["initial_prompt"] = prompt
 
@@ -175,4 +175,4 @@ if __name__ != '__main__':
 if __name__ == "__main__":
     # clean up storage file on restart
     app.logger.info(f"Launching app from config: {args.config}")
-    app.run(debug=False, port=4455, host='0.0.0.0')
+    app.run(debug=False, port=4455, host='0.0.0.0', use_reloader=False)
