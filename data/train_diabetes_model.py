@@ -29,6 +29,12 @@ for train_index, val_index in kf.split(X_values, y_values):
     X_train, X_val = X_values.iloc[train_index], X_values.iloc[val_index]
     y_train, y_val = y_values.iloc[train_index], y_values.iloc[val_index]
 
+    # Turn data to numpy arrays
+    X_train = X_train.to_numpy()
+    X_val = X_val.to_numpy()
+    y_train = y_train.to_numpy()
+    y_val = y_val.to_numpy()
+
     lr_pipeline.fit(X_train, y_train)
 
     # Evaluate and store scores
