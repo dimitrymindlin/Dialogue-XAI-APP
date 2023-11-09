@@ -119,7 +119,7 @@ class TabularAnchor(Explanation):
                                             save_to_cache=save_to_cache)
         exp = explanation[key]
         output_string = ""
-        output_string += "By fixing all of the following attributes, the prediction stays the same even though other attributes are changed:"
+        #output_string += "By fixing all of the following attributes, the prediction stays the same even though other attributes are changed:"
         output_string += "<br><br>"
 
         additional_options = "Here are some more options to change the prediction of"
