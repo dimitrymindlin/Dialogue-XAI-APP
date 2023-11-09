@@ -53,10 +53,9 @@ class CeterisParibus(Explanation):
         super().__init__(cache_location, class_names)
         self.background_data = background_data
         self.model = model
-        """self.categorical_names = categorical_names
-        self.class_names = list(class_names.values())"""
         self.feature_names = feature_names
         self.ys = ys
+        self.explainer = dx.Explainer(self.model, self.background_data, y=self.ys)
 
     def run_explanation(self,
                         current_data: pd.DataFrame):
@@ -69,29 +68,19 @@ class CeterisParibus(Explanation):
         Returns:
             explanations: The generated cf explanations.
         """
-
         cps = {}
         for d in tqdm(list(current_data.index)):
             instance = current_data.loc[[d]]
-            # Explain here
-            # observation = pd.DataFrame(instance).T
-            # pred = np.array([np.argmax(self.model.predict(instance))])
-            exp = dx.Explainer(self.model, self.background_data, y=self.ys)
-            """bd = exp.predict_parts(observation, type='break_down', label=ys.iloc[0])
-            bd_interactions= exp.predict_parts(observation, type='break_down_interactions', label="John+")
-            bd.plot(bd_interactions)"""
-            rf_profile = exp.predict_profile(instance)
-            print(rf_profile.result.head())
-            # Create bar plot from rf_profile
-            rf_profile.plot(variable_type='categorical')
-            plt.show()
-            print()
-
-            output = self.explainer.explain_instance(data_x[0],
-                                                     self.model.predict,
-                                                     threshold=0.95,
-                                                     max_anchor_size=3)
-            return output
-
-            cps[d] = cur_cp
+            rf_profile = self.explainer.predict_profile(instance)
+            cps[d] = rf_profile
         return cps
+
+    def get_explanation(self, data_df, feature_name=None, as_plot=True):
+        id = data_df.index[0]
+        cp_data = self.get_explanations([id], self.background_data, save_to_cache=True)
+        if not as_plot:
+            return cp_data
+        else:
+            # TODO: Handle categorical features
+            fig = cp_data[id].plot(variables=[feature_name], show=False)
+            return fig
