@@ -474,10 +474,8 @@ class MegaExplainer(Explanation):
         # A
         # response = textual_fi_with_values(sig_coefs)
         # B
-        if filtering_text == "top 3":
-            response = textual_fi_relational(sig_coefs, show_only_most_important=True)
-        else:
-            response = textual_fi_relational(sig_coefs, show_only_most_important=False)
+
+        response = textual_fi_with_values(sig_coefs, filtering_text=filtering_text)
         # C # TODO: Check with michi how to show plot.
         # response = visual_feature_importance_list(sig_coefs)
 
