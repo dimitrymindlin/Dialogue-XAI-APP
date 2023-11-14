@@ -6,6 +6,7 @@ the functions to get the responses to user inputs.
 """
 import copy
 import json
+import logging
 import pickle
 from random import seed as py_random_seed
 import secrets
@@ -701,9 +702,9 @@ class ExplainBot:
         returned_item = run_action_by_id(user_session_conversation, int(question_id), instance_id,
                                          int(feature_id))
 
-        username = user_session_conversation.username  # TODO: Check if needed?!
+        # username = user_session_conversation.username  # TODO: Check if needed?!
 
-        response_id = self.gen_almost_surely_unique_id()
+        # response_id = self.gen_almost_surely_unique_id()
         """logging_info = self.build_logging_info(self.bot_name,
                                                username,
                                                response_id,
@@ -717,6 +718,26 @@ class ExplainBot:
         # final_result = returned_item + f"<>{response_id}"
         final_result = returned_item
         return final_result
+
+    def get_test_question_by_test_id(self, test_id):
+        """
+        Returns the test questions for the current datapoint.
+        """
+        return self.current_instance[test_id]["questions"]
+
+    def build_test_questions(self):
+        test_instances = self.conversation.get_var("test_instances").contents
+        test_questions = {}
+
+        mega_explainer = self.conversation.get_var('mega_explainer').contents
+        diverse_instances = self.conversation.get_var('diverse_instances').contents
+        model = self.conversation.get_var("model").contents
+        exp_helper = self.conversation.get_var('experiment_helper').contents
+
+        for test_id, test_instance in test_instances.items():
+            pass
+
+
 
     def build_exit_survey_table(self):
         mega_explainer = self.conversation.get_var('mega_explainer').contents
