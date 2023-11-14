@@ -71,12 +71,12 @@ DatasetDescription.model_description = "gradient boosted tree"
 
 # Feature Tooltip
 ExplainBot.feature_tooltip_mapping = {
-    "age": "age (years)",
-    "pregnancies": "Number of times pregnant",
-    "glucose": "Plasma glucose concentration a 2 hours in an oral glucose tolerance test",
-    "bloodpressure": "Diastolic blood pressure (mm Hg)",
-    "skinthickness": "Triceps skin fold thickness (mm)",
-    "insulin": "2-Hour serum insulin (mu U/ml)",
-    "bmi": "Body mass index (weight in kg/(height in m)^2)",
-    "diabetespedigreefunction": "Diabetes pedigree function",
+    "age": "The person's age in years.",
+    "pregnancies": "How many times the person has been pregnant.",
+    "glucose": "Measures the sugar level in the blood after drinking a sugar solution",
+    "bloodpressure": "The blood pressure.",
+    "skinthickness": "The thickness of the skin on the tricep area of the arm.",
+    "insulin": "The amount of insulin in the blood two hours after eating.",
+    "bmi": "Body mass index is a number calculated from weight and height, used to assess if a person's weight is in a healthy range.",
+    "diabetespedigreefunction": "A score that represents the likelihood of diabetes based on family history.",
 }
