@@ -181,19 +181,20 @@ def run_action_by_id(conversation: Conversation,
     if question_id == 20:
         # 20;Why is this person predicted as [current prediction]?
         explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
-        result_text = f"The person was classified as <it>{current_prediction}</it>, because of the following attribute values: <br>"
-        return result_text + explanation[0]
+        result_text = f"The person is predicted as <it>{current_prediction}</it>, because the "
+        result_text = result_text + explanation[0]
+        return result_text
     if question_id == 22:
         # 22;How is the model using the attributes in general to give an answer?
         explanation = explain_global_feature_importances(conversation)
-        explanation_intro = "Tho model weights features differently and uses them to make a prediction.<br>" \
-                            "Here is the feature weighting with the most important ones having the highest values:"
+        explanation_intro = "The model uses the attributes to inform its predictions by assigning each a level of importance. " \
+                            "The chart with bars indicates the general trend of importances across all persons: longer bars correspond to attributes with a greater general influence on the model's decisions.<br>"
         return explanation_intro + explanation[0]
     if question_id == 23:
         # 23;Which are the most important attributes for the outcome of the person?
-        parse_op = "top 3"
+        parse_op = "top 3 only_positive"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
-        answer = f"Here are the 3 <b>most</b> important attributes for this person: <br><br>"
+        answer = f"Here are the 3 <b>most</b> important factors: <br><br>"
         return answer + explanation[0]
 
     if question_id == 24:
@@ -203,14 +204,13 @@ def run_action_by_id(conversation: Conversation,
     if question_id == 25:
         # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
         explanation = explain_ceteris_paribus(conversation, data, feature_name)
-        intro = "The following graph shows the prediction score when changing the selected attribute. <br>"
+        intro = "The following graph shows the prediction score on the Y Axis when changing only the selected attribute. <br>"
         return intro + explanation[0]
     if question_id == 27:
         # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the person?
         parse_op = "least 3"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
-        answer = "Here are the 3 <b>least</b> important attributes for this person: <br>"
-        return answer + explanation[0]
+        return explanation[0]
     else:
         return f"This is a mocked answer to your question with id {question_id}."
     """if question_id == 12:
