@@ -225,6 +225,10 @@ def explain_feature_statistic(conversation, feature_name):
 
 def explain_ceteris_paribus(conversation, data, feature_name):
     ceteris_paribus_exp = conversation.get_var('ceteris_paribus').contents
+
+    #ceteris_paribus_exp.get_simplified_explanation(data, feature_name, as_plot=False)
+
+
     # Plotly figure
     fig = ceteris_paribus_exp.get_explanation(data, feature_name)
 

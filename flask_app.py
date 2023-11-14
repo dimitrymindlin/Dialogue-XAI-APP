@@ -122,6 +122,9 @@ def get_test_datapoint():
         if isinstance(value, float) and value.is_integer():
             value = int(value)
         instance_dict[key] = str(value)
+    # Get test questions
+    #questions = bot_dict[user_id].get_test_questions()
+    #instance_dict["test_questions"] = questions
     return instance_dict
 
 
