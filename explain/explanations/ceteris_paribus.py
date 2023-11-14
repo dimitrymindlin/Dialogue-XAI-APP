@@ -84,3 +84,14 @@ class CeterisParibus(Explanation):
             # TODO: Handle categorical features
             fig = cp_data[id].plot(variables=[feature_name], show=False)
             return fig
+
+
+    def get_simplified_explanation(self, data_df, feature_name=None, as_plot=True):
+        id = data_df.index[0]
+        cp_data = self.get_explanations([id], self.background_data, save_to_cache=True)
+        if not as_plot:
+            return cp_data
+        else:
+            # TODO: Handle categorical features
+            fig = cp_data[id].plot(variables=[feature_name], show=False)
+            return fig
