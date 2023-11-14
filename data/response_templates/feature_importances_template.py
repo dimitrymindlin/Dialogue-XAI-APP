@@ -4,6 +4,18 @@ from typing import Dict
 import io
 
 
+def sumarize_least_important(sig_coefs):
+    # reverse sig_coefs
+    sig_coefs = sig_coefs[::-1]
+    summarization_text = "The attributes "
+    for i, (feature_name, feature_importance) in enumerate(sig_coefs):
+        if i > 2:
+            break
+        summarization_text += f"<b>{feature_name}, </b>"
+    summarization_text += " are the least important attributes for the current person."
+    return summarization_text
+
+
 def textual_fi_with_values(sig_coefs: Dict[str, float],
                            num_features_to_show: int = None,
                            filtering_text: str = None):
@@ -17,23 +29,29 @@ def textual_fi_with_values(sig_coefs: Dict[str, float],
     """
     output_text = "<ol>"
 
-    for i, (feature_name, feature_importance) in enumerate(sig_coefs):
-        if filtering_text == "top 3":
-            if i == 3:
-                break
-        elif filtering_text == "least 3":
-            if i < len(sig_coefs) - 3:
-                continue
+    if "least 3" in filtering_text:
+        return sumarize_least_important(sig_coefs)
 
-        if i == 0:
+    describing_features = 0
+    for i, (feature_name, feature_importance) in enumerate(sig_coefs):
+        if "top 3" in filtering_text:
+            if describing_features == 3:
+                break
+
+        if "only_positive" in filtering_text:
+            if feature_importance <= 0:
+                continue
+        if describing_features == 0:
             position = "most"
         else:
-            position = f"{i + 1}."
+            position = f"{describing_features + 1}."
         increase_decrease = "increases" if feature_importance > 0 else "decreases"
         new_text = (f"<b>{feature_name}</b> is the <b>{position}</b> important attribute and it"
-                    f" <em>{increase_decrease}</em> the likelihood of the current prediction by <b>{str(feature_importance)}.</b>")
+                    f" <em>{increase_decrease}</em> the likelihood of the current prediction.")
+        # new_text = new_text[:-1] + "by <b>{str(feature_importance)}.</b>"
         if new_text != "":
             output_text += "<li>" + new_text + "</li>"
+        describing_features += 1
         if num_features_to_show:
             if i == num_features_to_show:
                 break
