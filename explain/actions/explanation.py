@@ -95,7 +95,7 @@ def explain_global_feature_importances(conversation, as_plot=True):
         return html_string, 1
 
 
-def explain_feature_importances_as_plot(conversation, data, parse_op, regen):
+def explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction):
     data_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
     labels = list(data_dict.keys())
     values = [val[0] for val in data_dict.values()]
@@ -123,8 +123,8 @@ def explain_feature_importances_as_plot(conversation, data, parse_op, regen):
     plt.close()
 
     html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                  f'<span>The blue bars show that the variable contributes to the current prediction,' \
-                  f'and the red bars show attributes that count towards the opposite prediction.</span>'
+                  f'<span>Blue bars indicate increase in probability of <i>{current_prediction}</i>,<br>' \
+                  f'Red bars indicate decrease in probability of <i>{current_prediction}</i>.</span>'
 
     return html_string, 1
 

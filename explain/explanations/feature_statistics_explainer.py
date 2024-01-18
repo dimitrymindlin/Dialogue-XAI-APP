@@ -55,7 +55,7 @@ class FeatureStatisticsExplainer:
     def get_single_feature_statistic(self, feature_name):
         # Check if feature is numerical or categorical
         if feature_name in self.numerical_features:
-            return self.get_numerical_statistics(feature_name, as_string=False)
+            return self.get_numerical_statistics(feature_name, as_string=True)
         else:
             return self.get_categorical_statistics(feature_name)
 

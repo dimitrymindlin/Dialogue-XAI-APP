@@ -16,6 +16,10 @@ def feature_statistics_template(feature_name,
         min_v = min_v + " " + unit
         max_v = max_v + " " + unit
 
-    return (f"Here are statistics for the feature <b>{feature_name}</b>: <br><br>"
+    """return (f"Here are statistics for the feature <b>{feature_name}</b>: <br><br>"
             f"The <b>mean</b> is {mean}<br><br> one <b>standard deviation</b> is {std}<br><br>"
-            f" the <b>minimum</b> value is {min_v}<br><br> and the <b>maximum</b> value is {max_v}.")
+            f" the <b>minimum</b> value is {min_v}<br><br> and the <b>maximum</b> value is {max_v}.")"""
+
+    response_text = f"{feature_name} ranges from {min_v} to {max_v} with a mean of {mean}."
+
+    return response_text
