@@ -81,7 +81,8 @@ def run_action_by_id(conversation: Conversation,
                      question_id: int,
                      instance_id: int,
                      feature_id: int = None,
-                     build_temp_dataset: bool = True) -> str:
+                     build_temp_dataset: bool = True,
+                     instance_type_naming: str = "instance") -> str:
     """
     Runs the action selected by an ID instead of text parsing and updates the conversation object.
 
