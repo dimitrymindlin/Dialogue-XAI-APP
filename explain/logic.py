@@ -16,7 +16,6 @@ import re
 from jinja2 import Environment, FileSystemLoader
 import numpy as np
 import pandas as pd
-import torch
 
 from flask import Flask
 import gin
@@ -118,7 +117,6 @@ class ExplainBot:
         # Set seeds
         np.random.seed(seed)
         py_random_seed(seed)
-        torch.manual_seed(seed)
 
         self.bot_name = name
 
