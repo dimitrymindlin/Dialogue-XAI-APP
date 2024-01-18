@@ -41,6 +41,19 @@ bot_dict = {}
 
 # BOT.build_exit_survey_table()
 
+"""def log_to_csv(slug: str,
+               datapoint: dict,
+               endpoint: str,
+               questions: list,
+               instance_counter: int = None):
+    with open('dimi_log.csv', 'a') as f:
+        # if its the first time, write the header
+        writer_object = writer(f)
+        if os.stat("dimi_log.csv").st_size == 0:
+            writer_object.writerow(["timestamp", "slug", "datapoint", "endpoint", "questions", "instance_counter"])
+        writer_object.writerow([time.time(), slug, str(datapoint), endpoint, str(questions), instance_counter])
+        f.close()
+"""
 
 @bp.route('/')
 def home():
@@ -65,12 +78,14 @@ def init():
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
     # Questions
-    questions = bot_dict[user_id].get_questions_and_attributes()
+    questions = bot_dict[user_id].get_questions_attributes_featureNames()
     # Feature tooltip
     feature_tooltip = bot_dict[user_id].get_feature_tooltips()
+    feature_units = bot_dict[user_id].get_feature_units()
     result = {
         "questions": questions,
-        "feature_tooltip": feature_tooltip
+        "feature_tooltips": feature_tooltip,
+        "feature_units": feature_units
     }
     return result
 
@@ -83,8 +98,11 @@ def get_train_datapoint():
     user_id = request.args.get("user_id")
     if user_id is None:
         user_id = "TEST"
-    instance_id, instance_dict, prediction_proba = bot_dict[user_id].get_next_instance()
+
+    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance()
+    (instance_id, instance_dict, prediction_proba) = current_instance_with_units
     instance_dict["id"] = str(instance_id)
+
     # Make sure all values are strings
     for key, value in instance_dict.items():
         # turn floats to strings if float has zeroes after decimal point
@@ -94,15 +112,12 @@ def get_train_datapoint():
 
     # Get initial prompt
     current_prediction = bot_dict[user_id].get_current_prediction()
+    instance_dict["current_prediction"] = current_prediction
     prompt = f"""
-        The model predicted that the current Person is <i>{current_prediction}</i>. <br>
+        The model predicted that the current {bot_dict[user_id].instance_type_naming} is <i>{current_prediction}</i>. <br>
         If you have questions about the prediction, select questions from the right and I will answer them.
         """
     instance_dict["initial_prompt"] = prompt
-
-    # get the current prediction
-    current_prediction = bot_dict[user_id].get_current_prediction()
-    instance_dict["current_prediction"] = current_prediction
     return instance_dict
 
 
@@ -114,17 +129,16 @@ def get_test_datapoint():
     user_id = request.args.get("user_id")
     if user_id is None:
         user_id = "TEST"
-    instance_id, instance_dict, prediction_proba = bot_dict[user_id].get_next_instance(train=False)
+    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance(train=False)
+    (instance_id, instance_dict, prediction_proba) = current_instance_with_units
     instance_dict["id"] = str(instance_id)
+
     # Make sure all values are strings
     for key, value in instance_dict.items():
         # turn floats to strings if float has zeroes after decimal point
         if isinstance(value, float) and value.is_integer():
             value = int(value)
         instance_dict[key] = str(value)
-    # Get test questions
-    #questions = bot_dict[user_id].get_test_questions()
-    #instance_dict["test_questions"] = questions
     return instance_dict
 
 
@@ -137,7 +151,7 @@ def get_questions():
     if request.method == "POST":
         app.logger.info("generating the questions")
         try:
-            response = bot_dict[user_id].get_questions_and_attributes()
+            response = bot_dict[user_id].get_questions_attributes_featureNames()
         except Exception as ext:
             app.logger.info(f"Traceback getting questions: {traceback.format_exc()}")
             app.logger.info(f"Exception getting questions: {ext}")
@@ -163,7 +177,6 @@ def get_bot_response():
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
-        print(f'MICHI STYLE DEBUG: ${response}')
         return response
 
 
