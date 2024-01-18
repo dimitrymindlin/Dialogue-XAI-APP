@@ -226,7 +226,19 @@ def explain_feature_statistic(conversation, feature_name):
 def explain_ceteris_paribus(conversation, data, feature_name):
     ceteris_paribus_exp = conversation.get_var('ceteris_paribus').contents
 
-    #ceteris_paribus_exp.get_simplified_explanation(data, feature_name, as_plot=False)
+    ### Simplified Text version
+    x_flip_value = ceteris_paribus_exp.get_simplified_explanation(data, feature_name)
+    if x_flip_value is None:
+        return f"For the given patient, variations in <b>{feature_name}</b> have no impact on the model prediction and cannot change it to", 1
+    # get current feature value
+    current_feature_value = data[feature_name].values[0]
+    # get the difference
+    difference = current_feature_value - x_flip_value
+    # get the sign
+    sign = "decreased" if difference > 0 else "increased"
+    # get the sentence
+    explanation_text = f"If the value of <b>{feature_name}</b> is {sign} to {x_flip_value}, the prediction would change to"
+    return explanation_text, 1
 
 
     # Plotly figure
