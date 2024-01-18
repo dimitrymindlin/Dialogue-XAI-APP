@@ -103,7 +103,8 @@ def run_action_by_id(conversation: Conversation,
     regen = conversation.temp_dataset.contents['ids_to_regenerate']
     feature_name = data.columns[feature_id]
     parse_op = f"ID {instance_id}"
-    current_prediction = conversation.get_class_name_from_label(np.argmax(conversation.temp_dataset.contents['y']))
+    current_prediction = conversation.get_class_name_from_label(conversation.temp_dataset.contents['y'][instance_id])
+    opposite_class = conversation.get_class_name_from_label(1 - conversation.temp_dataset.contents['y'][instance_id])
 
     # get_explanation_report(conversation, instance_id)
 
@@ -139,12 +140,12 @@ def run_action_by_id(conversation: Conversation,
         answer += "Here are the top most important ones: <br>"
         return answer + explanation[0]"""
     if question_id == 5:
-        # What attributes of this person led the model to make this prediction?
+        # What attributes of this instance led the model to make this prediction?
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen)
         answer = "The following attributes were most important for the prediction. "
         return answer + explanation[0]
     """if question_id == 6:
-        # What would happen to the prediction if we changed [feature] for this person?
+        # What would happen to the prediction if we changed [feature] for this instance?
         explanation = explain_cfe_by_given_features(conversation, data, [feature_name])
         if explanation[1] == 0:
             answer = explanation[0] + feature_name + "."
@@ -152,7 +153,7 @@ def run_action_by_id(conversation: Conversation,
             answer = explanation[0]
         return answer"""
     if question_id == 7:
-        # How should this person change to get a different prediction?
+        # How should this instance change to get a different prediction?
         explanation = explain_cfe(conversation, data, parse_op, regen)
         return explanation[0]
     if question_id == 8:
@@ -161,7 +162,7 @@ def run_action_by_id(conversation: Conversation,
         explanation = explain_cfe_by_given_features(conversation, data, [feature_name], top_features_dict)
         return explanation
     if question_id == 9:
-        # Which changes to this person would still get the same prediction?
+        # Which changes to this instance would still get the same prediction?
         explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
         return explanation[0]
     if question_id == 10:
@@ -180,35 +181,35 @@ def run_action_by_id(conversation: Conversation,
         explanation = explain_feature_statistic(conversation, feature_name)
         return explanation
     if question_id == 20:
-        # 20;Why is this person predicted as [current prediction]?
+        # 20;Why is this instance predicted as [current prediction]?
         explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
-        result_text = f"The person is predicted as <it>{current_prediction}</it>, because the "
+        result_text = f"The {instance_type_naming} is predicted as <it>{current_prediction}</it>, because the "
         result_text = result_text + explanation[0]
         return result_text
     if question_id == 22:
         # 22;How is the model using the attributes in general to give an answer?
         explanation = explain_global_feature_importances(conversation)
         explanation_intro = "The model uses the attributes to inform its predictions by assigning each a level of importance. " \
-                            "The chart with bars indicates the general trend of importances across all persons: longer bars correspond to attributes with a greater general influence on the model's decisions.<br>"
+                            f"The chart with bars indicates the general trend of importances across all f{instance_type_naming}s: longer bars correspond to attributes with a greater general influence on the model's decisions.<br>"
         return explanation_intro + explanation[0]
     if question_id == 23:
-        # 23;Which are the most important attributes for the outcome of the person?
+        # 23;Which are the most important attributes for the outcome of the instance?
         parse_op = "top 3 only_positive"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
-        answer = f"Here are the 3 <b>most</b> important factors: <br><br>"
+        answer = f"Here are the 3 <b>most</b> important factors for this {instance_type_naming}: <br><br>"
         return answer + explanation[0]
 
     if question_id == 24:
         # 24;What are the attributes and their impact for the current prediction of [curent prediction]?
-        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen)
+        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction)
         return explanation[0]
     if question_id == 25:
         # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
         explanation = explain_ceteris_paribus(conversation, data, feature_name)
-        intro = "The following graph shows the prediction score on the Y Axis when changing only the selected attribute. <br>"
-        return intro + explanation[0]
+        #intro = "The following graph shows the prediction score on the Y Axis when changing only the selected attribute. <br>"
+        return  explanation[0] + f" <i>{opposite_class}</i>."
     if question_id == 27:
-        # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the person?
+        # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the instance?
         parse_op = "least 3"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
         return explanation[0]
