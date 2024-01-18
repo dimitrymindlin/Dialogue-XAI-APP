@@ -1,15 +1,14 @@
 import warnings
 
 import gin
-import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
 from tqdm import tqdm
-
 from explain.explanation import Explanation
 import dalex as dx
+from scipy import interpolate
+import numpy as np
 
-def plot_cp(names, values):
+"""def plot_cp(names, values):
     # Create a figure and axis
     fig, ax = plt.subplots()
 
@@ -28,7 +27,22 @@ def plot_cp(names, values):
     for i, val in enumerate(values):
         color = 'green' if val > 0 else 'red'
         ax.barh(i, val, color=color)
-    plt.show()
+    plt.show()"""
+
+
+def find_x_for_y_plotly(fig, y_target=0.5):
+    # Assuming the first trace contains the relevant data
+    trace = fig.data[0]
+    x_data = trace.x
+    y_data = trace.y
+
+    # Interpolating
+    f = interpolate.interp1d(y_data, x_data, bounds_error=False, fill_value='extrapolate')
+    x_at_y_target = f(y_target)
+
+    round_x_at_y_target = np.round(x_at_y_target, 2)
+    return round_x_at_y_target
+
 
 @gin.configurable
 class CeterisParibus(Explanation):
@@ -85,13 +99,14 @@ class CeterisParibus(Explanation):
             fig = cp_data[id].plot(variables=[feature_name], show=False)
             return fig
 
-
-    def get_simplified_explanation(self, data_df, feature_name=None, as_plot=True):
+    def get_simplified_explanation(self, data_df, feature_name=None):
         id = data_df.index[0]
         cp_data = self.get_explanations([id], self.background_data, save_to_cache=True)
-        if not as_plot:
-            return cp_data
-        else:
-            # TODO: Handle categorical features
-            fig = cp_data[id].plot(variables=[feature_name], show=False)
-            return fig
+        fig = cp_data[id].plot(variables=[feature_name], show=False)
+        x_value = find_x_for_y_plotly(fig, 0.5)
+        # check if x_value is in the range of the feature
+        feature_max = self.background_data[feature_name].max()
+        feature_min = self.background_data[feature_name].min()
+        if x_value > feature_max or x_value < feature_min:
+            x_value = None
+        return x_value
