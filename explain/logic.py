@@ -74,7 +74,8 @@ class ExplainBot:
                  categorical_mapping_path: str = None,
                  feature_tooltip_mapping=None,
                  actionable_features=None,
-                 feature_units=None):
+                 instance_type_naming: str = "instance",
+                 feature_units_mapping=None):
         """The init routine.
 
         Arguments:
@@ -109,7 +110,9 @@ class ExplainBot:
             feature_tooltip_mapping: A mapping from feature names to tooltips. This is used to display tooltips
                                         in the UI.
             actionable_features: A list of features that can be changed (actionable features)
-            feature_units: A mapping from feature names to units. This is used to display units in the UI.
+            feature_units_mapping: A mapping from feature names to units. This is used to display units in the UI.
+            instance_type_naming: The naming of the instance type. This is used to display the instance type such as
+                                    "person" or "house" in the UI.
         """
 
         # Set seeds
@@ -126,8 +129,9 @@ class ExplainBot:
         self.categorical_features = categorical_features
         self.numerical_features = numerical_features
         self.feature_tooltip_mapping = feature_tooltip_mapping
+        self.feature_units_mapping = feature_units_mapping
         self.actionable_features = actionable_features
-        self.feature_units = feature_units
+        self.instance_type_naming = instance_type_naming
 
         # A variable used to help file uploads
         self.manual_var_filename = None
@@ -145,6 +149,8 @@ class ExplainBot:
 
         self.data_instances = []
         self.current_instance = []
+        self.train_instance_counter = 0
+        self.test_instance_counter = 0
 
         # Initialize parser + prompts as None
         # These are done when the dataset is loaded
@@ -196,7 +202,7 @@ class ExplainBot:
                                                                   feature_names=list(background_dataset.columns),
                                                                   rounding_precision=self.conversation.rounding_precision,
                                                                   categorical_mapping=self.categorical_mapping,
-                                                                  feature_units=self.feature_units)
+                                                                  feature_units=self.feature_units_mapping)
         self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
     def get_next_instance(self, train=True):
@@ -204,12 +210,17 @@ class ExplainBot:
         Returns the next instance in the data_instances list if possible.
         param train: Whether to return a training instance or a test instance
         """
+        return_counter = None
         if len(self.data_instances) == 0:
             self.load_data_instances()  # TODO: Infinity loop - Where is experiment end determined?
             self.load_test_instances()
+            self.test_instance_counter += 1
+            return_counter = self.test_instance_counter
 
         if train:
             self.current_instance = self.data_instances.pop(0)
+            self.train_instance_counter += 1
+            return_counter = self.train_instance_counter
         else:
             test_id = self.current_instance[0]
             self.current_instance = self.test_instances.pop(test_id)["least_complex_instance"].to_dict()
@@ -217,15 +228,20 @@ class ExplainBot:
                                      self.current_instance.items()}  # unpack dict
             self.current_instance = (test_id, self.current_instance, None)
 
-        if self.feature_units is None:
-            return self.current_instance
+        # Round values
+        for feature, value in self.current_instance[1].items():
+            if isinstance(value, float):
+                self.current_instance[1][feature] = round(value, self.conversation.rounding_precision)
+
+        #if self.feature_units_mapping is None:
+        return self.current_instance, return_counter
 
         current_instance_with_units = copy.deepcopy(self.current_instance[1])  # triple(index, instance, prediction)
-        for feature, unit in self.feature_units.items():
+        for feature, unit in self.feature_units_mapping.items():
             current_instance_with_units[feature] = f"{current_instance_with_units[feature]} {unit}"
         # Get triple back to original format
         current_instance_with_units = (self.current_instance[0], current_instance_with_units, self.current_instance[2])
-        return current_instance_with_units
+        return current_instance_with_units, return_counter
 
     def get_current_prediction(self):
         """
@@ -241,6 +257,12 @@ class ExplainBot:
         Returns the feature tooltips for the current dataset.
         """
         return self.feature_tooltip_mapping
+
+    def get_feature_units(self):
+        """
+        Returns the feature units for the current dataset.
+        """
+        return self.feature_units_mapping
 
     def init_loaded_var(self, name: bytes):
         """Inits a var from manual load."""
@@ -259,8 +281,7 @@ class ExplainBot:
             "feature_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in
                                   question_pd[question_pd["question_type"] == "feature"].iterrows()],
             # list(question_pd[question_pd["question_type"] == "feature"][["q_id", "paraphrased"]].values),
-            "feature_names": [{'id': feature_id, 'feature_name': feature_name} for feature_id, feature_name in
-                              enumerate(feature_names)],
+            "feature_names": feature_names,
         }
         return answer_dict
 
@@ -407,11 +428,12 @@ class ExplainBot:
                     # Update the DataFrame in the instances_dict with the modified DataFrame
                     instances_dict[complexity_string] = instance_df
             else:
-                # If categorical_mapping is None, just convert all values to strings
-                instances_dict = {
-                    complexity_string: instance_df.astype(str) for complexity_string, instance_df in
-                    instances_dict.items()
-                }
+                # If categorical_mapping is None, just convert all values to floats if possible
+                for complexity_string, instance_df in instances_dict.items():
+                    # TODO: For other datasets, maybe this won't work ... Check where the conversion should be!
+                    instance_df = instance_df.astype(float)
+                    instances_dict[complexity_string] = instance_df
+
             # Update the instances_dict in the instance_results dict
             instance_results[instance_id] = instances_dict
         self.test_instances = instance_results
@@ -700,7 +722,7 @@ class ExplainBot:
         app.logger.info(f'USER INPUT: q_id:{question_id}, f_id:{feature_id}')
         instance_id = self.current_instance[0]
         returned_item = run_action_by_id(user_session_conversation, int(question_id), instance_id,
-                                         int(feature_id))
+                                         int(feature_id), instance_type_naming=self.instance_type_naming)
 
         # username = user_session_conversation.username  # TODO: Check if needed?!
 
@@ -736,8 +758,6 @@ class ExplainBot:
 
         for test_id, test_instance in test_instances.items():
             pass
-
-
 
     def build_exit_survey_table(self):
         mega_explainer = self.conversation.get_var('mega_explainer').contents
