@@ -268,12 +268,30 @@ class ExplainBot:
         """Inits a var from manual load."""
         self.manual_var_filename = name.decode("utf-8")
 
-    def get_questions_and_attributes(self):
+    def get_questions_attributes_featureNames(self):
         """
-        Returns the questions and attributes for the current dataset.
+        Returns the questions and attributes and feature names for the current dataset.
         """
         question_pd = pd.read_csv(self.conversation.question_bank_path, delimiter=";")
+        # Handle Feature Names
         feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
+        feature_names = [{'id': feature_id, 'feature_name': feature_name} for feature_id, feature_name in
+                         enumerate(feature_names)]
+        # sort feature names by feature_name
+        feature_names = sorted(feature_names, key=lambda k: k['feature_name'])
+        # change feature names from camelCase to Title Case
+        for feature_dict in feature_names:
+            feature_name = feature_dict['feature_name']
+            if feature_name == "BMI":
+                feature_name = "Body Mass Index"
+            feature_name = re.sub(r"(\w)([A-Z])", r"\1 \2", feature_name)  # split camelCase
+            feature_name = feature_name.title()  # convert to Title Case
+            feature_dict['feature_name'] = feature_name
+
+        # Replace "instance" in questions with instance_type_naming
+        for i, row in question_pd.iterrows():
+            question_pd.at[i, "paraphrased"] = row["paraphrased"].replace("instance", self.instance_type_naming)
+
         answer_dict = {
             "general_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in
                                   question_pd[question_pd["question_type"] == "general"].iterrows()],
