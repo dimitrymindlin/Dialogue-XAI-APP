@@ -5,7 +5,7 @@ import os
 import traceback
 
 from flask import Flask
-from flask import render_template, request, Blueprint
+from flask import request, Blueprint
 from flask_cors import CORS
 import gin
 
@@ -55,40 +55,60 @@ bot_dict = {}
         f.close()
 """
 
-@bp.route('/')
+"""@bp.route('/')
 def home():
-    """Load the explanation interface."""
+    # Load the explanation interface.
     user_id = request.args.get("user_id")
+    study_group = request.args.get("study_group")
     if user_id is None:
         user_id = "TEST"
-    BOT = ExplainBot(user_id)
+    BOT = ExplainBot(study_group)
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
     objective = bot_dict[user_id].conversation.describe.get_dataset_objective()
-    return render_template("new.html", currentUserId=user_id, datasetObjective=objective)
+    return render_template("new.html", currentUserId=user_id, datasetObjective=objective)"""
 
 
 @bp.route('/init', methods=['GET'])
 def init():
     """Load the explanation interface."""
     user_id = request.args.get("user_id")
+    study_group = request.args.get("study_group")
     if user_id is None:
         user_id = "TEST"
-    BOT = ExplainBot(user_id)
+    BOT = ExplainBot(study_group)
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
-    # Questions
-    questions = bot_dict[user_id].get_questions_attributes_featureNames()
-    # Feature tooltip
+
+    # Feature tooltip and units
     feature_tooltip = bot_dict[user_id].get_feature_tooltips()
     feature_units = bot_dict[user_id].get_feature_units()
+    questions = bot_dict[user_id].get_questions_attributes_featureNames()
     result = {
-        "questions": questions,
         "feature_tooltips": feature_tooltip,
-        "feature_units": feature_units
+        "feature_units": feature_units,
+        'questions': questions
     }
     return result
 
+
+@bp.route('/finish', methods=['DELETE'])
+def finish():
+    """
+    Finish the experiment.
+    """
+    print("Finishing Experiment")
+    user_id = request.args.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
+    # Remove the bot from the dict
+    try:
+        bot_dict.pop(user_id)
+    except KeyError:
+        print(f"User {user_id} sent finish again, but the Bot was not in the dict.")
+        return "200 OK"
+    print(f"User {user_id} finished the experiment. And the Bot was removed from the dict.")
+    return "200 OK"
 
 @bp.route('/get_train_datapoint', methods=['GET'])
 def get_train_datapoint():
@@ -118,6 +138,13 @@ def get_train_datapoint():
         If you have questions about the prediction, select questions from the right and I will answer them.
         """
     instance_dict["initial_prompt"] = prompt
+    user_study_group = bot_dict[user_id].get_study_group()
+
+    if user_study_group == "static":
+        # Get the explanation report
+        static_report = bot_dict[user_id].get_explanation_report()
+        instance_dict["static_report"] = static_report
+        print(static_report["feature_importance"])
     return instance_dict
 
 
@@ -169,10 +196,9 @@ def get_bot_response():
         app.logger.info("generating the bot response")
         try:
             data = json.loads(request.data)
-            conversation = bot_dict[user_id].conversation
             question_id = data["question"]
             feature_id = data["feature"]
-            response = bot_dict[user_id].update_state_dy_id(question_id, conversation, feature_id)
+            response = bot_dict[user_id].update_state_dy_id(question_id, feature_id)
         except Exception as ext:
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
