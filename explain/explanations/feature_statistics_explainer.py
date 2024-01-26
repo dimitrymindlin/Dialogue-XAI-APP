@@ -23,22 +23,32 @@ class FeatureStatisticsExplainer:
         self.categorical_mapping = categorical_mapping
         self.feature_units = feature_units
 
-    def get_categorical_statistics(self, feature_name):
-        """Returns a string with the frequencies of values of a categorical feature."""
+    """def get_categorical_statistics(self, feature_name, as_string=True): # TODO: Check before usage. Old code.
+        #Returns a string with the frequencies of values of a categorical feature.
+    
         feature_value_frequencies = self.data[feature_name].value_counts()
         # Map feature indeces to feature names
         feature_id = self.data.columns.get_loc(feature_name)
         feature_value_frequencies.index = self.categorical_mapping[feature_id]
         # Sort by frequency
         feature_value_frequencies.sort_values(ascending=False, inplace=True)
+
+        if not as_string:
+            return feature_value_frequencies
+
         result_text = ""
         for i, (value, frequency) in enumerate(feature_value_frequencies.items()):
             result_text += f"The value <b>{value}</b> occurs <b>{frequency}</b> times.<br>"
-        return result_text
+        return result_text"""
 
-    def get_numerical_statistics(self, feature_name, as_string=True):
-        if not as_string:
-            #return self.explain_numerical_statistics_as_plot(self.data[feature_name], feature_name)
+    def get_numerical_statistics(self, feature_name, as_string=True, as_plot=False):
+        """
+        Returns a string with the mean, standard deviation, minimum and maximum values of a numerical feature.
+        If as_string is False, returns a tuple with the mean, standard deviation, minimum and maximum values.
+        If as_plot is True, returns a plot of the feature distribution.
+        """
+        if as_plot:
+            # return self.explain_numerical_statistics_as_plot(self.data[feature_name], feature_name)
             return self.plot_binary_class_kde(self.data[feature_name], self.y_labels, feature_name)
 
         mean = round(self.data[feature_name].mean(), 2)
@@ -50,14 +60,29 @@ class FeatureStatisticsExplainer:
         std = str(std).replace(".", ",")
         min_v = str(min_v).replace(".", ",")
         max_v = str(max_v).replace(".", ",")
+        if not as_string:
+            return mean, std, min_v, max_v
         return feature_statistics_template(feature_name, mean, std, min_v, max_v, self.feature_units)
 
-    def get_single_feature_statistic(self, feature_name):
+    def get_single_feature_statistic(self, feature_name, as_string=True):
         # Check if feature is numerical or categorical
         if feature_name in self.numerical_features:
-            return self.get_numerical_statistics(feature_name, as_string=True)
+            return self.get_numerical_statistics(feature_name, as_string=as_string)
         else:
-            return self.get_categorical_statistics(feature_name)
+            raise NotImplementedError("Categorical feature statistics are not implemented yet.")
+            # return self.get_categorical_statistics(feature_name, as_string=as_string)
+
+    def get_all_feature_statistics(self, as_string=True):
+        feature_stats = {}
+        for feature_name in self.feature_names:
+            # Make dict of feature names to feature statistics (min, max, mean)
+            if feature_name in self.numerical_features:
+                mean, _, min_v, max_v = self.get_numerical_statistics(feature_name, as_string=as_string)
+                feature_stats[feature_name] = {"mean": mean, "min": min_v, "max": max_v}
+            else:
+                raise NotImplementedError("Categorical feature statistics are not implemented yet.")
+                feature_stats[feature_name] = self.get_categorical_statistics(feature_name)
+        return feature_stats
 
     def explain_numerical_statistics_as_plot(self, feature_data, feature_name):
         import matplotlib.pyplot as plt

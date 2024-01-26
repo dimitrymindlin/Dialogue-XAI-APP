@@ -227,9 +227,17 @@ def explain_anchor_changeable_attributes_without_effect(conversation, data, pars
     return short_summary, 1
 
 
-def explain_feature_statistic(conversation, feature_name):
+def explain_feature_statistic(conversation,
+                              feature_name=None,
+                              as_string=False):
+    """
+    Get feature statistics explanation for a single feature or all features.
+    """
     feature_stats_exp = conversation.get_var('feature_statistics_explainer').contents
-    explanation = feature_stats_exp.get_single_feature_statistic(feature_name)
+    if feature_name is not None:
+        explanation = feature_stats_exp.get_single_feature_statistic(feature_name)
+    else:
+        explanation = feature_stats_exp.get_all_feature_statistics(as_string=as_string)
     return explanation
 
 
