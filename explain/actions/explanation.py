@@ -7,6 +7,7 @@ import io
 import matplotlib.pyplot as plt
 import shap
 
+from create_experiment_data.ui_data_helper import FeatureDisplayNames
 from explain.actions.utils import gen_parse_op_text
 
 
@@ -95,7 +96,11 @@ def explain_global_feature_importances(conversation, as_plot=True):
         return html_string, 1
 
 
-def explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction):
+def explain_feature_importances_as_plot(conversation,
+                                        data,
+                                        parse_op,
+                                        regen,
+                                        current_prediction_string: str):
     data_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
     labels = list(data_dict.keys())
     values = [val[0] for val in data_dict.values()]
@@ -103,6 +108,11 @@ def explain_feature_importances_as_plot(conversation, data, parse_op, regen, cur
     # Reverse the order
     labels = labels[::-1]
     values = values[::-1]
+
+    # Turn labels to display names
+    feature_display_names: FeatureDisplayNames = conversation.get_var('feature_display_names').contents
+    for i, label in enumerate(labels):
+        labels[i] = feature_display_names.feature_name_to_display_name[label]
 
     fig, ax = plt.subplots(figsize=(10, 6))
     bars = ax.barh(labels, values, color=['red' if v < 0 else 'blue' for v in values])
@@ -123,8 +133,8 @@ def explain_feature_importances_as_plot(conversation, data, parse_op, regen, cur
     plt.close()
 
     html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                  f'<span>Blue bars indicate increase in probability of <i>{current_prediction}</i>,<br>' \
-                  f'Red bars indicate decrease in probability of <i>{current_prediction}</i>.</span>'
+                  f'<span>Blue bars indicate increase in probability of <i>{current_prediction_string}</i>,<br>' \
+                  f'Red bars indicate decrease in probability of <i>{current_prediction_string}</i>.</span>'
 
     return html_string, 1
 
