@@ -155,7 +155,9 @@ def run_action_by_id(conversation: Conversation,
     if question_id == 7:
         # How should this instance change to get a different prediction?
         explanation = explain_cfe(conversation, data, parse_op, regen)
-        return explanation[0]
+        explanation = "Here are some changes to the instance that would lead to a different prediction: <br>" + \
+                      explanation[0]
+        return explanation
     if question_id == 8:
         # How should this attribute change to get a different prediction?
         top_features_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)

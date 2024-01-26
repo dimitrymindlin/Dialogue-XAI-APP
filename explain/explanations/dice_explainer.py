@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from create_experiment_data.ui_data_helper import FeatureDisplayNames
 from explain.explanation import Explanation
 
 
@@ -24,7 +25,9 @@ class TabularDice(Explanation):
                  cache_location: str = "./cache/dice-tabular.pkl",
                  class_names: dict = None,
                  categorical_mapping: dict = None,
-                 background_dataset=None):
+                 background_dataset=None,
+                 feature_display_names: FeatureDisplayNames = None,
+                 final_cfe_amount: int = 5):
         """Init.
 
         Arguments:
@@ -37,6 +40,7 @@ class TabularDice(Explanation):
             desired_class: Set to "opposite" to compute opposite class
             cache_location: Location to store cache.
             class_names: The map between class names and text class description.
+            feature_display_names: FeatureDisplayNames: The map between feature ids and feature names to display.
         """
         super().__init__(cache_location, class_names)
         self.temp_outcome_name = 'y'
@@ -49,6 +53,8 @@ class TabularDice(Explanation):
         self.dice_model = dice_ml.Model(model=self.model, backend="sklearn")
         self.permitted_range_dict = None
         self.background_data = background_dataset
+        self.feature_display_names = feature_display_names
+        self.final_cfe_amount = final_cfe_amount
 
         # Format data in dice accepted format
         predictions = self.model.predict(data)
@@ -158,7 +164,9 @@ class TabularDice(Explanation):
                 # round cfe_f if it is float and turn to string to print
                 if isinstance(cfe_f, float):
                     cfe_f = str(round(cfe_f, self.rounding_precision))
-                change_string += f"{inc_dec} <b>{feature}</b> to </b>{cfe_f}</b>"
+                feature_display_name = self.feature_display_names.get_by_id(
+                    feature_index) if self.feature_display_names is not None else feature
+                change_string += f"{inc_dec} <b>{feature_display_name}</b> to </b>{cfe_f}</b>"
                 change_string += " and "
         # Strip off last and
         change_string = change_string[:-5]
