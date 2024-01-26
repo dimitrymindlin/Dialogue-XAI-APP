@@ -187,7 +187,28 @@ class TabularDice(Explanation):
 
         if self.temp_outcome_name in final_cfes.columns:
             final_cfes.pop(self.temp_outcome_name)
-        return final_cfes, final_cfe_ids
+
+        if len(final_cfe_ids) <= self.final_cfe_amount:
+            return final_cfes, final_cfe_ids
+
+        # Pick diverse cfes (don't use same combination of features twice)
+        cfe_feature_mentions_list = []
+        diverse_cfe_ids = []
+        for index, row in final_cfes.iterrows():
+            if len(diverse_cfe_ids) == self.final_cfe_amount:
+                break
+            # Check which features in the current row are different from the original instance
+            cfe_feature_mentions = set()
+            for feature in row.index:
+                if feature == "y":
+                    continue
+                if row[feature] != data.loc[ids[0]][feature]:
+                    cfe_feature_mentions.add(feature)
+            # Check if such a set of features has already been used
+            if cfe_feature_mentions not in cfe_feature_mentions_list:
+                diverse_cfe_ids.append(index)
+                cfe_feature_mentions_list.append(cfe_feature_mentions)
+        return final_cfes.loc[diverse_cfe_ids], diverse_cfe_ids
 
     def summarize_explanations(self,
                                data: pd.DataFrame,
