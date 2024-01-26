@@ -222,12 +222,16 @@ def run_action_by_id(conversation: Conversation,
         explanation = explain_ceteris_paribus(conversation, data, parse_op, regen)"""
 
 
-def get_explanation_report(conversation,
-                           instance_id: int):
+def compute_explanation_report(conversation,
+                               instance_id: int,
+                               build_temp_dataset: bool = True,
+                               instance_type_naming: str = "instance",
+                               feature_display_name_mapping=None):
     """
     Runs explanation methods on the current conversation and returns a static report.
     """
-
+    if build_temp_dataset:
+        conversation.build_temp_dataset()
     parse_text = f"filter id {instance_id}".split(" ")
     _ = filter_operation(conversation, parse_text, 0)
     data = conversation.temp_dataset.contents['X']
@@ -236,14 +240,40 @@ def get_explanation_report(conversation,
 
     model_prediction_probas, _ = predict_likelihood(conversation, as_text=False)
     model_prediction = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
-    opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction))
-    feature_importances, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
-    # Turn list of values into int
+    opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction_probas))
+
+    # Get already sorted feature importances
+    feature_importances, _ = explain_feature_importances_as_plot(conversation, data, parse_op, regen, model_prediction)
+    """# Turn list of values into int
     feature_importances = {key: round(float(value[0]), ndigits=3) for key, value in feature_importances.items()}
+
+    # Replace feature names by display names
+    if feature_display_name_mapping is not None:
+        feature_importances = {feature_display_name_mapping.get(key): value for key, value in
+                               feature_importances.items()}
+    # Create a new dict of feature importances to preserve order
+    feature_importances = {key: value for key, value in sorted(feature_importances.items(), key=lambda item: item[1],
+                                                               reverse=True)}"""
     counterfactual_strings, _ = explain_cfe(conversation, data, parse_op, regen)
     anchors_string, _ = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
 
-    # Fill static report template
+    feature_statistics = explain_feature_statistic(conversation, as_string=False)
+    # map feature names to display names
+    if feature_display_name_mapping is not None:
+        feature_statistics = {feature_display_name_mapping.get(key): value for key, value in
+                              feature_statistics.items()}
+
+    return {
+        "model_prediction": model_prediction,
+        "instance_type": instance_type_naming,
+        "feature_importance": feature_importances,
+        "opposite_class": opposite_class,
+        "counterfactuals": counterfactual_strings,
+        "anchors": anchors_string,
+        "feature_statistics": feature_statistics
+    }
+
+    """# Fill static report template
     # Load md file
     file_loader = FileSystemLoader('.')
     env = Environment(loader=file_loader)
@@ -251,19 +281,13 @@ def get_explanation_report(conversation,
 
     markdown = template.render(
         model_prediction=model_prediction,
-        instance_type="Applicant",
+        instance_type=instance_type_naming,
         feature_importance=feature_importances,
         opposite_class=opposite_class,
         counterfactuals=counterfactual_strings,
         anchors=anchors_string,
     )
-
     # Save the rendered Markdown to a file
     output_file = f'static_report_{instance_id}.md'
     with open(output_file, 'w') as file:
-        file.write(markdown)
-
-    new_point = data.copy()
-    new_point.at[instance_id, 'Checking account'] = 3
-
-    print()
+        file.write(markdown)"""
