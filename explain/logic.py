@@ -770,6 +770,14 @@ class ExplainBot:
         final_result = returned_item
         return final_result
 
+    def get_explanation_report(self):
+        """Returns the explanation report."""
+        instance_id = self.current_instance[0]
+        report = compute_explanation_report(self.conversation, instance_id,
+                                            instance_type_naming=self.instance_type_naming,
+                                            feature_display_name_mapping=self.feature_display_names.feature_name_to_display_name)
+        return report
+
     def get_test_question_by_test_id(self, test_id):
         """
         Returns the test questions for the current datapoint.
