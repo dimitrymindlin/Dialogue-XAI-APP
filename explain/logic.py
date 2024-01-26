@@ -21,9 +21,10 @@ from flask import Flask
 import gin
 
 from create_experiment_data.experiment_helper import ExperimentHelper
+from create_experiment_data.ui_data_helper import FeatureDisplayNames
 from explain.explanations.shap_global_explainer import ShapGlobalExplainer
 from explain.explanations.test_instances import TestInstances
-from explain.action import run_action, run_action_by_id
+from explain.action import run_action, run_action_by_id, compute_explanation_report
 from explain.actions.explanation import explain_cfe_by_given_features
 from explain.conversation import Conversation
 from explain.explanation import MegaExplainer
@@ -52,7 +53,7 @@ class ExplainBot:
     """The ExplainBot Class."""
 
     def __init__(self,
-                 user_id: str,
+                 study_group: str,
                  model_file_path: str,
                  dataset_file_path: str,
                  background_dataset_file_path: str,
@@ -119,6 +120,7 @@ class ExplainBot:
         py_random_seed(seed)
 
         self.bot_name = name
+        self.study_group = study_group
 
         # Prompt settings
         self.prompt_metric = prompt_metric
@@ -188,6 +190,13 @@ class ExplainBot:
                                                                     remove_underscores,
                                                                     store_to_conversation=False)
 
+        self.feature_display_names = FeatureDisplayNames(self.conversation)
+        self.conversation.add_var('feature_display_names', self.feature_display_names, 'feature_display_names')
+
+        # Load Experiment Helper
+        helper = ExperimentHelper(self.conversation, self.categorical_mapping, self.categorical_features)
+        self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
+
         # Load the explanations
         self.load_explanations(background_dataset=background_dataset,
                                y_values=background_y_values,
@@ -240,6 +249,9 @@ class ExplainBot:
         # Get triple back to original format
         current_instance_with_units = (self.current_instance[0], current_instance_with_units, self.current_instance[2])
         return current_instance_with_units, return_counter
+
+    def get_study_group(self):
+        return self.study_group
 
     def get_current_prediction(self):
         """
@@ -351,7 +363,8 @@ class ExplainBot:
                                    num_features=numeric_f,
                                    class_names=self.conversation.class_names,
                                    categorical_mapping=self.categorical_mapping,
-                                   background_dataset=background_dataset)
+                                   background_dataset=background_dataset,
+                                   feature_display_names=self.feature_display_names)
         tabular_dice.get_explanations(ids=diverse_instance_ids,
                                       data=data)
 
@@ -365,7 +378,8 @@ class ExplainBot:
                                        data=data,
                                        categorical_names=self.categorical_mapping,
                                        class_names=self.conversation.class_names,
-                                       feature_names=list(data.columns))
+                                       feature_names=list(data.columns),
+                                       feature_display_names=self.feature_display_names.feature_name_to_display_name)
         tabular_anchor.get_explanations(ids=diverse_instance_ids,
                                         data=data)
 
@@ -718,7 +732,6 @@ class ExplainBot:
 
     def update_state_dy_id(self,
                            question_id: int,
-                           user_session_conversation: Conversation,
                            feature_id: int = None):
         """The main experiment driver.
 
@@ -737,7 +750,7 @@ class ExplainBot:
 
         app.logger.info(f'USER INPUT: q_id:{question_id}, f_id:{feature_id}')
         instance_id = self.current_instance[0]
-        returned_item = run_action_by_id(user_session_conversation, int(question_id), instance_id,
+        returned_item = run_action_by_id(self.conversation, int(question_id), instance_id,
                                          int(feature_id), instance_type_naming=self.instance_type_naming)
 
         # username = user_session_conversation.username  # TODO: Check if needed?!
