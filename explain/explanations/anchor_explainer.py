@@ -21,7 +21,8 @@ class TabularAnchor(Explanation):
                  class_names: dict,
                  feature_names: list,
                  mode: str = "tabular",
-                 cache_location: str = "./cache/anchor-tabular.pkl"):
+                 cache_location: str = "./cache/anchor-tabular.pkl",
+                 feature_display_names=None):
         """
 
         Args:
@@ -33,6 +34,8 @@ class TabularAnchor(Explanation):
             class_names: dict of class names
             feature_names: list of feature names
             mode: currently only "tabular" is supported
+            cache_location: location to cache the explainer
+            feature_display_names: dict of feature names to display names
 
         """
         super().__init__(cache_location, class_names)
@@ -42,6 +45,7 @@ class TabularAnchor(Explanation):
         self.categorical_names = categorical_names if categorical_names is not None else {}
         self.class_names = list(class_names.values())
         self.feature_names = feature_names
+        self.feature_display_names = feature_display_names
 
         if self.mode == "tabular":
             self.explainer = anchor_tabular.AnchorTabularExplainer(self.class_names,
@@ -122,9 +126,15 @@ class TabularAnchor(Explanation):
         # output_string += "By fixing all of the following attributes, the prediction stays the same even though other attributes are changed:"
         output_string += "<br><br>"
 
+        display_names_exp_names = []
+        for idx, change_string in enumerate(exp.names()):
+            feature = change_string.split(" ")[0]
+            display_names_exp_names.append(self.feature_display_names[feature])
+            display_names_exp_names[idx] += " " + " ".join(change_string.split(" ")[1:])
+
         additional_options = "Here are some more options to change the prediction of"
         additional_options += f" instance id {str(key)}.<br><br>"
-        explanation_text = " and ".join(exp.names()).replace("<=", "is lower than")
+        explanation_text = " and ".join(display_names_exp_names).replace("<=", "is lower than")
         explanation_text = explanation_text.replace(">=", "is greater than")
         explanation_text = explanation_text.replace(".00", "")  # remove decimal zeroes
         explanation_text += "</b>"
