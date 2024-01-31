@@ -794,8 +794,14 @@ class ExplainBot:
 
         app.logger.info(f'USER INPUT: q_id:{question_id}, f_id:{feature_id}')
         instance_id = self.current_instance[0]
-        returned_item = run_action_by_id(self.conversation, int(question_id), instance_id,
-                                         int(feature_id), instance_type_naming=self.instance_type_naming)
+        # Convert feature_id to int if not None
+        if feature_id is not None:
+            feature_id = int(feature_id)
+        returned_item = run_action_by_id(self.conversation,
+                                         int(question_id),
+                                         instance_id,
+                                         feature_id,
+                                         instance_type_naming=self.instance_type_naming)
 
         # username = user_session_conversation.username  # TODO: Check if needed?!
 
