@@ -247,7 +247,7 @@ def explain_ceteris_paribus(conversation, data, feature_name):
     ### Simplified Text version
     x_flip_value = ceteris_paribus_exp.get_simplified_explanation(data, feature_name)
     if x_flip_value is None:
-        return f"For the given patient, variations in <b>{feature_name}</b> have no impact on the model prediction and cannot change it to", 1
+        return f"For the given patient, variations only in <b>{feature_name}</b> have no impact on the model prediction and cannot change it to", 1
     # get current feature value
     current_feature_value = data[feature_name].values[0]
     # get the difference
