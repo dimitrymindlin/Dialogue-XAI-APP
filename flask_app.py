@@ -237,8 +237,10 @@ if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
+    CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
 if __name__ == "__main__":
     # clean up storage file on restart
     app.logger.info(f"Launching app from config: {args.config}")
     app.run(debug=False, port=4455, host='0.0.0.0', use_reloader=False)
+    CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
