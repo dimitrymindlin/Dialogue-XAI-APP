@@ -97,7 +97,6 @@ def finish():
     """
     Finish the experiment.
     """
-    print("Finishing Experiment")
     user_id = request.args.get("user_id")
     if user_id is None:
         user_id = "TEST"
@@ -120,8 +119,9 @@ def get_train_datapoint():
         user_id = "TEST"
 
     current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance()
-    (instance_id, instance_dict, prediction_proba) = current_instance_with_units
+    (instance_id, instance_dict, prediction_proba, true_label) = current_instance_with_units
     instance_dict["id"] = str(instance_id)
+    instance_dict["true_label"] = true_label
 
     # Make sure all values are strings
     for key, value in instance_dict.items():
@@ -157,7 +157,7 @@ def get_test_datapoint():
     if user_id is None:
         user_id = "TEST"
     current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance(train=False)
-    (instance_id, instance_dict, prediction_proba) = current_instance_with_units
+    (instance_id, instance_dict, prediction_proba, true_label) = current_instance_with_units
     instance_dict["id"] = str(instance_id)
 
     # Make sure all values are strings
