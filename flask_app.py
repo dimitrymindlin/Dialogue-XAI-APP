@@ -169,6 +169,30 @@ def get_test_datapoint():
     return instance_dict
 
 
+@bp.route("/set_user_prediction", methods=['POST'])
+def set_user_prediction():
+    """Set the user prediction."""
+    user_id = request.args.get("user_id")
+    user_prediction = request.args.get("user_prediction")
+    if user_id is None:
+        user_id = "TEST"
+    bot = bot_dict[user_id]
+    bot.set_user_prediction(user_prediction)
+    return "200 OK"
+
+
+@bp.route("/get_user_correctness", methods=['GET'])
+def get_user_correctness():
+    user_id = request.args.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
+    bot = bot_dict[user_id]
+    correctness_string = bot.get_user_correctness()
+    print(correctness_string)
+    response = {"correctness_string": correctness_string}
+    return response
+
+
 @bp.route("/get_questions", methods=['POST'])
 def get_questions():
     """Load the questions."""
