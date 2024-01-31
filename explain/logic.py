@@ -474,8 +474,10 @@ class ExplainBot:
                     instance_result_dict[feature_name] = self.categorical_mapping[i][val]
                 else:
                     instance_result_dict[feature_name] = val
+            # get true label
+            true_label = self.conversation.get_var("dataset").contents['y'].loc[id]
             # turn instance to pandas df for model prediction
-            instance_results.append((id, instance_result_dict, model_prediction))
+            instance_results.append((id, instance_result_dict, model_prediction, true_label))
         self.data_instances = instance_results
 
     def load_test_instances(self):
