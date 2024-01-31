@@ -151,6 +151,7 @@ class ExplainBot:
         self.current_instance = []
         self.train_instance_counter = 0
         self.test_instance_counter = 0
+        self.user_prediction_dict = {}
 
         # Initialize parser + prompts as None
         # These are done when the dataset is loaded
@@ -212,11 +213,65 @@ class ExplainBot:
                                                                   feature_units=self.feature_units_mapping)
         self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
+    def set_user_prediction(self, user_prediction):
+        current_id = self.current_instance[0]
+        true_label = self.conversation.get_var("dataset").contents['y'].loc[current_id]
+        self.user_prediction_dict[current_id] = (user_prediction, true_label)
+
+    def get_user_correctness(self):
+        # TODO: Only works for diabetes.
+        def extract_user_predicted_label(user_prediction: str):
+            if user_prediction == "Surely Likely" or user_prediction == "Rather Likely":
+                return 1
+            elif user_prediction == "Rather Unlikely" or user_prediction == "Surely Unlikely":
+                return 0
+            else:
+                return 2
+
+        # Check self.user_prediction_dict for correctness
+        correct_counter = 0
+        total_counter = 0
+        for instance_id, (user_prediction, true_label) in self.user_prediction_dict.items():
+            user_prediction_int = extract_user_predicted_label(user_prediction)
+            if user_prediction_int == true_label:
+                correct_counter += 1
+            total_counter += 1
+        return f"{correct_counter} out of {total_counter}"
+
     def get_next_instance(self, train=True):
         """
         Returns the next instance in the data_instances list if possible.
         param train: Whether to return a training instance or a test instance
         """
+
+        def get_train_instance_as_current_instance():
+            self.current_instance = self.data_instances.pop(0)
+            self.train_instance_counter += 1
+            return_counter = self.train_instance_counter
+            # get true label
+            true_label = self.conversation.get_var("dataset").contents['y'].loc[self.current_instance[0]]
+            true_label_name = self.conversation.class_names[true_label]
+            # Replace the true label with the true label name
+            self.current_instance = (
+                self.current_instance[0], self.current_instance[1], self.current_instance[2], true_label_name)
+
+        def get_test_instance_as_current_instance():
+            test_id = self.current_instance[0]
+            try:
+                self.current_instance = self.test_instances.pop(test_id)["least_complex_instance"].to_dict()
+            except KeyError:
+                # If the test instance was already popped (i.e. train test loop is over), get the next one
+                self.current_instance = self.data_instances.pop(0)
+                test_id = self.current_instance[0]
+                self.current_instance = self.test_instances.pop(test_id)["least_complex_instance"].to_dict()
+
+            self.current_instance = {name: value_dict[test_id] for name, value_dict in
+                                     self.current_instance.items()}  # unpack dict
+            # get true label
+            true_label = self.conversation.get_var("dataset").contents['y'].loc[test_id]
+            true_label_name = self.conversation.class_names[true_label]
+            self.current_instance = (test_id, self.current_instance, None, true_label_name)
+
         return_counter = None
         if len(self.data_instances) == 0:
             self.load_data_instances()  # TODO: Infinity loop - Where is experiment end determined?
@@ -225,30 +280,17 @@ class ExplainBot:
             return_counter = self.test_instance_counter
 
         if train:
-            self.current_instance = self.data_instances.pop(0)
-            self.train_instance_counter += 1
-            return_counter = self.train_instance_counter
+            get_train_instance_as_current_instance()
         else:
-            test_id = self.current_instance[0]
-            self.current_instance = self.test_instances.pop(test_id)["least_complex_instance"].to_dict()
-            self.current_instance = {name: value_dict[test_id] for name, value_dict in
-                                     self.current_instance.items()}  # unpack dict
-            self.current_instance = (test_id, self.current_instance, None)
+            get_test_instance_as_current_instance()
 
         # Round values
         for feature, value in self.current_instance[1].items():
             if isinstance(value, float):
                 self.current_instance[1][feature] = round(value, self.conversation.rounding_precision)
 
-        #if self.feature_units_mapping is None:
+        # if self.feature_units_mapping is None:
         return self.current_instance, return_counter
-
-        current_instance_with_units = copy.deepcopy(self.current_instance[1])  # triple(index, instance, prediction)
-        for feature, unit in self.feature_units_mapping.items():
-            current_instance_with_units[feature] = f"{current_instance_with_units[feature]} {unit}"
-        # Get triple back to original format
-        current_instance_with_units = (self.current_instance[0], current_instance_with_units, self.current_instance[2])
-        return current_instance_with_units, return_counter
 
     def get_study_group(self):
         return self.study_group
