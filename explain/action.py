@@ -156,7 +156,7 @@ def run_action_by_id(conversation: Conversation,
         # How should this instance change to get a different prediction?
         explanation = explain_cfe(conversation, data, parse_op, regen)
         explanation = "Here are some changes to the instance that would lead to a different prediction: <br>" + \
-                      explanation[0]
+                      explanation[0] + " <br>. There are other possible changes. These are just examples."
         return explanation
     if question_id == 8:
         # How should this attribute change to get a different prediction?
@@ -208,8 +208,8 @@ def run_action_by_id(conversation: Conversation,
     if question_id == 25:
         # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
         explanation = explain_ceteris_paribus(conversation, data, feature_name)
-        #intro = "The following graph shows the prediction score on the Y Axis when changing only the selected attribute. <br>"
-        return  explanation[0] + f" <i>{opposite_class}</i>."
+        # intro = "The following graph shows the prediction score on the Y Axis when changing only the selected attribute. <br>"
+        return explanation[0] + f" <i>{opposite_class}</i>."
     if question_id == 27:
         # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the instance?
         parse_op = "least 3"
@@ -255,8 +255,8 @@ def compute_explanation_report(conversation,
     feature_importances = {key: value for key, value in sorted(feature_importances.items(), key=lambda item: item[1],
                                                                reverse=True)}"""
     counterfactual_strings, _ = explain_cfe(conversation, data, parse_op, regen)
-    counterfactual_strings = "Here are some changes to the instance that would lead to a different prediction: <br>" + \
-                             counterfactual_strings
+    counterfactual_strings = counterfactual_strings + " <br>. There are other possible changes. These are just examples."
+
     anchors_string, _ = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
 
     feature_statistics = explain_feature_statistic(conversation, as_string=False)
