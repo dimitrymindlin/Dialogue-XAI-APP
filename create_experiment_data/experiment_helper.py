@@ -50,10 +50,18 @@ class ExperimentHelper:
                 # Sample around mean for numerical features
                 feature_mean = np.mean(self.conversation.get_var('dataset').contents["X"][feature_name])
                 feature_std = np.std(self.conversation.get_var('dataset').contents["X"][feature_name])
+                feature_min = np.min(self.conversation.get_var('dataset').contents["X"][feature_name])
+                feature_max = np.max(self.conversation.get_var('dataset').contents["X"][feature_name])
                 # Sample around feature mean
                 random_change = np.random.normal(loc=feature_mean, scale=feature_std)
                 while random_change == tmp_instance.at[tmp_instance.index[0], feature_name]:
                     random_change = np.random.normal(loc=feature_mean, scale=feature_std)
+                # Check if the new value is within the feature range
+                if random_change < feature_min:
+                    random_change = feature_min
+                elif random_change > feature_max:
+                    random_change = feature_max
+
                 tmp_instance.at[tmp_instance.index[0], feature_name] = random_change
 
             # Check if prediction stays the same
