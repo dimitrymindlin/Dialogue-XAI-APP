@@ -16,7 +16,6 @@ twilio.txt
 
 # data uploads
 data/upload/*
-cache/*.pkl
 
 is_online.sh
 
