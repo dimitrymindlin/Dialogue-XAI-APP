@@ -148,7 +148,8 @@ class MegaExplainer(Explanation):
                  cache_location: str = "./cache/mega-explainer-tabular.pkl",
                  class_names: list[str] = None,
                  use_selection: bool = True,
-                 categorical_mapping: dict = None):
+                 categorical_mapping: dict = None,
+                 feature_name_to_display_name_dict=None):
         """Init.
 
         Args:
@@ -163,6 +164,7 @@ class MegaExplainer(Explanation):
         super().__init__(cache_location, class_names)
         self.prediction_fn = prediction_fn
         self.data = data
+        self.feature_name_to_display_name_dict = feature_name_to_display_name_dict
 
         cat_features = self.get_cat_features(data, cat_features)
 
@@ -475,7 +477,9 @@ class MegaExplainer(Explanation):
         # response = textual_fi_with_values(sig_coefs)
         # B
 
-        response = textual_fi_with_values(sig_coefs, filtering_text=filtering_text)
+        response = textual_fi_with_values(sig_coefs,
+                                          filtering_text=filtering_text,
+                                          feature_name_to_display_name_dict=self.feature_name_to_display_name_dict)
         # C # TODO: Check with michi how to show plot.
         # response = visual_feature_importance_list(sig_coefs)
 

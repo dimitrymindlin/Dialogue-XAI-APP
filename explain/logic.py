@@ -213,6 +213,9 @@ class ExplainBot:
                                                                   feature_units=self.feature_units_mapping)
         self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
+    def get_feature_display_name_dict(self):
+        return self.conversation.get_var('feature_display_names').contents.feature_name_to_display_name
+
     def set_user_prediction(self, user_prediction):
         current_id = self.current_instance[0]
         true_label = self.conversation.get_var("dataset").contents['y'].loc[current_id]

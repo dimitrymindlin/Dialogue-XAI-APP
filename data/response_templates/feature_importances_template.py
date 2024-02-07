@@ -1,24 +1,25 @@
-import pandas
 import numpy as np
 from typing import Dict
 import io
 
 
-def sumarize_least_important(sig_coefs):
+def sumarize_least_important(sig_coefs, feature_name_to_display_name_dict):
     # reverse sig_coefs
     sig_coefs = sig_coefs[::-1]
     summarization_text = "The attributes "
     for i, (feature_name, feature_importance) in enumerate(sig_coefs):
         if i > 2:
             break
-        summarization_text += f"<b>{feature_name}, </b>"
+        feature_display_name = feature_name_to_display_name_dict[feature_name]
+        summarization_text += f"<b>{feature_display_name}, </b>"
     summarization_text += " are the least important attributes for the current person."
     return summarization_text
 
 
-def textual_fi_with_values(sig_coefs: Dict[str, float],
+def textual_fi_with_values(sig_coefs,
                            num_features_to_show: int = None,
-                           filtering_text: str = None):
+                           filtering_text: str = None,
+                           feature_name_to_display_name_dict=None):
     """Formats dict of label -> feature name -> feature_importance dicts to string.
 
     Arguments:
@@ -30,7 +31,7 @@ def textual_fi_with_values(sig_coefs: Dict[str, float],
     output_text = "<ol>"
 
     if "least 3" in filtering_text:
-        return sumarize_least_important(sig_coefs)
+        return sumarize_least_important(sig_coefs, feature_name_to_display_name_dict)
 
     describing_features = 0
     for i, (feature_name, feature_importance) in enumerate(sig_coefs):
@@ -46,7 +47,9 @@ def textual_fi_with_values(sig_coefs: Dict[str, float],
         else:
             position = f"{describing_features + 1}."
         increase_decrease = "increases" if feature_importance > 0 else "decreases"
-        new_text = (f"<b>{feature_name}</b> is the <b>{position}</b> important attribute and it"
+        # Turn feature name into display_feature_name
+        feature_name_display = feature_name_to_display_name_dict[feature_name]
+        new_text = (f"<b>{feature_name_display}</b> is the <b>{position}</b> important attribute and it"
                     f" <em>{increase_decrease}</em> the likelihood of the current prediction.")
         # new_text = new_text[:-1] + "by <b>{str(feature_importance)}.</b>"
         if new_text != "":
