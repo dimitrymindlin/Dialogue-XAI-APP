@@ -65,9 +65,9 @@ class ExperimentHelper:
                 tmp_instance.at[tmp_instance.index[0], feature_name] = random_change
 
             # Check if prediction stays the same
-            if model.predict(tmp_instance)[0] == model.predict(original_instance)[0]:
-                result_instance = tmp_instance.copy()
-                changed_features += 1
+            #if model.predict(tmp_instance)[0] == model.predict(original_instance)[0]:
+            result_instance = tmp_instance.copy()
+            changed_features += 1
             if changed_features == max_features_to_vary:
                 break
         return result_instance
