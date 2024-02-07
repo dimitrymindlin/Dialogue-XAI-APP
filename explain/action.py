@@ -255,7 +255,7 @@ def compute_explanation_report(conversation,
     feature_importances = {key: value for key, value in sorted(feature_importances.items(), key=lambda item: item[1],
                                                                reverse=True)}"""
     counterfactual_strings, _ = explain_cfe(conversation, data, parse_op, regen)
-    counterfactual_strings = counterfactual_strings + " <br>. There are other possible changes. These are just examples."
+    counterfactual_strings = counterfactual_strings + " <br>There are other possible changes. These are just examples."
 
     anchors_string, _ = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
 
