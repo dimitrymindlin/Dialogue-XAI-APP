@@ -40,9 +40,13 @@ class TestInstances:
         self.actionable_features = actionable_features
         self.test_instances = load_cache(cache_location)
 
+    def get_random_instance(self):
+        return self.data.sample(1)
+
     def get_test_instances(self,
                            instance_count: int = 10,
-                           save_to_cache=True) -> List[int]:
+                           save_to_cache=True,
+                           close_instances=False):
         """
         Returns diverse instances for the given data set.
         Args:
@@ -60,44 +64,53 @@ class TestInstances:
         for instance_id in self.diverse_instance_ids:
             # Get the instance as a pandas dataframe
             original_instance = self.data.loc[instance_id].to_frame().transpose()
-            # Get model prediction
-            original_class_prediction = np.argmax(self.model.predict_proba(original_instance)[0])
-            # Get the feature importances
-            feature_importances = self.mega_explainer.get_feature_importances(original_instance)[0][
-                original_class_prediction]
-            # get a list of similar instances
-            similar_instances = [
-                self.experiment_helper.get_similar_instance(original_instance, self.model, self.actionable_features)
-                for _
-                in range(instance_count)]
-            similar_instances = pd.concat(similar_instances)
-            # Sort instances by complexity
-            similar_instances = self.sort_instances_by_complexity(original_instance, similar_instances,
-                                                                  feature_importances,
-                                                                  self.model.predict_proba)
-            # Get the most complex instance (i.e. the first one in the df)
-            most_complex_instance = similar_instances.head(1)
-            # Get the least complex instance (i.e. the last one in the df)
-            least_complex_instance = similar_instances.tail(1)
-            # get a list of counterfactual instance by varying the easiest instance
-            counterfactual_instances = self.experiment_helper.get_counterfactual_instances(least_complex_instance)
-            # Restructure counterfactual instances list to be list of one row dataframes
+            test_instance = self.get_random_instance()
+            if not close_instances:
+                test_instances[original_instance.index[0]] = {"most_complex_instance": test_instance,
+                                                              "least_complex_instance": test_instance,
+                                                              "easy_counterfactual_instance": test_instance,
+                                                              "hard_counterfactual_instance": test_instance}
+            else:
 
-            # Sort instances by complexity
-            counterfactual_instances = self.sort_instances_by_complexity(original_instance, counterfactual_instances,
-                                                                         feature_importances, self.model.predict_proba)
+                # Get model prediction
+                original_class_prediction = np.argmax(self.model.predict_proba(original_instance)[0])
+                # Get the feature importances
+                feature_importances = self.mega_explainer.get_feature_importances(original_instance)[0][
+                    original_class_prediction]
+                # get a list of similar instances
+                similar_instances = [
+                    self.experiment_helper.get_similar_instance(original_instance, self.model, self.actionable_features)
+                    for _
+                    in range(instance_count)]
+                similar_instances = pd.concat(similar_instances)
+                # Sort instances by complexity
+                similar_instances = self.sort_instances_by_complexity(original_instance, similar_instances,
+                                                                      feature_importances,
+                                                                      self.model.predict_proba)
+                # Get the most complex instance (i.e. the first one in the df)
+                most_complex_instance = similar_instances.head(1)
+                # Get the least complex instance (i.e. the last one in the df)
+                least_complex_instance = similar_instances.tail(1)
+                # get a list of counterfactual instance by varying the easiest instance
+                counterfactual_instances = self.experiment_helper.get_counterfactual_instances(least_complex_instance)
 
-            # get an easy counterfactual instance
-            easy_counterfactual_instance = counterfactual_instances.tail(1)
+                # Sort instances by complexity
+                counterfactual_instances = self.sort_instances_by_complexity(original_instance,
+                                                                             counterfactual_instances,
+                                                                             feature_importances,
+                                                                             self.model.predict_proba)
 
-            # get a hard counterfactual instance
-            hard_counterfactual_instance = counterfactual_instances.head(1)
+                # get an easy counterfactual instance
+                easy_counterfactual_instance = counterfactual_instances.tail(1)
 
-            # Save most_complex, least_complex and counterfactual instance in dict
-            test_instances[original_instance.index[0]] = {"most_complex_instance": most_complex_instance,
-                                                          "least_complex_instance": least_complex_instance,
-                                                          "easy_counterfactual_instance": easy_counterfactual_instance,
-                                                          "hard_counterfactual_instance": hard_counterfactual_instance}
+                # get a hard counterfactual instance
+                hard_counterfactual_instance = counterfactual_instances.head(1)
+
+                # Save most_complex, least_complex and counterfactual instance in dict
+                test_instances[original_instance.index[0]] = {"most_complex_instance": most_complex_instance,
+                                                              "least_complex_instance": least_complex_instance,
+                                                              "easy_counterfactual_instance": easy_counterfactual_instance,
+                                                              "hard_counterfactual_instance": hard_counterfactual_instance}
         # Save dict to pkl file
         if save_to_cache:
             with open(self.cache_location, 'wb') as file:
