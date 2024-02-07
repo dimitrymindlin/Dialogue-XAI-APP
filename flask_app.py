@@ -173,7 +173,8 @@ def get_test_datapoint():
 def set_user_prediction():
     """Set the user prediction."""
     user_id = request.args.get("user_id")
-    user_prediction = request.args.get("user_prediction")
+    data = json.loads(request.data)
+    user_prediction = data["user_prediction"]
     if user_id is None:
         user_id = "TEST"
     bot = bot_dict[user_id]
