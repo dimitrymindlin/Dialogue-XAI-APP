@@ -386,7 +386,8 @@ class ExplainBot:
                                        cat_features=categorical_f,
                                        class_names=self.conversation.class_names,
                                        categorical_mapping=self.categorical_mapping,
-                                       use_selection=True)
+                                       use_selection=True,
+                                       feature_name_to_display_name_dict=self.get_feature_display_name_dict())
 
         # Load diverse instances (explanations)
         diverse_instances_explainer = DiverseInstances(
