@@ -250,7 +250,7 @@ class ExplainBot:
         def get_train_instance_as_current_instance():
             self.current_instance = self.data_instances.pop(0)
             self.train_instance_counter += 1
-            return_counter = self.train_instance_counter
+            # return_counter = self.train_instance_counter
             # get true label
             true_label = self.conversation.get_var("dataset").contents['y'].loc[self.current_instance[0]]
             true_label_name = self.conversation.class_names[true_label]
@@ -259,6 +259,11 @@ class ExplainBot:
                 self.current_instance[0], self.current_instance[1], self.current_instance[2], true_label_name)
 
         def get_test_instance_as_current_instance():
+            def make_instance_dict():
+                # Create a new dictionary where the keys are the same but the values are the first value of the inner dictionary
+                new_dict = {name: list(value_dict.values())[0] for name, value_dict in self.current_instance.items()}
+                return new_dict
+
             test_id = self.current_instance[0]
             try:
                 self.current_instance = self.test_instances.pop(test_id)["least_complex_instance"].to_dict()
@@ -267,9 +272,7 @@ class ExplainBot:
                 self.current_instance = self.data_instances.pop(0)
                 test_id = self.current_instance[0]
                 self.current_instance = self.test_instances.pop(test_id)["least_complex_instance"].to_dict()
-
-            self.current_instance = {name: value_dict[test_id] for name, value_dict in
-                                     self.current_instance.items()}  # unpack dict
+            self.current_instance = make_instance_dict()
             # get true label
             true_label = self.conversation.get_var("dataset").contents['y'].loc[test_id]
             true_label_name = self.conversation.class_names[true_label]
