@@ -155,8 +155,8 @@ def run_action_by_id(conversation: Conversation,
     if question_id == 7:
         # How should this instance change to get a different prediction?
         explanation = explain_cfe(conversation, data, parse_op, regen)
-        explanation = "Here are possible changes to the instance that would lead to a different prediction: <br>" + \
-                      explanation[0] + " <br>There are other possible changes. These are just examples."
+        explanation = "Here are possible changes to the instance that would flip the prediction: <br>" + \
+                      explanation[0] + "There might be other possible changes. These are examples."
         return explanation
     if question_id == 8:
         # How should this attribute change to get a different prediction?
@@ -186,7 +186,7 @@ def run_action_by_id(conversation: Conversation,
         # 20;Why is this instance predicted as [current prediction]?
         explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
         result_text = f"The {instance_type_naming} is predicted as <it>{current_prediction}</it>, because the "
-        result_text = result_text + explanation[0]
+        result_text = result_text + explanation[0] + "."
         return result_text
     if question_id == 22:
         # 22;How is the model using the attributes in general to give an answer?
@@ -209,7 +209,7 @@ def run_action_by_id(conversation: Conversation,
         # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
         explanation = explain_ceteris_paribus(conversation, data, feature_name)
         # intro = "The following graph shows the prediction score on the Y Axis when changing only the selected attribute. <br>"
-        return explanation[0] + f" <i>{opposite_class}</i>."
+        return explanation[0] + f" <b>{opposite_class}</b>."
     if question_id == 27:
         # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the instance?
         parse_op = "least 3"
@@ -255,7 +255,7 @@ def compute_explanation_report(conversation,
     feature_importances = {key: value for key, value in sorted(feature_importances.items(), key=lambda item: item[1],
                                                                reverse=True)}"""
     counterfactual_strings, _ = explain_cfe(conversation, data, parse_op, regen)
-    counterfactual_strings = counterfactual_strings + " <br>. There are other possible changes. These are just examples."
+    counterfactual_strings = counterfactual_strings + " <br>There are other possible changes. These are just examples."
 
     anchors_string, _ = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
 
