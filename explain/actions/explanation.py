@@ -6,6 +6,7 @@ import base64
 import io
 import matplotlib.pyplot as plt
 import shap
+from matplotlib.ticker import FuncFormatter
 
 from create_experiment_data.ui_data_helper import FeatureDisplayNames
 from explain.actions.utils import gen_parse_op_text
@@ -109,6 +110,11 @@ def explain_feature_importances_as_plot(conversation,
     labels = labels[::-1]
     values = values[::-1]
 
+    # Flip the values if the prediction is likely, to have blue bars for unlikely and red bars for likely
+    # TODO: Only for Diabetes, make more general and pull from config
+    if "unlikely" not in current_prediction_string:  # if its likely, flip the values
+        values = [-v for v in values]
+
     # Turn labels to display names
     feature_display_names: FeatureDisplayNames = conversation.get_var('feature_display_names').contents
     for i, label in enumerate(labels):
@@ -122,6 +128,9 @@ def explain_feature_importances_as_plot(conversation,
     plt.xticks(fontsize=18)
     plt.tight_layout()
 
+    # Format x-ticks to have only two decimal places
+    ax.xaxis.set_major_formatter(FuncFormatter('{:.2f}'.format))
+
     # Save the plot to a BytesIO object
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
@@ -133,8 +142,8 @@ def explain_feature_importances_as_plot(conversation,
     plt.close()
 
     html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                  f'<span>Blue bars indicate increase in probability of <i>{current_prediction_string}</i>,<br>' \
-                  f'Red bars indicate decrease in probability of <i>{current_prediction_string}</i>.</span>'
+                  f'<span>Blue bars = attributes in favor of predicting <b>unlikely to have diabetes</b>. <br>' \
+                  f'Red bars = attributes in favor of predicting <b>likely to have diabetes</b>.</span>'
 
     return html_string, 1
 
