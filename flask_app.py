@@ -134,7 +134,7 @@ def get_train_datapoint():
     current_prediction = bot_dict[user_id].get_current_prediction()
     instance_dict["current_prediction"] = current_prediction
     prompt = f"""
-        The model predicted that the current {bot_dict[user_id].instance_type_naming} is <i>{current_prediction}</i>. <br>
+        The model predicted that the current {bot_dict[user_id].instance_type_naming} is <b>{current_prediction}</b>. <br>
         If you have questions about the prediction, select questions from the right and I will answer them.
         """
     instance_dict["initial_prompt"] = prompt

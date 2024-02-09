@@ -49,8 +49,9 @@ def textual_fi_with_values(sig_coefs,
         increase_decrease = "increases" if feature_importance > 0 else "decreases"
         # Turn feature name into display_feature_name
         feature_name_display = feature_name_to_display_name_dict[feature_name]
-        new_text = (f"<b>{feature_name_display}</b> is the <b>{position}</b> important attribute and it"
-                    f" <em>{increase_decrease}</em> the likelihood of the current prediction.")
+        new_text = (f"<b>{feature_name_display}</b> is the <b>{position}</b> important attribute.")
+        # f"and it"
+        # f" <em>{increase_decrease}</em> the likelihood of the current prediction.")
         # new_text = new_text[:-1] + "by <b>{str(feature_importance)}.</b>"
         if new_text != "":
             output_text += "<li>" + new_text + "</li>"
