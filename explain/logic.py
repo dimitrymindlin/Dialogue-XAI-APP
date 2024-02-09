@@ -224,9 +224,9 @@ class ExplainBot:
     def get_user_correctness(self):
         # TODO: Only works for diabetes.
         def extract_user_predicted_label(user_prediction: str):
-            if user_prediction == "Surely Likely" or user_prediction == "Rather Likely":
+            if user_prediction == "Likely to have diabetes":
                 return 1
-            elif user_prediction == "Rather Unlikely" or user_prediction == "Surely Unlikely":
+            elif user_prediction == "Unlikely to have diabetes":
                 return 0
             else:
                 return 2
