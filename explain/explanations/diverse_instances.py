@@ -34,7 +34,7 @@ class DiverseInstances:
 
     def get_instance_ids_to_show(self,
                                  data: pd.DataFrame,
-                                 instance_count: int = 10,
+                                 instance_count: int = 20,
                                  save_to_cache=True) -> List[int]:
         """
         Returns diverse instances for the given data set.
@@ -53,6 +53,8 @@ class DiverseInstances:
         diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, instance_count)
         # Get pandas index for the diverse instances
         diverse_instances_pandas_indices = [data.index[i] for i in diverse_instances]
+        # remove instance with id 123
+        diverse_instances_pandas_indices.remove(123)
 
         if save_to_cache:
             with open(self.cache_location, 'wb') as file:
