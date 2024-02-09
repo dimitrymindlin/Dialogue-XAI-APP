@@ -134,8 +134,11 @@ class TabularAnchor(Explanation):
 
         additional_options = "Here are some more options to change the prediction of"
         additional_options += f" instance id {str(key)}.<br><br>"
-        explanation_text = " and ".join(display_names_exp_names).replace("<=", "is lower than")
-        explanation_text = explanation_text.replace(">=", "is greater than")
+        explanation_text = " and ".join(display_names_exp_names).replace("<=", "is not above")
+        explanation_text = explanation_text.replace(">=", "is not below")
+        explanation_text = explanation_text.replace(">", "is above")
+        explanation_text = explanation_text.replace("<", "is below")
+
         explanation_text = explanation_text.replace(".00", "")  # remove decimal zeroes
         explanation_text += "</b>"
         explanation_text = "<b>" + explanation_text
