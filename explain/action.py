@@ -265,6 +265,13 @@ def compute_explanation_report(conversation,
         feature_statistics = {feature_display_name_mapping.get(key): value for key, value in
                               feature_statistics.items()}
 
+    # get ceteris paribus for all features
+    ceteris_paribus_sentences = []
+    for feature in data.columns:
+        ceteris_paribus, _ = explain_ceteris_paribus(conversation, data, feature)
+        ceteris_paribus += f" <b>{opposite_class}</b>."
+        ceteris_paribus_sentences.append(ceteris_paribus)
+
     return {
         "model_prediction": model_prediction,
         "instance_type": instance_type_naming,
@@ -272,7 +279,8 @@ def compute_explanation_report(conversation,
         "opposite_class": opposite_class,
         "counterfactuals": counterfactual_strings,
         "anchors": anchors_string,
-        "feature_statistics": feature_statistics
+        "feature_statistics": feature_statistics,
+        "ceteris_paribus": ceteris_paribus_sentences
     }
 
     """# Fill static report template
