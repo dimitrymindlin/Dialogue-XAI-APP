@@ -26,6 +26,7 @@ ExplainBot.dataset_file_path = "./data/diabetesSmall_test.csv"
 # The background dataset for the conversation
 ExplainBot.background_dataset_file_path = "./data/diabetesSmall_train.csv"
 ExplainBot.name = "diabetesSmall"
+ExplainBot.instance_type_naming = "patient"
 
 # Dataset feature information
 ExplainBot.dataset_index_column = 0
@@ -33,7 +34,7 @@ ExplainBot.target_variable_name = "y"
 ExplainBot.categorical_features = None
 ExplainBot.numerical_features = None
 ExplainBot.remove_underscores = True
-ExplainBot.actionable_features = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction']
+ExplainBot.actionable_features = ['Glucose', 'BloodPressure', 'Insulin', 'BMI', 'DiabetesPedigreeFunction']
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
@@ -44,6 +45,7 @@ MegaExplainer.use_selection = False
 
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/diabetesSmall-dice-tabular.pkl"
+TabularDice.final_cfe_amount = 3
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/diabetesSmall-diverse-instances.pkl"
@@ -71,12 +73,22 @@ DatasetDescription.model_description = "gradient boosted tree"
 
 # Feature Tooltip
 ExplainBot.feature_tooltip_mapping = {
-    "age": "The person's age in years.",
-    "pregnancies": "How many times the person has been pregnant.",
-    "glucose": "Measures the sugar level in the blood after drinking a sugar solution",
-    "bloodpressure": "The blood pressure.",
-    "skinthickness": "The thickness of the skin on the tricep area of the arm.",
+    "age": "The person's age.",
+    "pregnancies": "Number of times pregnant.",
+    "glucose": "Plasma glucose concentration after 2 hours in an oral glucose tolerance test.",
+    "bloodpressure": "Diastolic blood pressure.",
     "insulin": "The amount of insulin in the blood two hours after eating.",
     "bmi": "Body mass index is a number calculated from weight and height, used to assess if a person's weight is in a healthy range.",
     "diabetespedigreefunction": "A score that represents the likelihood of diabetes based on family history.",
+}
+
+# Feature Units
+ExplainBot.feature_units_mapping = {
+    "age": "years",
+    "pregnancies": "times",
+    "glucose": "mg/dL",
+    "bloodpressure": "mm Hg",
+    "insulin": "mu U/ml",
+    "bmi": "kg/m^2",
+    "diabetespedigreefunction": "score",
 }

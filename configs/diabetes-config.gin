@@ -75,7 +75,7 @@ DatasetDescription.model_description = "gradient boosted tree"
 ExplainBot.feature_tooltip_mapping = {
     "age": "The person's age.",
     "pregnancies": "Number of times pregnant.",
-    "glucose": "Plasma glucose concentration a 2 hours in an oral glucose tolerance test.",
+    "glucose": "Plasma glucose concentration after 2 hours in an oral glucose tolerance test.",
     "bloodpressure": "Diastolic blood pressure.",
     "skinthickness": "Triceps skin fold thickness. ",
     "insulin": "The amount of insulin in the blood two hours after eating.",
