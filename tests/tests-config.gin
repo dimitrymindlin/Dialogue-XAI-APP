@@ -3,28 +3,19 @@ read_and_format_data.target_var_name = "y"
 read_and_format_data.cat_features = None
 read_and_format_data.num_features = None
 read_and_format_data.remove_underscores = True
-read_and_format_data.filepath = "./data/compas_train.csv"
+read_and_format_data.filepath = "./data/diabetesSmall_train.csv"
 
-load_sklearn_model.filepath = "./data/compas_model_grad_boosted_tree.pkl"
+load_sklearn_model.filepath = "./data/diabetesSmall_model_logistic_regression.pkl"
 
 TabularDice.num_cfes_per_instance = 6
 
-Conversation.class_names = {0: "likely to commit a crime", 1: "unlikely to commit a crime"}
-TabularDice.class_names = {0: "likely to commit a crime", 1: "unlikely to commit a crime"}
-MegaExplainer.class_names = {0: "likely to commit a crime", 1: "unlikely to commit a crime"}
+Conversation.class_names = {0: "unlikely to have diabetes", 1: "likely to have diabetes"}
+TabularDice.class_names = {0: "unlikely to have diabetes", 1: "likely to have diabetes"}
+MegaExplainer.class_names = {0: "unlikely to have diabetes", 1: "likely to have diabetes"}
 MegaExplainer.use_selection = False
 
 show_operation.n_features_to_show = 6
 
-DatasetDescription.dataset_objective = "predict whether someone will commit a crime"
-DatasetDescription.dataset_description = "recidivism prediction"
-DatasetDescription.model_description = "gradient boosted tree"
-
-# The location of aws secret keys, if None will print logs to app.info
-load_dynamo_db.key_filepath = None
-load_dynamo_db.region_name = "us-east-1"
-load_dynamo_db.table_name = "talk-to-model-logs"
-
-
-# Setup logging, don't modify this
-log_dialogue_input.dynamodb_table = @load_dynamo_db()
+DatasetDescription.dataset_objective = "predict whether someone is likely to have diabetes"
+DatasetDescription.dataset_description = "diagnostic data for diabetes patients"
+DatasetDescription.model_description = "logistic regression model trained on diabetes diagnostic data"
