@@ -73,7 +73,7 @@ class CeterisParibus(Explanation):
 
     def run_explanation(self,
                         current_data: pd.DataFrame):
-        """Generate tabular dice explanations.
+        """Generate ceteris paribus explanations.
 
         Arguments:
             current_data: The data to generate explanations for in pandas df.

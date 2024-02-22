@@ -103,8 +103,10 @@ def run_action_by_id(conversation: Conversation,
     regen = conversation.temp_dataset.contents['ids_to_regenerate']
     feature_name = data.columns[feature_id]
     parse_op = f"ID {instance_id}"
-    current_prediction = conversation.get_class_name_from_label(conversation.temp_dataset.contents['y'][instance_id])
-    opposite_class = conversation.get_class_name_from_label(1 - conversation.temp_dataset.contents['y'][instance_id])
+    model_prediction_probas, _ = predict_likelihood(conversation, as_text=False)
+    current_prediction_str = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
+    opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction_probas))
+    current_prediction_id = conversation.temp_dataset.contents['y'][instance_id]
 
     # get_explanation_report(conversation, instance_id)
 
@@ -120,7 +122,8 @@ def run_action_by_id(conversation: Conversation,
         # How important is each attribute to the model's predictions?
         # Create full feature explanations
         # explanation = explain_feature_importances(conversation, data, parse_op, regen)
-        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen)
+        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction_str,
+                                                          current_prediction_id)
         return explanation[0]
     if question_id == 3:
         # How strong does [feature X] affect the prediction?
@@ -185,7 +188,7 @@ def run_action_by_id(conversation: Conversation,
     if question_id == 20:
         # 20;Why is this instance predicted as [current prediction]?
         explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
-        result_text = f"The {instance_type_naming} is predicted as <it>{current_prediction}</it>, because the "
+        result_text = f"The {instance_type_naming} is predicted as <it>{current_prediction_str}</it>, because the "
         result_text = result_text + explanation[0] + "."
         return result_text
     if question_id == 22:
@@ -203,11 +206,12 @@ def run_action_by_id(conversation: Conversation,
 
     if question_id == 24:
         # 24;What are the attributes and their impact for the current prediction of [curent prediction]?
-        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction)
+        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction_str,
+                                                          current_prediction_id)
         return explanation[0]
     if question_id == 25:
         # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
-        explanation = explain_ceteris_paribus(conversation, data, feature_name)
+        explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming)
         # intro = "The following graph shows the prediction score on the Y Axis when changing only the selected attribute. <br>"
         return explanation[0] + f" <b>{opposite_class}</b>."
     if question_id == 27:
@@ -239,11 +243,14 @@ def compute_explanation_report(conversation,
     parse_op = f"ID {instance_id}"
 
     model_prediction_probas, _ = predict_likelihood(conversation, as_text=False)
-    model_prediction = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
+    model_prediction_str = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
+    model_prediction_int = np.argmax(model_prediction_probas)
     opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction_probas))
 
     # Get already sorted feature importances
-    feature_importances, _ = explain_feature_importances_as_plot(conversation, data, parse_op, regen, model_prediction)
+    feature_importances, _ = explain_feature_importances_as_plot(conversation, data, parse_op, regen,
+                                                                 model_prediction_str,
+                                                                 model_prediction_int)
     """# Turn list of values into int
     feature_importances = {key: round(float(value[0]), ndigits=3) for key, value in feature_importances.items()}
 
@@ -268,12 +275,12 @@ def compute_explanation_report(conversation,
     # get ceteris paribus for all features
     ceteris_paribus_sentences = []
     for feature in data.columns:
-        ceteris_paribus, _ = explain_ceteris_paribus(conversation, data, feature)
+        ceteris_paribus, _ = explain_ceteris_paribus(conversation, data, feature, instance_type_naming)
         ceteris_paribus += f" <b>{opposite_class}</b>."
         ceteris_paribus_sentences.append(ceteris_paribus)
 
     return {
-        "model_prediction": model_prediction,
+        "model_prediction": model_prediction_str,
         "instance_type": instance_type_naming,
         "feature_importance": feature_importances,
         "opposite_class": opposite_class,

@@ -21,6 +21,7 @@ class DiverseInstances:
 
     def __init__(self,
                  cache_location: str = "./cache/diverse-instances.pkl",
+                 instance_amount: int = 5,
                  lime_explainer=None):
         """
 
@@ -31,10 +32,10 @@ class DiverseInstances:
         self.diverse_instances = load_cache(cache_location)
         self.cache_location = cache_location
         self.lime_explainer = lime_explainer
+        self.instance_amount = instance_amount
 
     def get_instance_ids_to_show(self,
                                  data: pd.DataFrame,
-                                 instance_count: int = 20,
                                  save_to_cache=True) -> List[int]:
         """
         Returns diverse instances for the given data set.
@@ -50,11 +51,13 @@ class DiverseInstances:
             return self.diverse_instances
 
         # Generate diverse instances
-        diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, instance_count)
+        diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, self.instance_amount)
         # Get pandas index for the diverse instances
         diverse_instances_pandas_indices = [data.index[i] for i in diverse_instances]
-        # remove instance with id 123
-        diverse_instances_pandas_indices.remove(123)
+
+        # TODO: This is hacky and only for Diabetes dataset. Move to data preprocessing
+        """# remove instance with id 123
+        diverse_instances_pandas_indices.remove(123)"""
 
         if save_to_cache:
             with open(self.cache_location, 'wb') as file:
