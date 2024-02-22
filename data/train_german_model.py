@@ -20,6 +20,14 @@ from data.processing_functions import get_and_preprocess_german_short
 
 german_data, categorical_mapping = get_and_preprocess_german_short()
 
+
+def make_categorical_col_ids(data, col_name):
+    """
+    Make a list of column ids for the categorical columns.
+    """
+    return [list(np.sort(data['x_values'][col_name].unique()))]
+
+
 # savings_categories = [['NA', 'little', 'moderate', 'quite rich', 'rich']]
 age_categories = [[0, 1, 2, 3]]
 savings_categories = [[0, 1, 2, 3, 4]]
@@ -27,9 +35,9 @@ savings_categories = [[0, 1, 2, 3, 4]]
 checking_categories = [[0, 1, 2, 3]]
 job_level_categories = [[0, 1, 2, 3]]
 one_hot_col_names = ['Gender', 'Housing Type', 'Credit Purpose']
-sex_categories = [list(np.sort(german_data['x_values']['Gender'].unique()))]
-housing_categories = [list(np.sort(german_data['x_values']['Housing Type'].unique()))]
-purpose_categories = [list(np.sort(german_data['x_values']['Credit Purpose'].unique()))]
+sex_categories = make_categorical_col_ids(german_data, 'Gender')
+housing_categories = make_categorical_col_ids(german_data, 'Housing Type')
+purpose_categories = make_categorical_col_ids(german_data, 'Credit Purpose')
 
 standard_scaler_col_list = ['Credit amount', 'Credit Duration']
 
@@ -68,7 +76,7 @@ preprocessor = ColumnTransformer(
         ('ordinal_saving', OrdinalEncoder(categories=savings_categories), [data_columns.index('Saving accounts')]),
         ('ordinal_checking', OrdinalEncoder(categories=checking_categories), [data_columns.index('Checking account')]),
         ('ordinal_age', OrdinalEncoder(categories=age_categories), [data_columns.index('Age Group')]),
-        ('ordinal_job', OrdinalEncoder(categories=age_categories), [data_columns.index('Job Level')]),
+        ('ordinal_job', OrdinalEncoder(categories=job_level_categories), [data_columns.index('Job Level')]),
         ('scaler', StandardScaler(), [data_columns.index(col) for col in standard_scaler_col_list])
     ],
     remainder='drop'
