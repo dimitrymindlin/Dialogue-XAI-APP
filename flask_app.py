@@ -4,7 +4,7 @@ import logging
 import os
 import traceback
 
-from flask import Flask
+from flask import Flask, render_template
 from flask import request, Blueprint
 from flask_cors import CORS
 import gin
@@ -55,7 +55,8 @@ bot_dict = {}
         f.close()
 """
 
-"""@bp.route('/')
+
+@bp.route('/')
 def home():
     # Load the explanation interface.
     user_id = request.args.get("user_id")
@@ -66,7 +67,7 @@ def home():
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
     objective = bot_dict[user_id].conversation.describe.get_dataset_objective()
-    return render_template("new.html", currentUserId=user_id, datasetObjective=objective)"""
+    return render_template("index.html", currentUserId=user_id, datasetObjective=objective)
 
 
 @bp.route('/init', methods=['GET'])
