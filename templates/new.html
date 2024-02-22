@@ -79,11 +79,10 @@
       </form>
     </div>
   </div>
-
   <script>
     async function fetchData() {
       try {
-        const response = await fetch('/get_train_datapoint');
+        const response = await fetch('/get_datapoint');
         const data = await response.json();
 
         const datapointElement = document.getElementById('datapoint');
