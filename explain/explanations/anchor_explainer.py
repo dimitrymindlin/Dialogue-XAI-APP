@@ -7,6 +7,7 @@ from anchor import anchor_tabular
 from anchor.anchor_explanation import AnchorExplanation
 from tqdm import tqdm
 
+from data.response_templates.anchor_template import anchor_template
 from explain.explanation import Explanation
 
 
@@ -17,18 +18,17 @@ class TabularAnchor(Explanation):
     def __init__(self,
                  model,
                  data: pd.DataFrame,
-                 categorical_names: dict,
+                 categorical_mapping: dict,
                  class_names: dict,
                  feature_names: list,
                  mode: str = "tabular",
-                 cache_location: str = "./cache/anchor-tabular.pkl",
-                 feature_display_names=None):
+                 cache_location: str = "./cache/anchor-tabular.pkl"):
         """
 
         Args:
             model: The model to explain.
             data: the background dataset provided at pandas df
-            categorical_names: map from integer to list of strings, names for each
+            categorical_mapping: map from integer to list of strings, names for each
             value of the categorical features. Every feature that is not in
             this map will be considered as ordinal or continuous, and thus discretized.
             class_names: dict of class names
@@ -42,10 +42,9 @@ class TabularAnchor(Explanation):
         self.data = data.to_numpy()
         self.mode = mode
         self.model = model
-        self.categorical_names = categorical_names if categorical_names is not None else {}
+        self.categorical_names = categorical_mapping if categorical_mapping is not None else {}
         self.class_names = list(class_names.values())
         self.feature_names = feature_names
-        self.feature_display_names = feature_display_names
 
         if self.mode == "tabular":
             self.explainer = anchor_tabular.AnchorTabularExplainer(self.class_names,
@@ -93,8 +92,8 @@ class TabularAnchor(Explanation):
     def summarize_explanations(self,
                                data: pd.DataFrame,
                                ids_to_regenerate: list[int] = None,
-                               filtering_text: str = None,
-                               save_to_cache: bool = False):
+                               save_to_cache: bool = False,
+                               template_manager=None):
         """Summarizes explanations for Anchor tabular.
 
         Arguments:
@@ -122,25 +121,6 @@ class TabularAnchor(Explanation):
                                             ids_to_regenerate=ids_to_regenerate,
                                             save_to_cache=save_to_cache)
         exp = explanation[key]
-        output_string = ""
-        # output_string += "By fixing all of the following attributes, the prediction stays the same even though other attributes are changed:"
-        output_string += "<br><br>"
+        response = anchor_template(exp, template_manager)
 
-        display_names_exp_names = []
-        for idx, change_string in enumerate(exp.names()):
-            feature = change_string.split(" ")[0]
-            display_names_exp_names.append(self.feature_display_names[feature])
-            display_names_exp_names[idx] += " " + " ".join(change_string.split(" ")[1:])
-
-        additional_options = "Here are some more options to change the prediction of"
-        additional_options += f" instance id {str(key)}.<br><br>"
-        explanation_text = " and ".join(display_names_exp_names).replace("<=", "is not above")
-        explanation_text = explanation_text.replace(">=", "is not below")
-        explanation_text = explanation_text.replace(">", "is above")
-        explanation_text = explanation_text.replace("<", "is below")
-
-        explanation_text = explanation_text.replace(".00", "")  # remove decimal zeroes
-        explanation_text += "</b>"
-        explanation_text = "<b>" + explanation_text
-
-        return additional_options, explanation_text
+        return response

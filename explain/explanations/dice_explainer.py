@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from create_experiment_data.ui_data_helper import FeatureDisplayNames
+from data.response_templates.dice_template import textual_cf
 from explain.explanation import Explanation
 
 
@@ -26,7 +26,6 @@ class TabularDice(Explanation):
                  class_names: dict = None,
                  categorical_mapping: dict = None,
                  background_dataset=None,
-                 feature_display_names: FeatureDisplayNames = None,
                  final_cfe_amount: int = 5):
         """Init.
 
@@ -40,7 +39,6 @@ class TabularDice(Explanation):
             desired_class: Set to "opposite" to compute opposite class
             cache_location: Location to store cache.
             class_names: The map between class names and text class description.
-            feature_display_names: FeatureDisplayNames: The map between feature ids and feature names to display.
         """
         super().__init__(cache_location, class_names)
         self.temp_outcome_name = 'y'
@@ -53,7 +51,6 @@ class TabularDice(Explanation):
         self.dice_model = dice_ml.Model(model=self.model, backend="sklearn")
         self.permitted_range_dict = None
         self.background_data = background_dataset
-        self.feature_display_names = feature_display_names
         self.final_cfe_amount = final_cfe_amount
 
         # Format data in dice accepted format
@@ -76,6 +73,7 @@ class TabularDice(Explanation):
 
     def wrap(self, model: Any):
         """Wraps model, converting pd to df to silence dice warnings"""
+
         class Model:
             def __init__(self, m):
                 self.model = m
@@ -85,6 +83,7 @@ class TabularDice(Explanation):
 
             def predict_proba(self, X):
                 return self.model.predict_proba(X.values.astype(int))
+
         return Model(model)
 
     def run_explanation(self,
@@ -131,7 +130,7 @@ class TabularDice(Explanation):
             cfes[d] = cur_cfe
         return cfes
 
-    def get_change_string(self, cfe: Any, original_instance: Any):
+    def get_change_string(self, cfe: Any, original_instance: Any, template_manager=None):
         """Builds a string describing the changes between the cfe and original instance."""
         cfe_features = list(cfe.columns)
         original_features = list(original_instance.columns)
@@ -144,6 +143,11 @@ class TabularDice(Explanation):
             orig_f = original_instance[feature].values[0]
             cfe_f = cfe[feature].values[0]
 
+            """# Map label encoded features to their original names if needed
+            if template_manager and template_manager.encoded_col_mapping:
+                cfe_f = template_manager.get_encoded_feature_name(feature, str(cfe_f))
+                orig_f = template_manager.get_encoded_feature_name(feature, str(orig_f))"""
+            feature_display_names_dict = template_manager.feature_display_names.feature_name_to_display_name
             if isinstance(cfe_f, str):
                 cfe_f = float(cfe_f)
 
@@ -164,8 +168,7 @@ class TabularDice(Explanation):
                 # round cfe_f if it is float and turn to string to print
                 if isinstance(cfe_f, float):
                     cfe_f = str(round(cfe_f, self.rounding_precision))
-                feature_display_name = self.feature_display_names.get_by_id(
-                    feature_index) if self.feature_display_names is not None else feature
+                feature_display_name = feature_display_names_dict[feature]
                 change_string += f"{inc_dec} <b>{feature_display_name}</b> to </b>{cfe_f}</b>"
                 change_string += " and "
         # Strip off last and
@@ -183,6 +186,7 @@ class TabularDice(Explanation):
 
         cfe = explanation[ids[0]]
         final_cfes = cfe.cf_examples_list[0].final_cfs_df
+        desired_class = cfe.cf_examples_list[0].desired_class
         final_cfe_ids = list(final_cfes.index)
 
         if self.temp_outcome_name in final_cfes.columns:
@@ -208,13 +212,14 @@ class TabularDice(Explanation):
             if cfe_feature_mentions not in cfe_feature_mentions_list:
                 diverse_cfe_ids.append(index)
                 cfe_feature_mentions_list.append(cfe_feature_mentions)
-        return final_cfes.loc[diverse_cfe_ids], diverse_cfe_ids
+        return final_cfes.loc[diverse_cfe_ids], diverse_cfe_ids, desired_class
 
     def summarize_explanations(self,
                                data: pd.DataFrame,
                                ids_to_regenerate: list[int] = None,
                                filtering_text: str = None,
-                               save_to_cache: bool = False):
+                               save_to_cache: bool = False,
+                               template_manager=None):
         """Summarizes explanations for dice tabular.
 
         Arguments:
@@ -230,57 +235,27 @@ class TabularDice(Explanation):
             ids_to_regenerate = []
         if data.shape[0] > 1:
             return ("", "I can only compute how to flip predictions for single instances at a time."
-                    " Please narrow down your selection to a single instance. For example, you"
-                    " could specify the id of the instance to want to figure out how to change.")
+                        " Please narrow down your selection to a single instance. For example, you"
+                        " could specify the id of the instance to want to figure out how to change.")
 
         ids = list(data.index)
         key = ids[0]
 
-        final_cfes, final_cfe_ids = self.get_final_cfes(data, ids,
-                                                        ids_to_regenerate=ids_to_regenerate,
-                                                        save_to_cache=save_to_cache)
+        final_cfes, final_cfe_ids, desired_class = self.get_final_cfes(data, ids,
+                                                                       ids_to_regenerate=ids_to_regenerate,
+                                                                       save_to_cache=save_to_cache)
 
         original_instance = data.loc[[key]]
 
-        if filtering_text is not None and len(filtering_text) > 0:
-            filtering_description = f"For instances where <b>{filtering_text}</b>"
-        else:
-            filtering_description = ""
-        # output_string = f"{filtering_description}, the original prediction is "
-        # output_string += f"<em>{original_label}</em>. "
-        output_string = ""
-        #output_string += "Here are some changes where the model would predict the opposite class:"
-        #output_string += "<br><br>"
-
-        additional_options = "Here are some more options to change the prediction of"
-        additional_options += f" instance id {str(key)}.<br><br>"
-
-        output_string += ""
-        #transition_words = ["Further,", "Also,", "In addition,", "Furthermore,"]
-
         # Get all cfe strings and remove duplicates
-        cfe_strings = [self.get_change_string(final_cfes.loc[[c_id]], original_instance) for c_id in final_cfe_ids]
+        cfe_strings = [
+            self.get_change_string(final_cfes.loc[[c_id]], original_instance, template_manager=template_manager) for
+            c_id in final_cfe_ids]
         cfe_strings = list(set(cfe_strings))
 
-        for i, cfe_string in enumerate(cfe_strings):
-            # Stop the summary in case its getting too large
-            if i < self.num_in_short_summary:
-                #if i != 0:
-                #    output_string += f"{np.random.choice(transition_words)} if you <em>"
-                output_string += cfe_string
-                # new_prediction = self.get_label_text(new_predictions[i])
-                # output_string += f"</em>, the model will predict {new_prediction}.<br><br>"
-                output_string += f".<br><br>"
-            else:
-                additional_options += "If you <em>"
-                additional_options += cfe_string
-                #new_prediction = self.get_label_text(new_predictions[i])
-                #additional_options += f"</em>, the model will predict {new_prediction}.<br><br>"
-                #additional_options += f"</em>, the model will predict the opposite class.<br><br>"
+        response = textual_cf(cfe_strings)
 
-        # output_string += "If you want some more options, just ask &#129502"
-
-        return additional_options, output_string
+        return response, desired_class
 
     def summarize_cfe_for_given_attribute(self,
                                           cfe: pd.DataFrame,
@@ -307,27 +282,17 @@ class TabularDice(Explanation):
         final_cfes = cfe[key].cf_examples_list[0].final_cfs_df
         if final_cfes is None:
             return (
-                       f"There are no changes possible to the chosen attribute alone that would result in a different prediction."), 0
+                f"There are no changes possible to the chosen attribute alone that would result in a different prediction."), 0
         final_cfe_ids = list(final_cfes.index)
 
         if self.temp_outcome_name in final_cfes.columns:
             final_cfes.pop(self.temp_outcome_name)
 
         original_instance = data.loc[[key]]
-
-        output_string = ""
-        output_string += "Here is how you could switch the attribute values to flip the prediction."
-        output_string += "<br><br>"
-
         # Get all cfe strings and remove duplicates
         cfe_strings = [self.get_change_string(final_cfes.loc[[c_id]], original_instance) for c_id in final_cfe_ids]
         cfe_strings = list(set(cfe_strings))
-        # Filter cfe strings that contain the attribute to vary
-        cfe_strings = [cfe_string for cfe_string in cfe_strings if attribute_to_vary in cfe_string]
 
-        for i, cfe_string in enumerate(cfe_strings):
-            # Stop the summary in case its getting too large
-            if i < self.num_in_short_summary:
-                output_string += cfe_string
-                output_string += f".<br><br>"
-        return output_string, 1
+        response = textual_cf(cfe_strings)
+
+        return response

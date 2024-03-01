@@ -3,64 +3,40 @@ from typing import Dict
 import io
 
 
-def sumarize_least_important(sig_coefs, feature_name_to_display_name_dict):
-    # reverse sig_coefs
-    sig_coefs = sig_coefs[::-1]
-    summarization_text = "The attributes "
-    for i, (feature_name, feature_importance) in enumerate(sig_coefs):
-        if i > 2:
-            break
-        feature_display_name = feature_name_to_display_name_dict[feature_name]
-        summarization_text += f"<b>{feature_display_name}, </b>"
-    summarization_text += " are the least important attributes for the current person."
-    return summarization_text
-
-
-def textual_fi_with_values(sig_coefs,
-                           num_features_to_show: int = None,
-                           filtering_text: str = None,
-                           feature_name_to_display_name_dict=None):
-    """Formats dict of label -> feature name -> feature_importance dicts to string.
+def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=None, template_manager=None):
+    """Formats sorted list of (feature name, feature importance) tuples into a string.
 
     Arguments:
-        sig_coefs: Dict of label -> feature name -> feature_importance dicts with textual feature names.
+        sig_coefs: Sorted list of tuples (feature name, feature importance) with textual feature names.
         num_features_to_show: Number of features to show in the output. If None, all features are shown.
+        filtering_text: Text to control output formatting (e.g., "least 3", "top 3", "only_positive").
+        template_manager: Object to access feature display names.
     Returns:
-        output_text: String with the formatted feature importances to show in the dialog.
+        String with the formatted feature importances.
     """
     output_text = "<ol>"
 
     if "least 3" in filtering_text:
-        return sumarize_least_important(sig_coefs, feature_name_to_display_name_dict)
+        # Handle summarizing least important features separately
+        sig_coefs = sig_coefs[::-1]  # Reverse to start with the worst.
 
-    describing_features = 0
+    describing_features = 0  # Initialize counter for described features
     for i, (feature_name, feature_importance) in enumerate(sig_coefs):
-        if "top 3" in filtering_text:
-            if describing_features == 3:
-                break
+        if describing_features == 3 or \
+                num_features_to_show and describing_features >= num_features_to_show or \
+                "only_positive" in filtering_text and feature_importance <= 0:
+            break
 
-        if "only_positive" in filtering_text:
-            if feature_importance <= 0:
-                continue
-        if describing_features == 0:
-            position = "most"
+        feature_display_name = template_manager.get_feature_display_name_by_name(feature_name)
+        if "least" in filtering_text:
+            position = "least" if i == 0 else f"{i + 1}. least"
         else:
-            position = f"{describing_features + 1}."
+            position = "most" if i == 0 else f"{i + 1}."
         increase_decrease = "increases" if feature_importance > 0 else "decreases"
-        # Turn feature name into display_feature_name
-        feature_name_display = feature_name_to_display_name_dict[feature_name]
-        new_text = (f"<b>{feature_name_display}</b> is the <b>{position}</b> important attribute.")
-        # f"and it"
-        # f" <em>{increase_decrease}</em> the likelihood of the current prediction.")
-        # new_text = new_text[:-1] + "by <b>{str(feature_importance)}.</b>"
-        if new_text != "":
-            output_text += "<li>" + new_text + "</li>"
+        output_text += f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute which {increase_decrease} the model's output.</li>"
         describing_features += 1
-        if num_features_to_show:
-            if i == num_features_to_show:
-                break
     output_text += "</ol>"
-    return output_text
+    return output_text if output_text != "<ol></ol>" else "The attributes are the least important attributes for the current person."
 
 
 def textual_fi_relational(sig_coefs: Dict[str, float],

@@ -54,7 +54,8 @@ class CeterisParibus(Explanation):
                  ys: pd.DataFrame,
                  class_names: dict,
                  cache_location: str = "./cache/ceterisparibus-tabular.pkl",
-                 feature_names: list = None):
+                 feature_names: list = None,
+                 categorical_mapping: dict = None):
         """
 
         Args:
@@ -62,7 +63,10 @@ class CeterisParibus(Explanation):
             data: the background dataset provided at pandas df
             value of the categorical features. Every feature that is not in
             this map will be considered as ordinal or continuous, and thus discretized.
-
+            class_names: The names of the classes.
+            cache_location: The location to save the cache.
+            feature_names: The names of the features.
+            categorical_mapping: The mapping of the categorical features to their values.
         """
         super().__init__(cache_location, class_names)
         self.background_data = background_data
@@ -70,6 +74,7 @@ class CeterisParibus(Explanation):
         self.feature_names = feature_names
         self.ys = ys
         self.explainer = dx.Explainer(self.model, self.background_data, y=self.ys)
+        self.categorical_mapping = categorical_mapping
 
     def run_explanation(self,
                         current_data: pd.DataFrame):
@@ -92,11 +97,24 @@ class CeterisParibus(Explanation):
     def get_explanation(self, data_df, feature_name=None, as_plot=True):
         id = data_df.index[0]
         cp_data = self.get_explanations([id], self.background_data, save_to_cache=True)
+        feature_id = self.feature_names.index(feature_name)
         if not as_plot:
             return cp_data
         else:
-            # TODO: Handle categorical features
-            fig = cp_data[id].plot(variables=[feature_name], show=False)
+            if feature_id in self.categorical_mapping.keys():
+                variables_type = 'categorical'
+            else:
+                variables_type = 'numerical'
+            fig = cp_data[id].plot(variables=[feature_name], show=False, variable_type=variables_type)
+            # Update the y-axis tick labels
+            if feature_id in self.categorical_mapping.keys():
+                categorical_mapping_for_feature = self.categorical_mapping[feature_id]
+                # Convert the list to a dictionary
+                categorical_mapping_for_feature_dict = {i: val for i, val in enumerate(categorical_mapping_for_feature)}
+                fig.update_yaxes(tickvals=list(categorical_mapping_for_feature_dict.keys()),
+                                 ticktext=list(categorical_mapping_for_feature_dict.values()))
+                # Sort the y-axis tick labels alphabetically
+                fig.update_yaxes(categoryorder='array', categoryarray=categorical_mapping_for_feature)
             return fig
 
     def get_simplified_explanation(self, data_df, feature_name=None):

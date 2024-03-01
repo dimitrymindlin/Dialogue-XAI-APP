@@ -107,6 +107,7 @@ def run_action_by_id(conversation: Conversation,
     current_prediction_str = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
     opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction_probas))
     current_prediction_id = conversation.temp_dataset.contents['y'][instance_id]
+    template_manager = conversation.get_var('template_manager').contents
 
     # get_explanation_report(conversation, instance_id)
 
@@ -157,9 +158,10 @@ def run_action_by_id(conversation: Conversation,
         return answer"""
     if question_id == 7:
         # How should this instance change to get a different prediction?
-        explanation = explain_cfe(conversation, data, parse_op, regen)
-        explanation = "Here are possible changes to the instance that would flip the prediction: <br>" + \
-                      explanation[0] + "There might be other possible changes. These are examples."
+        explanation, desired_class = explain_cfe(conversation, data, parse_op, regen)
+        desired_class_str = conversation.get_class_name_from_label(desired_class)
+        explanation = f"Here are possible scenarios that would change the prediction to {desired_class_str}: <br>" + \
+                      explanation + "There might be other possible changes. These are examples."
         return explanation
     if question_id == 8:
         # How should this attribute change to get a different prediction?
@@ -168,15 +170,17 @@ def run_action_by_id(conversation: Conversation,
         return explanation
     if question_id == 9:
         # Which changes to this instance would still get the same prediction?
-        explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
+        explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
+                                                                          template_manager)
         return explanation[0]
     if question_id == 10:
         # Which maximum changes would not influence the class prediction?
         pass
     if question_id == 11:
         # What attributes must be present or absent to guarantee this prediction?
-        explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
-        return explanation[0]
+        explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
+                                                                          template_manager)
+        return explanation
     if question_id == 12:
         # How does the prediction change when this attribute changes? Ceteris Paribus
         # explanation = explain_ceteris_paribus(conversation, data, parse_op, regen)
@@ -187,9 +191,10 @@ def run_action_by_id(conversation: Conversation,
         return explanation
     if question_id == 20:
         # 20;Why is this instance predicted as [current prediction]?
-        explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
+        explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
+                                                                          template_manager)
         result_text = f"The {instance_type_naming} is predicted as <it>{current_prediction_str}</it>, because the "
-        result_text = result_text + explanation[0] + "."
+        result_text = result_text + explanation + "."
         return result_text
     if question_id == 22:
         # 22;How is the model using the attributes in general to give an answer?
@@ -199,8 +204,9 @@ def run_action_by_id(conversation: Conversation,
         return explanation_intro + explanation[0]
     if question_id == 23:
         # 23;Which are the most important attributes for the outcome of the instance?
-        parse_op = "top 3 only_positive"
-        explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
+        parse_op = "top 3"
+        explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
+                                                        template_manager=template_manager)
         answer = f"Here are the 3 <b>most</b> important factors for this {instance_type_naming}: <br><br>"
         return answer + explanation[0]
 
@@ -212,12 +218,13 @@ def run_action_by_id(conversation: Conversation,
     if question_id == 25:
         # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
         explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming)
-        # intro = "The following graph shows the prediction score on the Y Axis when changing only the selected attribute. <br>"
-        return explanation[0] + f" <b>{opposite_class}</b>."
+        intro = "The following graph shows the prediction probability when changing only the selected attribute. <br>"
+        return intro + explanation[0]
     if question_id == 27:
         # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the instance?
         parse_op = "least 3"
-        explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
+        explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
+                                                        template_manager=template_manager)
         return explanation[0]
     else:
         return f"This is a mocked answer to your question with id {question_id}."
@@ -246,6 +253,7 @@ def compute_explanation_report(conversation,
     model_prediction_str = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
     model_prediction_int = np.argmax(model_prediction_probas)
     opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction_probas))
+    template_manager = conversation.get_var('template_manager').contents
 
     # Get already sorted feature importances
     feature_importances, _ = explain_feature_importances_as_plot(conversation, data, parse_op, regen,
@@ -261,10 +269,11 @@ def compute_explanation_report(conversation,
     # Create a new dict of feature importances to preserve order
     feature_importances = {key: value for key, value in sorted(feature_importances.items(), key=lambda item: item[1],
                                                                reverse=True)}"""
-    counterfactual_strings, _ = explain_cfe(conversation, data, parse_op, regen)
+    counterfactual_strings, desired_class = explain_cfe(conversation, data, parse_op, regen)
     counterfactual_strings = counterfactual_strings + " <br>There are other possible changes. These are just examples."
 
-    anchors_string, _ = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen)
+    anchors_string = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
+                                                                         template_manager)
 
     feature_statistics = explain_feature_statistic(conversation, as_string=False)
     # map feature names to display names

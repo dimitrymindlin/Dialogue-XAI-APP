@@ -39,23 +39,6 @@ gin.parse_config_file(args.config)
 bot_dict = {}
 
 
-# BOT.build_exit_survey_table()
-
-"""def log_to_csv(slug: str,
-               datapoint: dict,
-               endpoint: str,
-               questions: list,
-               instance_counter: int = None):
-    with open('dimi_log.csv', 'a') as f:
-        # if its the first time, write the header
-        writer_object = writer(f)
-        if os.stat("dimi_log.csv").st_size == 0:
-            writer_object.writerow(["timestamp", "slug", "datapoint", "endpoint", "questions", "instance_counter"])
-        writer_object.writerow([time.time(), slug, str(datapoint), endpoint, str(questions), instance_counter])
-        f.close()
-"""
-
-
 @bp.route('/')
 def home():
     # Load the explanation interface.
@@ -85,10 +68,12 @@ def init():
     feature_tooltip = bot_dict[user_id].get_feature_tooltips()
     feature_units = bot_dict[user_id].get_feature_units()
     questions = bot_dict[user_id].get_questions_attributes_featureNames()
+    user_experiment_prediction_choices = bot_dict[user_id].conversation.class_names
     result = {
         "feature_tooltips": feature_tooltip,
         "feature_units": feature_units,
-        'questions': questions
+        'questions': questions,
+        'prediction_choices': user_experiment_prediction_choices,
     }
     return result
 
