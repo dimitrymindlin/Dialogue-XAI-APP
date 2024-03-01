@@ -7,9 +7,31 @@ import io
 import matplotlib.pyplot as plt
 import shap
 from matplotlib.ticker import FuncFormatter
-
-from create_experiment_data.ui_data_helper import FeatureDisplayNames
 from explain.actions.utils import gen_parse_op_text
+
+
+def fig_to_base64(fig):
+    """
+    Converts a matplotlib or plotly figure to a base64 string.
+
+    Parameters:
+    - fig: A matplotlib or plotly Figure object.
+
+    Returns:
+    - A base64-encoded string representation of the figure.
+    """
+    buf = io.BytesIO()
+
+    # Check if the figure is a plotly Figure
+    if 'plotly.graph_objs._figure.Figure' in str(type(fig)):
+        fig.write_image(buf, format='png')
+    else:  # Assume matplotlib
+        fig.savefig(buf, format='png')
+
+    buf.seek(0)  # Go to the beginning of the buffer
+    image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')  # Encode as base64
+    buf.close()  # Close the buffer
+    return image_base64
 
 
 def explain_operation(conversation, parse_text, i, **kwargs):
@@ -37,13 +59,19 @@ def explain_operation(conversation, parse_text, i, **kwargs):
     raise NameError(f"No explanation operation defined for {parse_text}")
 
 
-def explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True):
+def explain_local_feature_importances(conversation,
+                                      data,
+                                      parse_op,
+                                      regen,
+                                      as_text=True,
+                                      template_manager=None):
     """Get Lime or SHAP explanation, considering fidelity (mega explainer functionality)"""
     mega_explainer_exp = conversation.get_var('mega_explainer').contents
     if as_text:
         explanation_text = mega_explainer_exp.summarize_explanations(data,
                                                                      filtering_text=parse_op,
-                                                                     ids_to_regenerate=regen)
+                                                                     ids_to_regenerate=regen,
+                                                                     template_manager=template_manager)
         conversation.store_followup_desc(explanation_text)
         return explanation_text, 1
     else:
@@ -101,24 +129,23 @@ def explain_feature_importances_as_plot(conversation,
                                         data,
                                         parse_op,
                                         regen,
-                                        current_prediction_string: str):
-    data_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
-    labels = list(data_dict.keys())
-    values = [val[0] for val in data_dict.values()]
+                                        current_prediction_string: str,
+                                        prediction_id: int,
+                                        target_class=None):
+    explanation_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
+    labels = list(explanation_dict.keys())
+    values = [val[0] for val in explanation_dict.values()]
 
     # Reverse the order
     labels = labels[::-1]
     values = values[::-1]
 
-    # Flip the values if the prediction is likely, to have blue bars for unlikely and red bars for likely
-    # TODO: Only for Diabetes, make more general and pull from config
-    if "unlikely" not in current_prediction_string:  # if its likely, flip the values
-        values = [-v for v in values]
-
     # Turn labels to display names
-    feature_display_names: FeatureDisplayNames = conversation.get_var('feature_display_names').contents
-    for i, label in enumerate(labels):
-        labels[i] = feature_display_names.feature_name_to_display_name[label]
+    template_manager = conversation.get_var('template_manager').contents
+    feature_name_to_display_name = template_manager.feature_display_names.feature_name_to_display_name
+    for feature, display_name in feature_name_to_display_name.items():
+        if feature in labels:
+            labels[labels.index(feature)] = display_name
 
     fig, ax = plt.subplots(figsize=(10, 6))
     bars = ax.barh(labels, values, color=['red' if v < 0 else 'blue' for v in values])
@@ -141,9 +168,13 @@ def explain_feature_importances_as_plot(conversation,
     # Clear the current plot to free memory
     plt.close()
 
+    # TODO: Change to multilabel and get correct class name.
+    class_0_label = conversation.class_names[0]
+
+    # TODO: Only for binary case?
     html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                  f'<span>Blue bars = attributes in favor of predicting <b>unlikely to have diabetes</b>. <br>' \
-                  f'Red bars = attributes in favor of predicting <b>likely to have diabetes</b>.</span>'
+                  f'<span>Blue bars = attributes in favor of predicting <b>{current_prediction_string}</b>. <br>' \
+                  f'Red bars = attributes against current prediction.</span>'
 
     return html_string, 1
 
@@ -187,12 +218,13 @@ def get_feature_importance_by_feature_id(conversation,
 def explain_cfe(conversation, data, parse_op, regen):
     """Get CFE explanation"""
     dice_tabular = conversation.get_var('tabular_dice').contents
-    out = dice_tabular.summarize_explanations(data,
-                                              filtering_text=parse_op,
-                                              ids_to_regenerate=regen)
-    additional_options, short_summary = out
-    conversation.store_followup_desc(additional_options)
-    return short_summary, 1
+    out, desired_class = dice_tabular.summarize_explanations(data,
+                                                             filtering_text=parse_op,
+                                                             ids_to_regenerate=regen,
+                                                             template_manager=conversation.get_var(
+                                                                 'template_manager').contents)
+    short_summary = out
+    return short_summary, desired_class
 
 
 def explain_cfe_by_given_features(conversation,
@@ -225,15 +257,10 @@ def explain_cfe_by_given_features(conversation,
     return change_string
 
 
-def explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen):
+def explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen, template_manager):
     """Get Anchor explanation"""
     anchor_exp = conversation.get_var('tabular_anchor').contents
-    out = anchor_exp.summarize_explanations(data,
-                                            filtering_text=parse_op,
-                                            ids_to_regenerate=regen)
-    additional_options, short_summary = out
-    conversation.store_followup_desc(additional_options)
-    return short_summary, 1
+    return anchor_exp.summarize_explanations(data, ids_to_regenerate=regen, template_manager=template_manager)
 
 
 def explain_feature_statistic(conversation,
@@ -244,44 +271,53 @@ def explain_feature_statistic(conversation,
     """
     feature_stats_exp = conversation.get_var('feature_statistics_explainer').contents
     if feature_name is not None:
-        explanation = feature_stats_exp.get_single_feature_statistic(feature_name)
+        explanation = feature_stats_exp.get_single_feature_statistic(feature_name, as_string=as_string)
     else:
         explanation = feature_stats_exp.get_all_feature_statistics(as_string=as_string)
+    if not as_string:
+        # Convert the figure to PNG as a BytesIO object
+        image_base64 = fig_to_base64(explanation)
+        # Create the HTML string with the base64 image
+        html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
+                      f'<span>Distribution of the feature values for {feature_name}.</span>'
+        return html_string
     return explanation
 
 
-def explain_ceteris_paribus(conversation, data, feature_name):
+def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name):
+    def write_tipping_point_cp():
+        ### Simplified Text version
+        x_flip_value = ceteris_paribus_exp.get_simplified_explanation(data, feature_name)
+        """if x_flip_value is None:
+            return f"For the given {instance_type_name}, variations only in <b>{feature_name}</b> have no impact on the model prediction and cannot change it to", 1"""
+        # get current feature value
+        current_feature_value = data[feature_name].values[0]
+        # get the difference
+        difference = current_feature_value - x_flip_value
+        # get the sign
+        sign = "decreased" if difference > 0 else "increased"
+        # get the sentence
+        explanation_text = f"If the value of <b>{feature_name}</b> is {sign} to {x_flip_value}, the prediction would change to"
+        # return explanation_text, 1
+
     ceteris_paribus_exp = conversation.get_var('ceteris_paribus').contents
-
-    ### Simplified Text version
-    x_flip_value = ceteris_paribus_exp.get_simplified_explanation(data, feature_name)
-    if x_flip_value is None:
-        return f"For the given patient, variations only in <b>{feature_name}</b> have no impact on the model prediction and cannot change it to", 1
-    # get current feature value
-    current_feature_value = data[feature_name].values[0]
-    # get the difference
-    difference = current_feature_value - x_flip_value
-    # get the sign
-    sign = "decreased" if difference > 0 else "increased"
-    # get the sentence
-    explanation_text = f"If the value of <b>{feature_name}</b> is {sign} to {x_flip_value}, the prediction would change to"
-    return explanation_text, 1
-
-
     # Plotly figure
     fig = ceteris_paribus_exp.get_explanation(data, feature_name)
+    """# plot the figure
+    pyo.plot(fig, filename='ceteris_paribus.html', auto_open=True)"""
 
     # Convert the figure to PNG as a BytesIO object
-    buf = io.BytesIO()
-    fig.write_image(buf, format='png')
-    buf.seek(0)
-    image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-    buf.close()
+    image_base64 = fig_to_base64(fig)
+    feature_id = data.columns.get_loc(feature_name)
+    if feature_id in ceteris_paribus_exp.categorical_mapping.keys():
+        axis = 'X-axis'
+    else:
+        axis = 'Y-axis'
 
     # Create the HTML string with the base64 image
     html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                  f'<span>When the prediction value is on the Y-axis above 0.5 , ' \
-                  f'the model would predict likely to have diabetes and,' \
-                  f'when it is below 0.5, unlikely to have diabetes..</span>'
+                  f'<span>When the prediction probability crosses 0.5 on the {axis}, ' \
+                  f'the model would change the prediction. This is not always possible, since the selected attribute might' \
+                  f'not be able to change the probability enough.</span>'
 
     return html_string, 1
