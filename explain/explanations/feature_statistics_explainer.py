@@ -64,13 +64,77 @@ class FeatureStatisticsExplainer:
             return mean, std, min_v, max_v
         return feature_statistics_template(feature_name, mean, std, min_v, max_v, self.feature_units)
 
+    def get_categorical_frequencies_fig(self, value_counts, feature_name):
+        """
+        Creates a bar plot for the frequencies of values for a categorical feature and returns the figure.
+
+        Parameters:
+        - value_counts: pandas Series containing the value counts to plot.
+        - feature_name: String, the name of the categorical feature to plot.
+
+        Returns:
+        - fig: A matplotlib Figure object of the feature value frequencies bar chart.
+        """
+        # Create a figure and axis object
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        # Create a bar plot on the axis
+        value_counts.plot(kind='bar', ax=ax)
+        ax.set_title(f'Frequency of {feature_name} Categories')
+        ax.set_xlabel('Category')
+        ax.set_ylabel('Frequency')
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+
+        feature_id = self.data.columns.get_loc(feature_name)
+        categorical_mapping_for_feature_list = self.categorical_mapping.get(feature_id, None)
+        categorical_mapping_for_feature_dict = {i: v for i, v in enumerate(categorical_mapping_for_feature_list)}
+        ax = plt.gca()  # get current axis
+
+        # Update the x-axis ticks
+        ax.set_xticks(list(categorical_mapping_for_feature_dict.keys()))
+        ax.set_xticklabels(list(categorical_mapping_for_feature_dict.values()))
+
+        plt.tight_layout()
+
+        return fig
+
+    def get_categorical_statistics(self, feature_name, as_string=True, as_plot=False):
+        """
+        Returns statistics or a plot for the frequencies of values of a categorical feature.
+
+        Parameters:
+        - feature_name: String, the name of the categorical feature.
+        - as_string: Boolean, if True, returns a string; otherwise, returns value counts.
+        - as_plot: Boolean, if True, returns a plot based on the calculated frequencies.
+
+        Returns:
+        - A string with the frequencies, a pandas Series of frequencies, or a matplotlib Figure object.
+        """
+        feature_value_frequencies = self.data[feature_name].value_counts()
+        # Map feature indices to feature names if needed
+        if feature_name in self.categorical_mapping:
+            feature_id = self.data.columns.get_loc(feature_name)
+            feature_value_frequencies.index = self.categorical_mapping[feature_id]
+        feature_value_frequencies.sort_values(ascending=False, inplace=True)
+
+        if as_plot:
+            return self.get_categorical_frequencies_fig(feature_value_frequencies, feature_name)
+
+        if not as_string:
+            return feature_value_frequencies
+
+        result_text = ""
+        for value, frequency in feature_value_frequencies.items():
+            result_text += f"The value <b>{value}</b> occurs <b>{frequency}</b> times.<br>"
+        return result_text
+
     def get_single_feature_statistic(self, feature_name, as_string=True):
         # Check if feature is numerical or categorical
         if feature_name in self.numerical_features:
             return self.get_numerical_statistics(feature_name, as_string=as_string)
         else:
-            raise NotImplementedError("Categorical feature statistics are not implemented yet.")
-            # return self.get_categorical_statistics(feature_name, as_string=as_string)
+            as_plot = True if not as_string else False
+            return self.get_categorical_statistics(feature_name, as_string=as_string, as_plot=as_plot)
 
     def get_all_feature_statistics(self, as_string=True):
         feature_stats = {}
