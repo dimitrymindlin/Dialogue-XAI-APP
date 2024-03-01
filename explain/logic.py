@@ -19,7 +19,7 @@ from flask import Flask
 import gin
 
 from create_experiment_data.experiment_helper import ExperimentHelper
-from create_experiment_data.ui_data_helper import FeatureDisplayNames
+from data.response_templates.template_manager import TemplateManager
 from explain.explanations.shap_global_explainer import ShapGlobalExplainer
 from explain.explanations.test_instances import TestInstances
 from explain.action import run_action, run_action_by_id, compute_explanation_report
@@ -73,7 +73,8 @@ class ExplainBot:
                  feature_tooltip_mapping=None,
                  actionable_features=None,
                  instance_type_naming: str = "instance",
-                 feature_units_mapping=None):
+                 feature_units_mapping=None,
+                 encoded_col_mapping_path: dict = None, ):
         """The init routine.
 
         Arguments:
@@ -111,6 +112,7 @@ class ExplainBot:
             feature_units_mapping: A mapping from feature names to units. This is used to display units in the UI.
             instance_type_naming: The naming of the instance type. This is used to display the instance type such as
                                     "person" or "house" in the UI.
+            encoded_col_mapping_path: Path to the encoded column mapping file.
         """
 
         # Set seeds
@@ -130,6 +132,7 @@ class ExplainBot:
         self.feature_units_mapping = feature_units_mapping
         self.actionable_features = actionable_features
         self.instance_type_naming = instance_type_naming
+        self.encoded_col_mapping_path = encoded_col_mapping_path
 
         # A variable used to help file uploads
         self.manual_var_filename = None
@@ -189,17 +192,19 @@ class ExplainBot:
                                                                     remove_underscores,
                                                                     store_to_conversation=False)
 
-        self.feature_display_names = FeatureDisplayNames(self.conversation)
-        self.conversation.add_var('feature_display_names', self.feature_display_names, 'feature_display_names')
-
         # Load Experiment Helper
-        helper = ExperimentHelper(self.conversation, self.categorical_mapping, self.categorical_features)
+        helper = ExperimentHelper(self.conversation,
+                                  self.categorical_mapping,
+                                  self.categorical_features)
         self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
+
+        # Load Template Manager
+        template_manager = TemplateManager(self.conversation, encoded_col_mapping_path=encoded_col_mapping_path)
+        self.conversation.add_var('template_manager', template_manager, 'template_manager')
 
         # Load the explanations
         self.load_explanations(background_dataset=background_dataset,
-                               y_values=background_y_values,
-                               categorical_mapping=self.categorical_mapping)
+                               y_values=background_y_values)
 
         # Load FeatureStatisticsExplainer with background data
         feature_statistics_explainer = FeatureStatisticsExplainer(background_dataset,
@@ -212,7 +217,8 @@ class ExplainBot:
         self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
     def get_feature_display_name_dict(self):
-        return self.conversation.get_var('feature_display_names').contents.feature_name_to_display_name
+        template_manager = self.conversation.get_var('template_manager').contents
+        return template_manager.feature_display_names.feature_name_to_display_name
 
     def set_user_prediction(self, user_prediction):
         current_id = self.current_instance[0]
@@ -360,8 +366,7 @@ class ExplainBot:
         return answer_dict
 
     def load_explanations(self, background_dataset,
-                          y_values=None,
-                          categorical_mapping=None):
+                          y_values=None):
         """Loads the explanations.
 
         If set in gin, this routine will cache the explanations.
@@ -384,8 +389,7 @@ class ExplainBot:
                                        cat_features=categorical_f,
                                        class_names=self.conversation.class_names,
                                        categorical_mapping=self.categorical_mapping,
-                                       use_selection=True,
-                                       feature_name_to_display_name_dict=self.get_feature_display_name_dict())
+                                       use_selection=True)
 
         # Load diverse instances (explanations)
         diverse_instances_explainer = DiverseInstances(
@@ -394,8 +398,7 @@ class ExplainBot:
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         diverse_instances = [{"id": i, "values": data.loc[i].to_dict()} for i in diverse_instance_ids]
 
-        message = (f"...loaded {len(diverse_instance_ids)} diverse instance ids "
-                   "from cache!")
+        message = f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!"
         app.logger.info(message)
         # Compute explanations for diverse instances
         mega_explainer.get_explanations(ids=diverse_instance_ids,
@@ -410,8 +413,7 @@ class ExplainBot:
                                    num_features=numeric_f,
                                    class_names=self.conversation.class_names,
                                    categorical_mapping=self.categorical_mapping,
-                                   background_dataset=background_dataset,
-                                   feature_display_names=self.feature_display_names)
+                                   background_dataset=background_dataset)
         tabular_dice.get_explanations(ids=diverse_instance_ids,
                                       data=data)
 
@@ -423,10 +425,9 @@ class ExplainBot:
         # categorical_names = create_feature_values_mapping_from_df(data, categorical_f)
         tabular_anchor = TabularAnchor(model=model,
                                        data=data,
-                                       categorical_names=self.categorical_mapping,
+                                       categorical_mapping=self.categorical_mapping,
                                        class_names=self.conversation.class_names,
-                                       feature_names=list(data.columns),
-                                       feature_display_names=self.feature_display_names.feature_name_to_display_name)
+                                       feature_names=list(data.columns))
         tabular_anchor.get_explanations(ids=diverse_instance_ids,
                                         data=data)
 
@@ -435,7 +436,8 @@ class ExplainBot:
                                                    background_data=background_dataset,
                                                    ys=y_values,
                                                    class_names=self.conversation.class_names,
-                                                   feature_names=list(data.columns))
+                                                   feature_names=list(data.columns),
+                                                   categorical_mapping=self.categorical_mapping)
         ceteris_paribus_explainer.get_explanations(ids=list(data.index),
                                                    data=data)
 
@@ -461,59 +463,61 @@ class ExplainBot:
         test_instance_explainer = TestInstances(data, model, mega_explainer, helper,
                                                 diverse_instance_ids=diverse_instance_ids,
                                                 actionable_features=self.actionable_features)
+        # TODO: HOW ARE TEST INSTANCES CHOSEN AND WHAT ARE THEIR IDS?
         test_instances = test_instance_explainer.get_test_instances()
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
 
+    def apply_categorical_mapping(self, instances, is_dataframe=False):
+        """
+        Apply categorical mapping to instances.
+
+        Args:
+            instances (dict or DataFrame): The instances to apply categorical mapping on.
+            is_dataframe (bool): Flag to indicate if the instances are in a DataFrame. Default is False.
+
+        Returns:
+            The instances with applied categorical mapping.
+        """
+        if self.categorical_mapping is None:
+            if is_dataframe:
+                return instances.astype(float)
+            else:
+                return instances
+
+        if is_dataframe:
+            for column_index, column in enumerate(instances.columns):
+                if column_index in self.categorical_mapping:
+                    for row_index, cell_value in enumerate(instances[column]):
+                        if isinstance(cell_value, int):
+                            categorical_value = self.categorical_mapping[column_index][cell_value]
+                            instances.iat[row_index, column_index] = categorical_value
+        else:
+            for i, (feature_name, val) in enumerate(instances.items()):
+                if i in self.categorical_mapping:
+                    instances[feature_name] = self.categorical_mapping[i][val]
+
+        return instances
+
     def load_data_instances(self):
-        # dataset_pd = self.conversation.get_var("dataset").contents['X']
         diverse_instances = self.conversation.get_var("diverse_instances").contents
         instance_results = []
         for instance in diverse_instances:
             instance_pd = pd.DataFrame(instance['values'], index=[0])
             model_prediction = self.conversation.get_var("model_prob_predict").contents(instance_pd)[0]
             id = instance['id']
-            # current_instance = list(dataset_pd.loc[id].values)
-            instance_result_dict = {}
-            for i, (feature_name, val) in enumerate(instance['values'].items()):
-                if self.categorical_mapping is not None and i in self.categorical_mapping:
-                    instance_result_dict[feature_name] = self.categorical_mapping[i][val]
-                else:
-                    instance_result_dict[feature_name] = val
-            # get true label
+            instance_result_dict = {feature_name: val for feature_name, val in instance['values'].items()}
+            instance_result_dict = self.apply_categorical_mapping(instance_result_dict)
             true_label = self.conversation.get_var("dataset").contents['y'].loc[id]
-            # turn instance to pandas df for model prediction
             instance_results.append((id, instance_result_dict, model_prediction, true_label))
         self.data_instances = instance_results
 
     def load_test_instances(self):
-        # TODO: How do I want to store them?
         test_instances = self.conversation.get_var("test_instances").contents
         instance_results = {}
-
         for instance_id, instances_dict in test_instances.items():
-            # Map categorical feature values to strings if categorical_mapping is not None
-            if self.categorical_mapping is not None:
-                for complexity_string, instance_df in instances_dict.items():
-                    mapping_dict_with_names = {
-                        instance_df.columns[pos]: values for pos, values in self.categorical_mapping.items()
-                    }
-                    # Map int feature values to strings using nested loops
-                    for column_index, column in enumerate(instance_df.columns):
-                        for row_index, cell_value in enumerate(instance_df[column]):
-                            if isinstance(cell_value, int):
-                                categorical_value = mapping_dict_with_names[column][cell_value]
-                                instance_df.iat[row_index, column_index] = categorical_value
-
-                    # Update the DataFrame in the instances_dict with the modified DataFrame
-                    instances_dict[complexity_string] = instance_df
-            else:
-                # If categorical_mapping is None, just convert all values to floats if possible
-                for complexity_string, instance_df in instances_dict.items():
-                    # TODO: For other datasets, maybe this won't work ... Check where the conversion should be!
-                    instance_df = instance_df.astype(float)
-                    instances_dict[complexity_string] = instance_df
-
-            # Update the instances_dict in the instance_results dict
+            for complexity_string, instance_df in instances_dict.items():
+                modified_df = self.apply_categorical_mapping(instance_df, is_dataframe=True)
+                instances_dict[complexity_string] = modified_df
             instance_results[instance_id] = instances_dict
         self.test_instances = instance_results
 
@@ -762,7 +766,7 @@ class ExplainBot:
             instance_id = self.current_instance[0]
             returned_item = run_action_by_id(user_session_conversation, int(text), instance_id)
 
-        username = user_session_conversation.username
+        # username = user_session_conversation.username
 
         response_id = self.gen_almost_surely_unique_id()
         """logging_info = self.build_logging_info(self.bot_name,
@@ -830,7 +834,7 @@ class ExplainBot:
         instance_id = self.current_instance[0]
         report = compute_explanation_report(self.conversation, instance_id,
                                             instance_type_naming=self.instance_type_naming,
-                                            feature_display_name_mapping=self.feature_display_names.feature_name_to_display_name)
+                                            feature_display_name_mapping=self.get_feature_display_name_dict())
         return report
 
     def get_test_question_by_test_id(self, test_id):
