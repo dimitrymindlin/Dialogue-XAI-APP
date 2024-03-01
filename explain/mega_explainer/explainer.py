@@ -228,7 +228,8 @@ class Explainer:
                          top_k_starting_pct: float = 0.2,
                          top_k_ending_pct: float = 0.5,
                          epsilon: float = 1e-4,
-                         return_fidelities: bool = False) -> MegaExplanation:
+                         return_fidelities: bool = False,
+                         explain_only_most_likely=True) -> MegaExplanation:
         """Computes the explanation.
 
         This function computes the explanation. It calls several explanation methods, computes
@@ -237,10 +238,11 @@ class Explainer:
         Args:
             return_fidelities: Whether to return explanation fidelities
             epsilon:
-            top_k_ending_pct:
-            top_k_starting_pct:
+            top_k_ending_pct: The percentage of top k features to use for the explanation
+            top_k_starting_pct: The percentage of top k features to use for the explanation
             data: The instance to explain. If given as a pd.DataFrame, will be converted to a
                   np.ndarray
+            explain_only_most_likely: Whether to only explain the most likely class or all classes
         Returns:
             explanations: the final explanations, selected based on most faithful
         """
@@ -251,89 +253,119 @@ class Explainer:
                 message = f"Data not type np.ndarray, failed to convert with error {exp}"
                 raise NameError(message)
 
-        explanations, scores = {}, {}
-        fidelity_scores_topk = {}
-
+        explanations, scores, fidelity_scores_topk = {}, {}, {}
         # Makes sure data is formatted correctly
         formatted_data = self.check_exp_data_shape(data)
 
+        if explain_only_most_likely:
+            # Get the prediction scores for most likely class
+            predictions = self.model(formatted_data)[0]
+            num_classes = predictions.shape[-1]
+            class_indices = [np.argmax(predictions)]
+        else:
+            # Get the prediction scores for all classes
+            predictions = self.model(formatted_data)[0]
+            num_classes = predictions.shape[-1]
+            class_indices = list(range(num_classes))
+
         # Gets indices of 20-50% of data
-        lower_index = int(formatted_data.shape[1]*top_k_starting_pct)
-        upper_index = int(formatted_data.shape[1]*top_k_ending_pct)
+        lower_index = int(formatted_data.shape[1] * top_k_starting_pct)
+        upper_index = int(formatted_data.shape[1] * top_k_ending_pct)
         k = list(range(lower_index, upper_index))
 
-        # Explain the most likely class
-        label = np.argmax(self.model(formatted_data)[0])
+        # Iterate over all classes
+        for class_index in class_indices:
+            explanations[class_index], scores[class_index], fidelity_scores_topk[class_index] = {}, {}, {}
+
+            # Explanation logic adapted for multi-class
+            for method in self.explanation_methods.keys():
+                cur_explainer = self.explanation_methods[method]
+                cur_expl, score = cur_explainer.get_explanation(formatted_data, label=class_index)
+
+                explanations[class_index][method] = cur_expl.squeeze(0)
+                scores[class_index][method] = score
+                fidelity_scores_topk[class_index][method] = self._compute_faithfulness_auc(formatted_data,
+                                                                                           explanations[class_index][
+                                                                                               method],
+                                                                                           class_index,
+                                                                                           k,
+                                                                                           metric="topk")
 
         # Iterate over each explanation method and compute fidelity scores of topk
         # and non-topk features per the method
-        for method in self.explanation_methods.keys():
-            cur_explainer = self.explanation_methods[method]
-            cur_expl, score = cur_explainer.get_explanation(formatted_data,
-                                                            label=label)
-
-            explanations[method] = cur_expl.squeeze(0)
-            scores[method] = score
-            # Compute the fidelity auc of the top-k features
-            fidelity_scores_topk[method] = self._compute_faithfulness_auc(formatted_data,
-                                                                          explanations[method],
-                                                                          label,
-                                                                          k,
-                                                                          metric="topk")
 
         if return_fidelities:
             return fidelity_scores_topk
 
-        if len(fidelity_scores_topk) >= 2:
-            top2 = heapq.nlargest(2, fidelity_scores_topk, key=fidelity_scores_topk.get)
+        # Initialize dictionary to store the best explanation for each class
+        best_explanations_per_class = {}
 
-            diff = abs(fidelity_scores_topk[top2[0]] - fidelity_scores_topk[top2[1]])
-            # Priority given to topk for a tie
-            if diff > epsilon:
-                best_method = top2[0]
-                best_exp = explanations[best_method]
-                best_method_score = scores[best_method]
-                agree = True
-            else:
-                # In the case where there is a small difference between best and second best method
-                highest_fidelity = self.compute_stability(formatted_data,
-                                                          explanations[top2[0]],
-                                                          self.explanation_methods[top2[0]],
-                                                          label,
-                                                          k)
+        for class_index in explanations.keys():
+            class_fidelity_scores = {method: fidelity_scores_topk[class_index][method] for method in
+                                     fidelity_scores_topk[class_index]}
+            if len(class_fidelity_scores) >= 2:
+                top2_methods = heapq.nlargest(2, class_fidelity_scores, key=class_fidelity_scores.get)
 
-                second_highest_fidelity = self.compute_stability(formatted_data,
-                                                                 explanations[top2[1]],
-                                                                 self.explanation_methods[top2[1]],
-                                                                 label,
-                                                                 k)
-
-                agree = False
-                if highest_fidelity < second_highest_fidelity:
-                    best_method = top2[0]
-                    best_exp = explanations[best_method]
-                    best_method_score = scores[best_method]
+                diff = abs(class_fidelity_scores[top2_methods[0]] - class_fidelity_scores[top2_methods[1]])
+                if diff > epsilon:
+                    best_method = top2_methods[0]
                 else:
-                    best_method = top2[1]
-                    best_exp = explanations[best_method]
-                    best_method_score = scores[best_method]
-        else:
-            best_method = "lime_0.75"
-            best_exp = explanations[best_method]
-            best_method_score = scores[best_method]
-            agree = True
+                    # Adapt the stability computation for multi-class context if necessary
+                    highest_fidelity = self.compute_stability(formatted_data,
+                                                              explanations[class_index][top2_methods[0]],
+                                                              self.explanation_methods[top2_methods[0]], class_index, k)
+                    second_highest_fidelity = self.compute_stability(formatted_data,
+                                                                     explanations[class_index][top2_methods[1]],
+                                                                     self.explanation_methods[top2_methods[1]],
+                                                                     class_index, k)
+
+                    best_method = top2_methods[0] if highest_fidelity > second_highest_fidelity else top2_methods[1]
+            else:
+                # Default to a specific method if not enough data is available for comparison
+                best_method = "lime_0.75"
+            # Store the best explanation for the class
+            best_explanations_per_class[class_index] = {
+                'explanation': explanations[class_index][best_method].numpy(),
+                'method': best_method,
+                'score': scores[class_index][best_method],
+                'agree': diff <= epsilon if 'diff' in locals() else True
+            }
 
         # Format return
         # TODO(satya,dylan): figure out a way to get a score metric using fidelity
-        final_explanation = self._format_explanation(best_exp.numpy(),
-                                                     label,
-                                                     best_method_score,
-                                                     best_method,
-                                                     agree)
+        # Initialize a container for the final explanations for all classes
+        final_explanations_for_all_classes = {}
+
+        # Iterate over each class in best_explanations_per_class to format the final explanation
+        for class_index, best_explanation_info in best_explanations_per_class.items():
+            # Extract information for the current class's best explanation
+            best_exp_array = best_explanation_info[
+                'explanation']  # Assuming this is already a numpy array; remove .numpy() if so
+            best_method = best_explanation_info['method']
+            best_method_score = best_explanation_info['score']
+            agree = best_explanation_info['agree']
+
+            # Format the explanation for the current class
+            # Note: You may need to adjust _format_explanation to accept and handle class_index if it doesn't already
+            final_explanations_for_all_classes[class_index] = self._format_explanation(best_exp_array,
+                                                                                       class_index,
+                                                                                       best_method_score,
+                                                                                       best_method,
+                                                                                       agree)
+
+        # Extract inner dict for explain_only_most_likely
+        if explain_only_most_likely:
+            final_explanations_for_all_classes = final_explanations_for_all_classes[class_indices[0]]
+            fidelity_scores_topk = fidelity_scores_topk[class_indices[0]]
+
+        # Assuming best_explanations_per_class is already filled as per the previous code
+        # Final adjustments before return
         if return_fidelities:
-            return final_explanation, fidelity_scores_topk
+            # If fidelity scores are requested, return them alongside the best explanations
+            return final_explanations_for_all_classes, fidelity_scores_topk
         else:
-            return final_explanation
+            # If only explanations are needed, return the formatted explanations for each class
+            return final_explanations_for_all_classes
 
     def compute_stability(self, data, baseline_explanation, explainer, label, top_k_inds):
         """Computes the AUC stability scores.
