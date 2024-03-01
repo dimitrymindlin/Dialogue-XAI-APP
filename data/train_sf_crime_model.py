@@ -32,13 +32,28 @@ def preprocess_data_specific(data, config):
     if rename_col_dict:
         data = data.rename(columns=rename_col_dict)
 
-    bins = [-np.inf, 33, 48, 65, np.inf]
-    data["Crimes"] = pd.cut(data["Crimes"], bins=bins, labels=["low", "medium", "high", "very high"])
+    bins = [-np.inf, 39, 65, np.inf]
+    data["Crimes"] = pd.cut(data["Crimes"], bins=bins, labels=["low", "medium", "high"])
     data["Crimes"] = data["Crimes"].map(ordinal_mapping)
 
-    data, encoded_classes = label_encode_and_save_classes(data, columns_to_encode, save_path)
+    # Change NFL Game day to True or False
+    data["NFLGameDay"] = data["NFLGameDay"].map({0: False, 1: True})
+
+    def categorize_day(day):
+        if day <= 10:
+            return "BeginningOfMonth"
+        elif day <= 20:
+            return "MiddleOfMonth"
+        else:
+            return "EndOfMonth"
+
+    data["MonthPeriod"] = data["Day"].apply(categorize_day)
+    data.drop(columns=["Day"], inplace=True)
+
     X = data.drop(columns=["Crimes", "Year"])
     y = data["Crimes"]
+
+    X, encoded_classes = label_encode_and_save_classes(X, columns_to_encode, save_path)
 
     return X, y, encoded_classes
 
@@ -75,8 +90,8 @@ def main():
     best_model, best_params = train_model(X_train, y_train, pipeline, model_params, search_params)
 
     # Print evaluation metrics on train and test
-    print("Best Model Score:", best_model.score(X_train, y_train))
-    print("Best Model Score:", best_model.score(X_test, y_test))
+    print("Best Model Score Train:", best_model.score(X_train, y_train))
+    print("Best Model Score Test:", best_model.score(X_test, y_test))
     print("Best Parameters:", best_params)
 
     # Save the best model

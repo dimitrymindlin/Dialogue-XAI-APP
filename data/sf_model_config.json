@@ -3,28 +3,33 @@
     "PdDistrict",
     "DayOfWeek",
     "Month",
-    "NFLGameDay"
+    "NFLGameDay",
+    "MonthPeriod"
   ],
   "ordinal_mapping": {
     "Crimes": {
       "low": 0,
       "medium": 1,
-      "high": 2,
-      "very high": 3
+      "high": 2
     }
   },
   "model_params": {
     "n_estimators": [
-      100
+      100,
+      200,
+      500
     ],
     "max_depth": [
-      5
+      5,
+      10
     ],
     "min_samples_split": [
-      2
+      2,
+      3
     ],
     "min_samples_leaf": [
-      1
+      1,
+      2
     ]
   },
   "rename_columns": {
