@@ -223,24 +223,16 @@ class ExplainBot:
     def set_user_prediction(self, user_prediction):
         current_id = self.current_instance[0]
         true_label = self.conversation.get_var("dataset").contents['y'].loc[current_id]
-        self.user_prediction_dict[current_id] = (user_prediction, true_label)
+        reversed_dict = {value: key for key, value in self.conversation.class_names.items()}
+        user_prediction_as_int = reversed_dict[user_prediction]
+        self.user_prediction_dict[current_id] = (user_prediction_as_int, true_label)
 
     def get_user_correctness(self):
-        # TODO: Only works for diabetes.
-        def extract_user_predicted_label(user_prediction: str):
-            if user_prediction == "Likely to have diabetes":
-                return 1
-            elif user_prediction == "Unlikely to have diabetes":
-                return 0
-            else:
-                return 2
-
         # Check self.user_prediction_dict for correctness
         correct_counter = 0
         total_counter = 0
         for instance_id, (user_prediction, true_label) in self.user_prediction_dict.items():
-            user_prediction_int = extract_user_predicted_label(user_prediction)
-            if user_prediction_int == true_label:
+            if user_prediction == true_label:
                 correct_counter += 1
             total_counter += 1
         return f"{correct_counter} out of {total_counter}"
