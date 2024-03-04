@@ -318,6 +318,6 @@ def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name
     html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
                   f'<span>When the prediction probability crosses 0.5 on the {axis}, ' \
                   f'the model would change the prediction. This is not always possible, since the selected attribute might' \
-                  f'not be able to change the probability enough.</span>'
+                  f' not be able to change the probability enough.</span>'
 
     return html_string, 1
