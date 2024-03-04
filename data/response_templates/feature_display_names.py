@@ -20,8 +20,6 @@ class FeatureDisplayNames:
             # TODO: Put these exceptions in config
             if feature_name == "BMI":
                 feature_name = "Body Mass Index"
-            elif feature_name == "NFLGameDay":
-                feature_name = "NFL Game Day"
             else:
                 feature_name = re.sub(r"(\w)([A-Z])", r"\1 \2", feature_name)  # split camelCase
                 feature_name = feature_name.title()  # convert to Title Case
