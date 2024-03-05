@@ -160,7 +160,7 @@ def run_action_by_id(conversation: Conversation,
         # How should this instance change to get a different prediction?
         explanation, desired_class = explain_cfe(conversation, data, parse_op, regen)
         desired_class_str = conversation.get_class_name_from_label(desired_class)
-        explanation = f"Here are possible scenarios that would change the prediction to {desired_class_str}: <br>" + \
+        explanation = f"Here are possible scenarios that would change the prediction to <b>{desired_class_str}</b>:<br> <br>" + \
                       explanation + "There might be other possible changes. These are examples."
         return explanation
     if question_id == 8:
