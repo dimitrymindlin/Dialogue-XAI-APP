@@ -117,14 +117,20 @@ class TabularDice(Explanation):
         for d in tqdm(list(data.index)):
             # dice has a few function calls that are going to be deprecated
             # silence warnings for ease of use now
+            current_instance = data.loc[[d]]
+            current_class = self.model.predict(current_instance)[0]
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 if self.non_binary and desired_class == "opposite":
-                    desired_class = int(
-                        np.random.choice([p for p in self.classes if p != self.model.predict(data.loc[[d]])[0]]))
-                cur_cfe = self.exp.generate_counterfactuals(data.loc[[d]],
+                    # TODO: Change to explain for EVERY other class
+                    desired_class_tmp = int(
+                        np.random.choice([p for p in self.classes if p != current_class]))
+                else:
+                    desired_class_tmp = desired_class
+
+                cur_cfe = self.exp.generate_counterfactuals(current_instance,
                                                             total_CFs=self.num_cfes_per_instance,
-                                                            desired_class=desired_class,
+                                                            desired_class=desired_class_tmp,
                                                             features_to_vary=features_to_vary,
                                                             permitted_range=self.permitted_range_dict)
             cfes[d] = cur_cfe
