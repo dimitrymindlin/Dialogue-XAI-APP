@@ -214,7 +214,10 @@ class ExplainBot:
         current_id = self.current_instance[0]
         true_label = self.conversation.get_var("dataset").contents['y'].loc[current_id]
         reversed_dict = {value: key for key, value in self.conversation.class_names.items()}
-        user_prediction_as_int = reversed_dict[user_prediction]
+        try:
+            user_prediction_as_int = reversed_dict[user_prediction]
+        except KeyError:
+            user_prediction_as_int = int(1000)  # for "I don't know" option
         self.user_prediction_dict[current_id] = (user_prediction_as_int, true_label)
 
     def get_user_correctness(self):
