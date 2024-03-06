@@ -422,7 +422,7 @@ class ExplainBot:
                                                    class_names=self.conversation.class_names,
                                                    feature_names=list(data.columns),
                                                    categorical_mapping=self.categorical_mapping)
-        ceteris_paribus_explainer.get_explanations(ids=list(data.index),
+        ceteris_paribus_explainer.get_explanations(ids=diverse_instance_ids,
                                                    data=data)
 
         """# Load global explanation via shap explainer
