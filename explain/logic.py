@@ -324,19 +324,16 @@ class ExplainBot:
         """
         question_pd = pd.read_csv(self.conversation.question_bank_path, delimiter=";")
         # Handle Feature Names
+        # Get dispplay feature names
+        template_manager = self.conversation.get_var("template_manager").contents
+        feature_display_names = template_manager.feature_display_names.feature_name_to_display_name
+        # Create list of dicts {id: feature_name} where feature_name is the display name
         feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
-        feature_names = [{'id': feature_id, 'feature_name': feature_name} for feature_id, feature_name in
+        feature_names = [{'id': feature_id, 'feature_name': feature_display_names[feature_name]} for
+                         feature_id, feature_name in
                          enumerate(feature_names)]
         # sort feature names by feature_name
         feature_names = sorted(feature_names, key=lambda k: k['feature_name'])
-        # change feature names from camelCase to Title Case
-        for feature_dict in feature_names:
-            feature_name = feature_dict['feature_name']
-            if feature_name == "BMI":
-                feature_name = "Body Mass Index"
-            feature_name = re.sub(r"(\w)([A-Z])", r"\1 \2", feature_name)  # split camelCase
-            feature_name = feature_name.title()  # convert to Title Case
-            feature_dict['feature_name'] = feature_name
 
         # Replace "instance" in questions with instance_type_naming
         for i, row in question_pd.iterrows():
