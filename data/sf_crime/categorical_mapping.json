@@ -1,0 +1,46 @@
+{
+  "0": [
+    "BAYVIEW",
+    "CENTRAL",
+    "INGLESIDE",
+    "MISSION",
+    "NORTHERN",
+    "PARK",
+    "RICHMOND",
+    "SOUTHERN",
+    "TARAVAL",
+    "TENDERLOIN"
+  ],
+  "1": [
+    "Friday",
+    "Monday",
+    "Saturday",
+    "Sunday",
+    "Thursday",
+    "Tuesday",
+    "Wednesday"
+  ],
+  "4": [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+  ],
+  "3": [
+    "False",
+    "True"
+  ],
+  "5": [
+    "BeginningOfMonth",
+    "EndOfMonth",
+    "MiddleOfMonth"
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "PdDistrict": {
+    "0": "BAYVIEW",
+    "1": "CENTRAL",
+    "2": "INGLESIDE",
+    "3": "MISSION",
+    "4": "NORTHERN",
+    "5": "PARK",
+    "6": "RICHMOND",
+    "7": "SOUTHERN",
+    "8": "TARAVAL",
+    "9": "TENDERLOIN"
+  },
+  "DayOfWeek": {
+    "0": "Friday",
+    "1": "Monday",
+    "2": "Saturday",
+    "3": "Sunday",
+    "4": "Thursday",
+    "5": "Tuesday",
+    "6": "Wednesday"
+  },
+  "Month": {
+    "0": "1",
+    "1": "2",
+    "2": "3",
+    "3": "4",
+    "4": "5",
+    "5": "6",
+    "6": "7",
+    "7": "8",
+    "8": "9",
+    "9": "10",
+    "10": "11",
+    "11": "12"
+  },
+  "NFLGameDay": {
+    "0": "False",
+    "1": "True"
+  },
+  "MonthPeriod": {
+    "0": "BeginningOfMonth",
+    "1": "EndOfMonth",
+    "2": "MiddleOfMonth"
+  }
+}
