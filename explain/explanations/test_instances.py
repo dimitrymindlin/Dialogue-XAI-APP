@@ -46,7 +46,7 @@ class TestInstances:
     def get_test_instances(self,
                            instance_count: int = 10,
                            save_to_cache=True,
-                           close_instances=False):
+                           close_instances=True):
         """
         Returns diverse instances for the given data set.
         Args:
@@ -99,6 +99,10 @@ class TestInstances:
                                                                              counterfactual_instances,
                                                                              feature_importances,
                                                                              self.model.predict_proba)
+                # Turn all cf values to int if categorical
+                for feature in counterfactual_instances.columns:
+                    if feature in self.experiment_helper.categorical_features:
+                        counterfactual_instances[feature] = counterfactual_instances[feature].astype(int)
 
                 # get an easy counterfactual instance
                 easy_counterfactual_instance = counterfactual_instances.tail(1)
