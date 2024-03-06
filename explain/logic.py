@@ -402,8 +402,7 @@ class ExplainBot:
         tabular_dice.get_explanations(ids=diverse_instance_ids,
                                       data=data)
 
-        message = (f"...loaded {len(tabular_dice.cache)} dice tabular "
-                   "explanations from cache!")
+        message = f"...loaded {len(tabular_dice.cache)} dice tabular explanations from cache!"
         app.logger.info(message)
 
         # Load anchor explanations
@@ -426,12 +425,24 @@ class ExplainBot:
         ceteris_paribus_explainer.get_explanations(ids=list(data.index),
                                                    data=data)
 
-        # Load global explanation via shap explainer
+        """# Load global explanation via shap explainer
         shap_explainer = ShapGlobalExplainer(model=model,
                                              data=data,
                                              class_names=self.conversation.class_names)
 
         shap_explainer.get_explanations()
+        self.conversation.add_var('global_shap', shap_explainer, 'explanation')
+        """
+
+        # Load FeatureStatisticsExplainer with background data
+        feature_statistics_explainer = FeatureStatisticsExplainer(background_dataset,
+                                                                  y_values,
+                                                                  self.numerical_features,
+                                                                  feature_names=list(background_dataset.columns),
+                                                                  rounding_precision=self.conversation.rounding_precision,
+                                                                  categorical_mapping=self.categorical_mapping,
+                                                                  feature_units=self.feature_units_mapping)
+        self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
         # Add all the explanations to the conversation
         self.conversation.add_var('mega_explainer', mega_explainer, 'explanation')
