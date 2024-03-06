@@ -448,7 +448,6 @@ class ExplainBot:
         self.conversation.add_var('mega_explainer', mega_explainer, 'explanation')
         self.conversation.add_var('tabular_dice', tabular_dice, 'explanation')
         self.conversation.add_var('tabular_anchor', tabular_anchor, 'explanation')
-        self.conversation.add_var('global_shap', shap_explainer, 'explanation')
         self.conversation.add_var('ceteris_paribus', ceteris_paribus_explainer, 'explanation')
         # list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
