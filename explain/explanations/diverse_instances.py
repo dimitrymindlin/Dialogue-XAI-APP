@@ -36,7 +36,8 @@ class DiverseInstances:
 
     def get_instance_ids_to_show(self,
                                  data: pd.DataFrame,
-                                 save_to_cache=True) -> List[int]:
+                                 save_to_cache=True,
+                                 submodular_pick=False) -> List[int]:
         """
         Returns diverse instances for the given data set.
         Args:
@@ -51,9 +52,13 @@ class DiverseInstances:
             return self.diverse_instances
 
         # Generate diverse instances
-        diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, self.instance_amount)
-        # Get pandas index for the diverse instances
-        diverse_instances_pandas_indices = [data.index[i] for i in diverse_instances]
+        if submodular_pick:
+            diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, self.instance_amount)
+            # Get pandas index for the diverse instances
+            diverse_instances_pandas_indices = [data.index[i] for i in diverse_instances]
+        else:
+            # Get random instances
+            diverse_instances_pandas_indices = data.sample(self.instance_amount).index.tolist()
 
         # TODO: This is hacky and only for Diabetes dataset. Move to data preprocessing
         """# remove instance with id 123
