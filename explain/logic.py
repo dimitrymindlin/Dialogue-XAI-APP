@@ -838,24 +838,6 @@ class ExplainBot:
                                             feature_display_name_mapping=self.get_feature_display_name_dict())
         return report
 
-    def get_test_question_by_test_id(self, test_id):
-        """
-        Returns the test questions for the current datapoint.
-        """
-        return self.current_instance[test_id]["questions"]
-
-    def build_test_questions(self):
-        test_instances = self.conversation.get_var("test_instances").contents
-        test_questions = {}
-
-        mega_explainer = self.conversation.get_var('mega_explainer').contents
-        diverse_instances = self.conversation.get_var('diverse_instances').contents
-        model = self.conversation.get_var("model").contents
-        exp_helper = self.conversation.get_var('experiment_helper').contents
-
-        for test_id, test_instance in test_instances.items():
-            pass
-
     def build_exit_survey_table(self):
         mega_explainer = self.conversation.get_var('mega_explainer').contents
         diverse_instances = self.conversation.get_var('diverse_instances').contents
