@@ -206,16 +206,6 @@ class ExplainBot:
         self.load_explanations(background_dataset=background_dataset,
                                y_values=background_y_values)
 
-        # Load FeatureStatisticsExplainer with background data
-        feature_statistics_explainer = FeatureStatisticsExplainer(background_dataset,
-                                                                  background_y_values,
-                                                                  self.numerical_features,
-                                                                  feature_names=list(background_dataset.columns),
-                                                                  rounding_precision=self.conversation.rounding_precision,
-                                                                  categorical_mapping=self.categorical_mapping,
-                                                                  feature_units=self.feature_units_mapping)
-        self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
-
     def get_feature_display_name_dict(self):
         template_manager = self.conversation.get_var('template_manager').contents
         return template_manager.feature_display_names.feature_name_to_display_name
@@ -363,7 +353,8 @@ class ExplainBot:
         }
         return answer_dict
 
-    def load_explanations(self, background_dataset,
+    def load_explanations(self,
+                          background_dataset,
                           y_values=None):
         """Loads the explanations.
 
@@ -382,27 +373,26 @@ class ExplainBot:
         numeric_f = self.conversation.get_var('dataset').contents['numeric']
 
         # Load local FI explanations
+        app.logger.info("...loading MegaExplainer...")
         mega_explainer = MegaExplainer(prediction_fn=pred_f,
                                        data=background_dataset,
                                        cat_features=categorical_f,
                                        class_names=self.conversation.class_names,
                                        categorical_mapping=self.categorical_mapping,
-                                       use_selection=True)
+                                       use_selection=False)
 
         # Load diverse instances (explanations)
+        app.logger.info("...loading DiverseInstances...")
         diverse_instances_explainer = DiverseInstances(
             lime_explainer=mega_explainer.mega_explainer.explanation_methods['lime_0.75'])
         diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=data)
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         diverse_instances = [{"id": i, "values": data.loc[i].to_dict()} for i in diverse_instance_ids]
+        app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")
 
-        message = f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!"
-        app.logger.info(message)
         # Compute explanations for diverse instances
-        mega_explainer.get_explanations(ids=diverse_instance_ids,
-                                        data=data)
-        message = (f"...loaded {len(mega_explainer.cache)} mega explainer "
-                   "explanations from cache!")
+        mega_explainer.get_explanations(ids=diverse_instance_ids, data=data)
+        message = f"...loaded {len(mega_explainer.cache)} mega explainer explanations from cache!"
         app.logger.info(message)
 
         # Load dice explanations
