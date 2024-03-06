@@ -1,6 +1,5 @@
 ﻿q_id;question;paraphrased;method;method_category;question_type
-20;Why is this instance predicted as [class]?;What conditions guarantee
-the same model prediction no matter what else changes?;anchor;Minimal Feature Set;general
+20;Why is this instance predicted as [class]?;What conditions guarantee the same model prediction no matter what else changes?;anchor;Minimal Feature Set;general
 23;Which are the most important attributes for the outcome of the current instance?; Which are the most important attributes for the outcome of the instance?;shap/lime;Feature Importance;general
 24;Give me a list of features and their impact for predicting the current instance.; How do the attributes influence the prediction of the current instance? ;shap/lime;Feature Importance;general
 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus;Feature Change;feature
