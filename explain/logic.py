@@ -480,12 +480,17 @@ class ExplainBot:
                 return instances
 
         if is_dataframe:
-            for column_index, column in enumerate(instances.columns):
-                if column_index in self.categorical_mapping:
-                    for row_index, cell_value in enumerate(instances[column]):
-                        if isinstance(cell_value, int):
-                            categorical_value = self.categorical_mapping[column_index][cell_value]
-                            instances.iat[row_index, column_index] = categorical_value
+            # Iterate only over columns that have a categorical mapping.
+            for column_index, column_mapping in self.categorical_mapping.items():
+                column_name = instances.columns[column_index]
+                old_values_copy = int(instances[column_name].values)
+                if column_name in instances.columns:
+                    # Prepare a mapping dictionary for the current column.
+                    mapping_dict = {i: category for i, category in enumerate(column_mapping)}
+                    # Replace the entire column values based on mapping_dict.
+                    instances[column_name] = instances[column_name].replace(mapping_dict)
+                    if old_values_copy == instances[column_name].values[0]:
+                        raise ValueError(f"Column {column_name} was not replaced with categorical mapping.")
         else:
             for i, (feature_name, val) in enumerate(instances.items()):
                 if i in self.categorical_mapping:
@@ -510,10 +515,11 @@ class ExplainBot:
         test_instances = self.conversation.get_var("test_instances").contents
         instance_results = {}
         for instance_id, instances_dict in test_instances.items():
+            new_instances_dict = {}
             for complexity_string, instance_df in instances_dict.items():
                 modified_df = self.apply_categorical_mapping(instance_df, is_dataframe=True)
-                instances_dict[complexity_string] = modified_df
-            instance_results[instance_id] = instances_dict
+                new_instances_dict[complexity_string] = modified_df
+            instance_results[instance_id] = new_instances_dict
         self.test_instances = instance_results
 
     def load_model(self, filepath: str):
