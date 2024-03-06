@@ -261,13 +261,19 @@ class ExplainBot:
                 return new_dict
 
             test_id = self.current_instance[0]
+            # Select the appropriate instance based on the counter's value.
+            instance_key = "least_complex_instance" if self.test_instance_counter % 2 == 0 else "easy_counterfactual_instance"
             try:
-                self.current_instance = self.test_instances.pop(test_id)["least_complex_instance"].to_dict()
+                # Pop the selected instance directly, avoiding an intermediate variable.
+                self.current_instance = self.test_instances[test_id].pop(instance_key).to_dict()
             except KeyError:
-                # If the test instance was already popped (i.e. train test loop is over), get the next one
+                # If test_id is not found in test_instances, get the next available instance.
                 self.current_instance = self.data_instances.pop(0)
                 test_id = self.current_instance[0]
-                self.current_instance = self.test_instances.pop(test_id)["least_complex_instance"].to_dict()
+                if self.current_instance:
+                    # Safely attempt to pop from test_instances using the new test_id, handling cases where it might not exist.
+                    self.current_instance = self.test_instances[test_id].pop(instance_key).to_dict()
+            # turn df to
             self.current_instance = make_instance_dict()
             # get true label
             true_label = self.conversation.get_var("dataset").contents['y'].loc[test_id]
