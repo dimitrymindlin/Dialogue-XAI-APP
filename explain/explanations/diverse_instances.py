@@ -36,6 +36,8 @@ class DiverseInstances:
 
     def get_instance_ids_to_show(self,
                                  data: pd.DataFrame,
+                                 model,
+                                 y_values: List[int],
                                  save_to_cache=True,
                                  submodular_pick=False) -> List[int]:
         """
@@ -51,14 +53,26 @@ class DiverseInstances:
         if len(self.diverse_instances) > 0:
             return self.diverse_instances
 
-        # Generate diverse instances
-        if submodular_pick:
-            diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, self.instance_amount)
-            # Get pandas index for the diverse instances
-            diverse_instances_pandas_indices = [data.index[i] for i in diverse_instances]
-        else:
-            # Get random instances
-            diverse_instances_pandas_indices = data.sample(self.instance_amount).index.tolist()
+        while len(self.diverse_instances) < self.instance_amount:
+            # Generate diverse instances
+            if submodular_pick:
+                diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, self.instance_amount)
+                # Get pandas index for the diverse instances
+                diverse_instances_pandas_indices = [data.index[i] for i in diverse_instances]
+            else:
+                # Get random instances
+                diverse_instances_pandas_indices = data.sample(self.instance_amount).index.tolist()
+
+            # Check that model prediction is correct
+            true_labels = y_values[diverse_instances_pandas_indices]
+            for i in diverse_instances_pandas_indices:
+                if model.predict(data.loc[i].values.reshape(1, -1))[0] != true_labels[i]:
+                    # Remove instance if model prediction is not correct
+                    diverse_instances_pandas_indices.remove(i)
+
+            for i in diverse_instances_pandas_indices:
+                if i not in self.diverse_instances:
+                    self.diverse_instances.append(i)
 
         # TODO: This is hacky and only for Diabetes dataset. Move to data preprocessing
         """# remove instance with id 123
