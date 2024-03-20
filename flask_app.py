@@ -106,7 +106,8 @@ def get_train_datapoint():
     if user_id is None:
         user_id = "TEST"
 
-    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance()
+    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple(
+        return_probability=True)
     (instance_id, instance_dict, prediction_proba, true_label) = current_instance_with_units
     instance_dict["id"] = str(instance_id)
     instance_dict["true_label"] = true_label
