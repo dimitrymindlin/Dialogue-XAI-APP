@@ -479,4 +479,18 @@ class MegaExplainer(Explanation):
                                           filtering_text=filtering_text,
                                           template_manager=template_manager)
 
+        #follow_up_questions = self.get_follow_up_questions(data, sig_coefs)
+
         return response
+
+    def get_follow_up_questions(self, sig_coefs):
+        """
+        Gets the follow-up questions for the user after receiving an explanation.
+        Idea: Given most important features, suggest to investigate the top feature in a pdp or check counterfactuals.
+        """
+        # TODO: NOT READY...  For future implementation.
+        follow_up_questions = []
+        for i, sig in enumerate(sig_coefs):
+            if i < 3:
+                follow_up_questions.append(f"Do you want to investigate the effect of {sig[0]} on the model's prediction?")
+        return follow_up_questions
