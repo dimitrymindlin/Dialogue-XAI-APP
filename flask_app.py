@@ -119,11 +119,12 @@ def get_train_datapoint():
             value = int(value)
         instance_dict[key] = str(value)
 
+    instance_dict["prediction_probability"] = json.dumps(prediction_proba.tolist())
+
     # Get initial prompt
     current_prediction = bot_dict[user_id].get_current_prediction()
-    instance_dict["current_prediction"] = current_prediction
     prompt = f"""
-        The model predicted that the current {bot_dict[user_id].instance_type_naming} is <b>{current_prediction}</b>. <br>
+        The model predicts that the current {bot_dict[user_id].instance_type_naming} is earning <b>{current_prediction}</b>. <br>
         If you have questions about the prediction, select questions from the right and I will answer them.
         """
     instance_dict["initial_prompt"] = prompt
@@ -133,7 +134,6 @@ def get_train_datapoint():
         # Get the explanation report
         static_report = bot_dict[user_id].get_explanation_report()
         instance_dict["static_report"] = static_report
-        print(static_report["feature_importance"])
     return instance_dict
 
 
@@ -145,7 +145,7 @@ def get_test_datapoint():
     user_id = request.args.get("user_id")
     if user_id is None:
         user_id = "TEST"
-    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance(train=False)
+    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple(train=False)
     (instance_id, instance_dict, prediction_proba, true_label) = current_instance_with_units
     instance_dict["id"] = str(instance_id)
 
@@ -196,6 +196,23 @@ def get_questions():
         except Exception as ext:
             app.logger.info(f"Traceback getting questions: {traceback.format_exc()}")
             app.logger.info(f"Exception getting questions: {ext}")
+            response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
+        return response
+
+
+@bp.route("/get_feature_ranges", methods=['POST'])
+def get_feature_ranges():
+    """Load the feature ranges."""
+    user_id = request.args.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
+    if request.method == "POST":
+        app.logger.info("generating the feature ranges")
+        try:
+            response = bot_dict[user_id].get_feature_ranges()
+        except Exception as ext:
+            app.logger.info(f"Traceback getting feature ranges: {traceback.format_exc()}")
+            app.logger.info(f"Exception getting feature ranges: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
         return response
 
