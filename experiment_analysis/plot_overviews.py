@@ -275,5 +275,27 @@ def plot_understanding_with_questions(matrix_understanding, matrix_questions, us
     plt.xlabel("Datapoint")
     plt.ylabel("User ID")
 
+    # Rename last x tick label to "Objective Score"
+    labels = [item.get_text() for item in ax.get_xticklabels()]
+    labels[-1] = "Objective Score"
+    ax.set_xticklabels(labels)
+
     plt.tight_layout()  # Adjust layout to fit everything
     plt.show()
+
+def plot_question_raking(question_matrix):
+    """
+    Print a list of questions asked ranked by the number of times they were asked across all users
+    """
+    # Flatten the matrix and count the occurrences of each question
+    all_questions = [question for user_questions in question_matrix for questions in user_questions for question in questions]
+    question_counts = pd.Series(all_questions).value_counts()
+
+    # Plot the question counts
+    plt.figure(figsize=(10, 6))
+    question_counts.plot(kind='bar')
+    plt.title("Question Ranking")
+    plt.xlabel("Question ID")
+    plt.ylabel("Number of Occurrences")
+    plt.show()
+
