@@ -28,15 +28,23 @@ def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=
             break
 
         feature_display_name = template_manager.get_feature_display_name_by_name(feature_name)
-        if "least" in filtering_text:
-            position = "least" if i == 0 else f"{i + 1}. least"
+        if i + 1 == 2:
+            position_prefix = "second"
+        elif i + 1 == 3:
+            position_prefix = "third"
         else:
-            position = "most" if i == 0 else f"{i + 1}."
+            position_prefix = ""
+
+        if "least" in filtering_text:
+            position = "least" if i == 0 else f"{position_prefix} least"
+        else:
+            position = "most" if i == 0 else f"{position_prefix}"
         increase_decrease = "increases" if feature_importance > 0 else "decreases"
-        output_text += f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute which {increase_decrease} the model's output.</li>"
+        # output_text += f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute which {increase_decrease} the model's output.</li>"
+        output_text += f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute.</li>"
         describing_features += 1
     output_text += "</ol>"
-    return output_text if output_text != "<ol></ol>" else "The attributes are the least important attributes for the current person."
+    return output_text
 
 
 def textual_fi_relational(sig_coefs: Dict[str, float],
