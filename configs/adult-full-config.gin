@@ -1,0 +1,103 @@
+##########################################
+# The san francisco crime dataset conversation config
+##########################################
+
+# User provided prediction model file path
+ExplainBot.model_file_path = "./data/adult/adult_model_rf.pkl"
+ExplainBot.encoded_col_mapping_path = "./data/adult/encoded_col_mapping.json"
+
+# Seed
+ExplainBot.seed = 0
+
+# The dataset to run the conversation on
+ExplainBot.dataset_file_path = "./data/adult/adult_test.csv"
+
+# The background dataset for the conversation
+ExplainBot.background_dataset_file_path = "./data/adult/adult_train.csv"
+ExplainBot.name = "adult census dataset"
+ExplainBot.instance_type_naming = "Person"
+
+# Dataset feature information
+ExplainBot.dataset_index_column = 0
+ExplainBot.target_variable_name = "Income"
+ExplainBot.categorical_features = [
+    "Workclass",
+    "MaritalStatus",
+    "Occupation",
+    "Relationship",
+    "Race",
+    "Gender",
+    "NativeCountry",
+    "Age"]
+ExplainBot.numerical_features = ['HoursPerWeek', 'Education']
+ExplainBot.remove_underscores = True
+ExplainBot.actionable_features = ["Workclass", "MaritalStatus", "Occupation", "Relationship", "CapitalGain", "CapitalLoss", "HoursPerWeek", "Education"]
+ExplainBot.categorical_mapping_path = "./data/adult/categorical_mapping.json"
+
+# Explanation Params
+Explanation.max_cache_size = 1_000_000
+
+# MegaExplainer Params
+MegaExplainer.cache_location = "./cache/adult-mega-explainer-tabular.pkl"
+MegaExplainer.use_selection = False
+
+# Tabular Dice Params
+TabularDice.cache_location = "./cache/adult-dice-tabular.pkl"
+TabularDice.final_cfe_amount = 3
+
+# Diverse Instances
+DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"
+DiverseInstances.instance_amount = 10
+
+# Test Instances
+TestInstances.cache_location = "./cache/adult-test-instances.pkl"
+
+# Global Explanations
+ShapGlobalExplainer.cache_location = "./cache/adult-global.pkl"
+
+# Ceteris Paribus
+CeterisParibus.cache_location = "./cache/adult-ceteris-paribus.pkl"
+
+# Tabular Anchor Params
+TabularAnchor.cache_location = "./cache/adult-anchor-tabular.pkl"
+
+# Conversation params
+Conversation.class_names = {0: "under 50k", 1: "over 50k"}
+Conversation.question_bank_path =  "./data/question_bank.csv"
+
+# Dataset description
+DatasetDescription.dataset_objective = "Predict whether an individual earns more than 50k a years or less."
+DatasetDescription.dataset_description = "adult census dataset"
+DatasetDescription.model_description = "random forest model"
+
+# Feature Tooltip
+ExplainBot.feature_tooltip_mapping = {
+    "age": "The age group of the person",
+    "capitalgain": "The capital gain of the person, in dollars",
+    "capitalloss": "The capital loss of the person, in dollars",
+    "education": "The education level of the person",
+    "gender": "The gender of the person (Male / Female)",
+    "hoursperweek": "Working hours per week",
+    "maritalstatus": "Marital status of the person, either married or single",
+    "nativecountry": "Country of origin",
+    "occupation": "The occupation type of the person",
+    "race": "The ethnicity of the person",
+    "relationship": "The type of relationship the person has.",
+    "workclass": "The type of workclass the person is in. Private, public, etc."
+}
+
+# Feature Units
+ExplainBot.feature_units_mapping = {
+    "age": "",
+    "capitalgain": "$",
+    "capitalloss": "$",
+    "education": "",
+    "gender": "°C",
+    "hoursperweek": "",
+    "maritalstatus": "",
+    "nativecountry": "",
+    "occupation": "",
+    "race": "",
+    "relationship": "",
+    "workclass": ""
+}
