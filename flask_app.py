@@ -58,8 +58,10 @@ def init():
     """Load the explanation interface."""
     user_id = request.args.get("user_id")
     study_group = request.args.get("study_group")
-    if user_id is None:
+    if user_id is None or "":
         user_id = "TEST"
+    if study_group is None or "":
+        study_group = "interactive"
     BOT = ExplainBot(study_group)
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
