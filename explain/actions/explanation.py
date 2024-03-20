@@ -290,7 +290,7 @@ def explain_feature_statistic(conversation,
         image_base64 = fig_to_base64(explanation)
         # Create the HTML string with the base64 image
         html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                      f'<span>Distribution of the feature values for {feature_name}.</span>'
+                      f'<span>Distribution of the possible values for {feature_name}.</span>'
         return html_string
     return explanation
 
