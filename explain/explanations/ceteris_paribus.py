@@ -1,4 +1,5 @@
 import warnings
+from typing import List
 
 import gin
 import pandas as pd
@@ -33,8 +34,8 @@ import numpy as np
 def find_x_for_y_plotly(fig, y_target=0.5):
     # Assuming the first trace contains the relevant data
     trace = fig.data[0]
-    x_data = trace.x
-    y_data = trace.y
+    x_data = np.array(trace.x)
+    y_data = np.array(trace.y)
 
     # Interpolating
     f = interpolate.interp1d(y_data, x_data, bounds_error=False, fill_value='extrapolate')
@@ -42,6 +43,31 @@ def find_x_for_y_plotly(fig, y_target=0.5):
 
     round_x_at_y_target = np.round(x_at_y_target, 2)
     return round_x_at_y_target
+
+
+def find_categories_crossing_threshold_scatter(fig, threshold, current_feature_value):
+    crossing_categories = []
+
+    def get_categories_and_values_dict(trace):
+        x_data = np.array(trace.x)
+        y_data = np.array(trace.y)
+        indices = np.where(x_data == current_feature_value)[0]
+        current_proba = y_data[indices][0]
+        x_data = np.delete(x_data, indices)
+        y_data = np.delete(y_data, indices)
+        # Make a dict from x_data to y_data
+        cp_dict = dict(zip(x_data, y_data))
+        return current_proba, cp_dict
+
+    for trace in fig.data:
+        current_probability, attribute_threshold_dict = get_categories_and_values_dict(trace)
+        greater_or_smaller = 'greater' if current_probability > threshold else 'smaller'
+        for attribute, threshold in attribute_threshold_dict.items():
+            if threshold < current_probability and greater_or_smaller == 'greater':
+                crossing_categories.append(attribute)
+            elif threshold > current_probability and greater_or_smaller == 'smaller':
+                crossing_categories.append(attribute)
+    return crossing_categories
 
 
 @gin.configurable
@@ -55,7 +81,8 @@ class CeterisParibus(Explanation):
                  class_names: dict,
                  cache_location: str = "./cache/ceterisparibus-tabular.pkl",
                  feature_names: list = None,
-                 categorical_mapping: dict = None):
+                 categorical_mapping: dict = None,
+                 ordinal_features: List[str] = None):
         """
 
         Args:
@@ -117,14 +144,36 @@ class CeterisParibus(Explanation):
                 fig.update_yaxes(categoryorder='array', categoryarray=categorical_mapping_for_feature)
             return fig
 
-    def get_simplified_explanation(self, data_df, feature_name=None):
+    def get_feature_values_flipping_prediction(self, data_df, feature_name=None):
+        def check_x_value_in_range(x_value):
+            # check if x_value is in the range of the feature
+            feature_max = self.background_data[feature_name].max()
+            feature_min = self.background_data[feature_name].min()
+            if x_value > feature_max or x_value < feature_min:
+                x_value = None
+            return x_value
+
         id = data_df.index[0]
+        current_feature_value = data_df[feature_name].values[0]
         cp_data = self.get_explanations([id], self.background_data, save_to_cache=True)
         fig = cp_data[id].plot(variables=[feature_name], show=False)
-        x_value = find_x_for_y_plotly(fig, 0.5)
-        # check if x_value is in the range of the feature
-        feature_max = self.background_data[feature_name].max()
-        feature_min = self.background_data[feature_name].min()
-        if x_value > feature_max or x_value < feature_min:
-            x_value = None
-        return x_value
+        # For numerical feature, find the x value for y = 0.5
+        feature_id = self.feature_names.index(feature_name)
+        if feature_id in self.categorical_mapping.keys():
+            x_value = find_categories_crossing_threshold_scatter(fig, 0.5, current_feature_value)
+        else:
+            x_value = find_x_for_y_plotly(fig, 0.5)
+
+        possible_x_values = []
+        # Check if x_value is a list
+        if isinstance(x_value, list):
+            for x in x_value:
+                x_value = check_x_value_in_range(x)
+                if x_value is not None:
+                    possible_x_values.append(x_value)
+        else:
+            x_value = check_x_value_in_range(x_value)
+            if x_value is not None:
+                possible_x_values.append(x_value)
+
+        return possible_x_values
