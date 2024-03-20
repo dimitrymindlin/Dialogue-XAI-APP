@@ -2,6 +2,7 @@
 import json
 
 import numpy as np
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.pipeline import Pipeline
@@ -9,9 +10,29 @@ from sklearn.preprocessing import OneHotEncoder, LabelEncoder, FunctionTransform
 import os
 
 
-def label_encode_and_save_classes(df, columns, save_path):
+class DebuggingTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, column_index):
+        self.column_index = column_index
+
+    def fit(self, X, y=None):
+        return self  # Nothing happens here.
+
+    def transform(self, X):
+        # Assuming X is a NumPy array. If it's a DataFrame, adjust accordingly.
+        column_data = X[:, self.column_index]  # Adjust this if X is not an array.
+        print(f"Unique values in column {self.column_index}: {np.unique(column_data)}")
+        return X  # Return data unchanged.
+
+
+def label_encode_and_save_classes(df, config):
+    def sort_keys_by_values(mapping_dict):
+        # Sort the dictionary by values and return the keys as a list
+        return [key for key, value in sorted(mapping_dict.items(), key=lambda item: item[1])]
+
     encoded_classes = {}
     categorical_mapping = {}
+    columns = config["columns_to_encode"]
+    save_path = config["save_path"]
     for col in columns:
         le = LabelEncoder()
         df[col] = le.fit_transform(df[col])
@@ -22,6 +43,18 @@ def label_encode_and_save_classes(df, columns, save_path):
         # value of the categorical features.
         col_id = df.columns.get_loc(col)
         categorical_mapping[col_id] = list(mapping_dict.values())
+
+    # Enrich both mappings with mappings from config "ordinal_mapping"
+    ordinal_mapping = config.get("ordinal_mapping", {})
+    # Remove Target column from ordinal_mapping
+    ordinal_mapping.pop(config["target_col"], None)
+    # Add the ordinal mappings to the encoded_classes
+    for col, mapping in ordinal_mapping.items():
+        col_id = df.columns.get_loc(col)
+        # turn mapping to a list of strings in the same order as the integers
+        mapping_list = sort_keys_by_values(mapping)
+        categorical_mapping[str(col_id)] = mapping_list
+        encoded_classes[col] = {int(i): str(class_name) for i, class_name in enumerate(mapping)}
 
     # Save all the mappings in separate JSON files
     with open(os.path.join(save_path, "encoded_col_mapping.json"), 'w') as f:
@@ -46,7 +79,7 @@ def preprocess_data(data, columns_to_encode, ordinal_info, drop_columns=None):
 def construct_pipeline(columns_to_encode, model):
     preprocessor = ColumnTransformer(
         transformers=[
-            ('one_hot', OneHotEncoder(), columns_to_encode),
+            ('one_hot', OneHotEncoder(handle_unknown='ignore'), columns_to_encode),
         ], remainder='passthrough'
     )
     pipeline = Pipeline(steps=[
