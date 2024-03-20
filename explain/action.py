@@ -135,6 +135,7 @@ def run_action_by_id(conversation: Conversation,
         parse_op = "top 3"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
         answer = "Here are the 3 most important attributes for this prediction: <br><br>"
+        # follow_up = get_fi_follow_up(conversation, data, parse_op, regen, template_manager)
         return answer + explanation[0]
     """if question_id == 5:
         # Why did the model give this particular prediction for this person?
@@ -180,7 +181,9 @@ def run_action_by_id(conversation: Conversation,
         # What attributes must be present or absent to guarantee this prediction?
         explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
                                                                           template_manager)
-        return explanation
+        result_text = f"The following group of attributes definitely predicts the current outcome: <br>"
+        result_text = result_text + explanation + "." + "<br> That means that other attributes can change and the prediction will still be the same."
+        return result_text
     if question_id == 12:
         # How does the prediction change when this attribute changes? Ceteris Paribus
         # explanation = explain_ceteris_paribus(conversation, data, parse_op, regen)
@@ -191,11 +194,7 @@ def run_action_by_id(conversation: Conversation,
         return explanation
     if question_id == 20:
         # 20;Why is this instance predicted as [current prediction]?
-        explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
-                                                                          template_manager)
-        result_text = f"The {instance_type_naming} is predicted as <it>{current_prediction_str}</it>, because the "
-        result_text = result_text + explanation + "."
-        return result_text
+        pass
     if question_id == 22:
         # 22;How is the model using the attributes in general to give an answer?
         explanation = explain_global_feature_importances(conversation)
@@ -207,7 +206,7 @@ def run_action_by_id(conversation: Conversation,
         parse_op = "top 3"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
                                                         template_manager=template_manager)
-        answer = f"Here are the 3 <b>most</b> important factors for this {instance_type_naming}: <br><br>"
+        answer = f"Here are the 3 <b>most</b> important attributes for the current prediction: <br><br>"
         return answer + explanation[0]
 
     if question_id == 24:
@@ -217,12 +216,13 @@ def run_action_by_id(conversation: Conversation,
         return explanation[0]
     if question_id == 25:
         # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
-        explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming)
-        intro = "The following graph shows the prediction probability when changing only the selected attribute. <br>"
-        return intro + explanation[0]
+        explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming, opposite_class,
+                                              as_text=True)
+        return explanation
     if question_id == 27:
         # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the instance?
         parse_op = "least 3"
+        answer = "Here are the <b>least</b> important attributes for the current prediction: <br><br>"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
                                                         template_manager=template_manager)
         return explanation[0]
