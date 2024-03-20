@@ -58,6 +58,7 @@ class ExplainBot:
                  dataset_index_column: int,
                  target_variable_name: str,
                  categorical_features: List[str],
+                 ordinary_features: List[str],
                  numerical_features: List[str],
                  remove_underscores: bool,
                  name: str,
@@ -91,6 +92,7 @@ class ExplainBot:
                                   i.e., 'y'
             categorical_features: The names of the categorical features in the data. If None, they
                                   will be guessed.
+            ordinary_features: The names of the ordinal (categorical) features in the data.
             numerical_features: The names of the numeric features in the data. If None, they will
                                 be guessed.
             remove_underscores: Whether to remove underscores in the feature names. This might help
@@ -127,6 +129,7 @@ class ExplainBot:
         self.prompt_ordering = prompt_ordering
         self.use_guided_decoding = use_guided_decoding
         self.categorical_features = categorical_features
+        self.ordinary_features = ordinary_features
         self.numerical_features = numerical_features
         self.feature_tooltip_mapping = feature_tooltip_mapping
         self.feature_units_mapping = feature_units_mapping
@@ -149,10 +152,11 @@ class ExplainBot:
         self.decoder = None
 
         self.data_instances = []
-        self.current_instance = []
         self.train_instance_counter = 0
         self.test_instance_counter = 0
         self.user_prediction_dict = {}
+        self.current_instance = None
+        self.current_instance_type = "train"  # Or test
 
         # Initialize parser + prompts as None
         # These are done when the dataset is loaded
@@ -192,106 +196,73 @@ class ExplainBot:
                                                                     remove_underscores,
                                                                     store_to_conversation=False)
 
+        # Load Template Manager
+        template_manager = TemplateManager(self.conversation,
+                                           encoded_col_mapping_path=encoded_col_mapping_path,
+                                           categorical_mapping=categorical_mapping)
+        self.conversation.add_var('template_manager', template_manager, 'template_manager')
+
         # Load Experiment Helper
         helper = ExperimentHelper(self.conversation,
                                   self.categorical_mapping,
-                                  self.categorical_features)
+                                  self.categorical_features,
+                                  template_manager)
         self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
 
-        # Load Template Manager
-        template_manager = TemplateManager(self.conversation, encoded_col_mapping_path=encoded_col_mapping_path)
-        self.conversation.add_var('template_manager', template_manager, 'template_manager')
-
         # Load the explanations
-        self.load_explanations(background_dataset=background_dataset,
-                               y_values=background_y_values)
+        self.load_explanations(background_ds_x=background_dataset,
+                               background_ds_y=background_y_values)
 
     def get_feature_display_name_dict(self):
         template_manager = self.conversation.get_var('template_manager').contents
         return template_manager.feature_display_names.feature_name_to_display_name
 
+    def get_feature_ranges(self):
+        feature_statistics_explainer = self.conversation.get_var('feature_statistics_explainer').contents
+        return feature_statistics_explainer.get_feature_ranges()
+
     def set_user_prediction(self, user_prediction):
+        true_label = self.get_current_prediction()
         current_id = self.current_instance[0]
-        true_label = self.conversation.get_var("dataset").contents['y'].loc[current_id]
         reversed_dict = {value: key for key, value in self.conversation.class_names.items()}
+        true_label_as_int = reversed_dict[true_label]
         try:
             user_prediction_as_int = reversed_dict[user_prediction]
         except KeyError:
-            user_prediction_as_int = int(1000)  # for "I don't know" option
-        self.user_prediction_dict[current_id] = (user_prediction_as_int, true_label)
+            user_prediction_as_int = int(1000)
+            # for "I don't know" option
+        # Make 2d dict with self.current_instance_type as first key and current_id as second key
+        if self.current_instance_type not in self.user_prediction_dict:
+            self.user_prediction_dict[self.current_instance_type] = {}
 
-    def get_user_correctness(self):
+        self.user_prediction_dict[self.current_instance_type][current_id] = (user_prediction_as_int, true_label_as_int)
+
+    def get_user_correctness(self, train=False):
         # Check self.user_prediction_dict for correctness
         correct_counter = 0
         total_counter = 0
-        for instance_id, (user_prediction, true_label) in self.user_prediction_dict.items():
+        # Get correct prediction dict
+        if train:
+            predictions_dict = self.user_prediction_dict["train"]
+        else:
+            predictions_dict = self.user_prediction_dict["test"]
+        # Calculate correctness
+        for instance_id, (user_prediction, true_label) in predictions_dict.items():
             if user_prediction == true_label:
                 correct_counter += 1
             total_counter += 1
-        return f"{correct_counter} out of {total_counter}"
+        correctness_string = f"{correct_counter} out of {total_counter}"
+        return correctness_string
 
-    def get_next_instance(self, train=True):
+    def get_next_instance_triple(self, train=True, return_probability=False):
         """
         Returns the next instance in the data_instances list if possible.
         param train: Whether to return a training instance or a test instance
         """
-
-        def get_train_instance_as_current_instance():
-            self.current_instance = self.data_instances.pop(0)
-            self.train_instance_counter += 1
-            # return_counter = self.train_instance_counter
-            # get true label
-            true_label = self.conversation.get_var("dataset").contents['y'].loc[self.current_instance[0]]
-            true_label_name = self.conversation.class_names[true_label]
-            # Replace the true label with the true label name
-            self.current_instance = (
-                self.current_instance[0], self.current_instance[1], self.current_instance[2], true_label_name)
-
-        def get_test_instance_as_current_instance():
-            def make_instance_dict():
-                # Create a new dictionary where the keys are the same but the values are the first value of the inner dictionary
-                new_dict = {name: list(value_dict.values())[0] for name, value_dict in self.current_instance.items()}
-                return new_dict
-
-            test_id = self.current_instance[0]
-            # Select the appropriate instance based on the counter's value.
-            instance_key = "least_complex_instance" if self.test_instance_counter % 2 == 0 else "easy_counterfactual_instance"
-            try:
-                # Pop the selected instance directly, avoiding an intermediate variable.
-                self.current_instance = self.test_instances[test_id].pop(instance_key).to_dict()
-            except KeyError:
-                # If test_id is not found in test_instances, get the next available instance.
-                self.current_instance = self.data_instances.pop(0)
-                test_id = self.current_instance[0]
-                if self.current_instance:
-                    # Safely attempt to pop from test_instances using the new test_id, handling cases where it might not exist.
-                    self.current_instance = self.test_instances[test_id].pop(instance_key).to_dict()
-            # turn df to
-            self.current_instance = make_instance_dict()
-            # get true label
-            true_label = self.conversation.get_var("dataset").contents['y'].loc[test_id]
-            true_label_name = self.conversation.class_names[true_label]
-            self.current_instance = (test_id, self.current_instance, None, true_label_name)
-
-        return_counter = None
-        if len(self.data_instances) == 0:
-            self.load_data_instances()  # TODO: Infinity loop - Where is experiment end determined?
-            self.load_test_instances()
-            self.test_instance_counter += 1
-            return_counter = self.test_instance_counter
-
-        if train:
-            get_train_instance_as_current_instance()
-        else:
-            get_test_instance_as_current_instance()
-
-        # Round values
-        for feature, value in self.current_instance[1].items():
-            if isinstance(value, float):
-                self.current_instance[1][feature] = round(value, self.conversation.rounding_precision)
-
-        # if self.feature_units_mapping is None:
-        return self.current_instance, return_counter
+        experiment_helper = self.conversation.get_var('experiment_helper').contents
+        self.current_instance, counter, self.current_instance_type = experiment_helper.get_next_instance(train=train,
+                                                                                                         return_probability=return_probability)
+        return self.current_instance, counter
 
     def get_study_group(self):
         return self.study_group
@@ -354,28 +325,30 @@ class ExplainBot:
         return answer_dict
 
     def load_explanations(self,
-                          background_dataset,
-                          y_values=None):
+                          background_ds_x,
+                          background_ds_y=None):
         """Loads the explanations.
 
         If set in gin, this routine will cache the explanations.
 
         Arguments:
-            background_dataset: The background dataset to compute the explanations with.
+            background_ds_x: The background dataset to compute the explanations with.
+            background_ds_y: The background dataset's y values.
         """
         app.logger.info("Loading explanations into conversation...")
 
         # This may need to change as we add different types of models
         pred_f = self.conversation.get_var('model_prob_predict').contents
         model = self.conversation.get_var('model').contents
-        data = self.conversation.get_var('dataset').contents['X']
+        test_data = self.conversation.get_var('dataset').contents['X']
+        test_data_y = self.conversation.get_var('dataset').contents['y']
         categorical_f = self.conversation.get_var('dataset').contents['cat']
         numeric_f = self.conversation.get_var('dataset').contents['numeric']
 
         # Load local FI explanations
         app.logger.info("...loading MegaExplainer...")
         mega_explainer = MegaExplainer(prediction_fn=pred_f,
-                                       data=background_dataset,
+                                       data=background_ds_x,
                                        cat_features=categorical_f,
                                        class_names=self.conversation.class_names,
                                        categorical_mapping=self.categorical_mapping,
@@ -385,25 +358,27 @@ class ExplainBot:
         app.logger.info("...loading DiverseInstances...")
         diverse_instances_explainer = DiverseInstances(
             lime_explainer=mega_explainer.mega_explainer.explanation_methods['lime_0.75'])
-        diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=data)
+        diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=test_data,
+                                                                                    model=model,
+                                                                                    y_values=test_data_y)
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
-        diverse_instances = [{"id": i, "values": data.loc[i].to_dict()} for i in diverse_instance_ids]
+        diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
         app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")
 
         # Compute explanations for diverse instances
-        mega_explainer.get_explanations(ids=diverse_instance_ids, data=data)
+        mega_explainer.get_explanations(ids=diverse_instance_ids, data=test_data)
         message = f"...loaded {len(mega_explainer.cache)} mega explainer explanations from cache!"
         app.logger.info(message)
 
         # Load dice explanations
         tabular_dice = TabularDice(model=model,
-                                   data=data,
+                                   data=test_data,
                                    num_features=numeric_f,
                                    class_names=self.conversation.class_names,
                                    categorical_mapping=self.categorical_mapping,
-                                   background_dataset=background_dataset)
+                                   background_dataset=background_ds_x)
         tabular_dice.get_explanations(ids=diverse_instance_ids,
-                                      data=data)
+                                      data=test_data)
 
         message = f"...loaded {len(tabular_dice.cache)} dice tabular explanations from cache!"
         app.logger.info(message)
@@ -411,22 +386,23 @@ class ExplainBot:
         # Load anchor explanations
         # categorical_names = create_feature_values_mapping_from_df(data, categorical_f)
         tabular_anchor = TabularAnchor(model=model,
-                                       data=data,
+                                       data=test_data,
                                        categorical_mapping=self.categorical_mapping,
                                        class_names=self.conversation.class_names,
-                                       feature_names=list(data.columns))
+                                       feature_names=list(test_data.columns))
         tabular_anchor.get_explanations(ids=diverse_instance_ids,
-                                        data=data)
+                                        data=test_data)
 
         # Load Ceteris Paribus Explanations
         ceteris_paribus_explainer = CeterisParibus(model=model,
-                                                   background_data=background_dataset,
-                                                   ys=y_values,
+                                                   background_data=background_ds_x,
+                                                   ys=background_ds_y,
                                                    class_names=self.conversation.class_names,
-                                                   feature_names=list(data.columns),
-                                                   categorical_mapping=self.categorical_mapping)
+                                                   feature_names=list(test_data.columns),
+                                                   categorical_mapping=self.categorical_mapping,
+                                                   ordinal_features=self.ordinary_features)
         ceteris_paribus_explainer.get_explanations(ids=diverse_instance_ids,
-                                                   data=data)
+                                                   data=test_data)
 
         """# Load global explanation via shap explainer
         shap_explainer = ShapGlobalExplainer(model=model,
@@ -438,10 +414,10 @@ class ExplainBot:
         """
 
         # Load FeatureStatisticsExplainer with background data
-        feature_statistics_explainer = FeatureStatisticsExplainer(background_dataset,
-                                                                  y_values,
+        feature_statistics_explainer = FeatureStatisticsExplainer(background_ds_x,
+                                                                  background_ds_y,
                                                                   self.numerical_features,
-                                                                  feature_names=list(background_dataset.columns),
+                                                                  feature_names=list(background_ds_x.columns),
                                                                   rounding_precision=self.conversation.rounding_precision,
                                                                   categorical_mapping=self.categorical_mapping,
                                                                   feature_units=self.feature_units_mapping)
@@ -454,76 +430,14 @@ class ExplainBot:
         self.conversation.add_var('ceteris_paribus', ceteris_paribus_explainer, 'explanation')
         # list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
-        # Load Experiment Helper
-        helper = ExperimentHelper(self.conversation, self.categorical_mapping, self.categorical_features)
-        self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
         # Load test instances
-        test_instance_explainer = TestInstances(data, model, mega_explainer, helper,
+        test_instance_explainer = TestInstances(test_data, model, mega_explainer,
+                                                self.conversation.get_var("experiment_helper").contents,
                                                 diverse_instance_ids=diverse_instance_ids,
                                                 actionable_features=self.actionable_features)
         # TODO: HOW ARE TEST INSTANCES CHOSEN AND WHAT ARE THEIR IDS?
         test_instances = test_instance_explainer.get_test_instances()
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
-
-    def apply_categorical_mapping(self, instances, is_dataframe=False):
-        """
-        Apply categorical mapping to instances.
-
-        Args:
-            instances (dict or DataFrame): The instances to apply categorical mapping on.
-            is_dataframe (bool): Flag to indicate if the instances are in a DataFrame. Default is False.
-
-        Returns:
-            The instances with applied categorical mapping.
-        """
-        if self.categorical_mapping is None:
-            if is_dataframe:
-                return instances.astype(float)
-            else:
-                return instances
-
-        if is_dataframe:
-            # Iterate only over columns that have a categorical mapping.
-            for column_index, column_mapping in self.categorical_mapping.items():
-                column_name = instances.columns[column_index]
-                old_values_copy = int(instances[column_name].values)
-                if column_name in instances.columns:
-                    # Prepare a mapping dictionary for the current column.
-                    mapping_dict = {i: category for i, category in enumerate(column_mapping)}
-                    # Replace the entire column values based on mapping_dict.
-                    instances[column_name] = instances[column_name].replace(mapping_dict)
-                    if old_values_copy == instances[column_name].values[0]:
-                        raise ValueError(f"Column {column_name} was not replaced with categorical mapping.")
-        else:
-            for i, (feature_name, val) in enumerate(instances.items()):
-                if i in self.categorical_mapping:
-                    instances[feature_name] = self.categorical_mapping[i][val]
-
-        return instances
-
-    def load_data_instances(self):
-        diverse_instances = self.conversation.get_var("diverse_instances").contents
-        instance_results = []
-        for instance in diverse_instances:
-            instance_pd = pd.DataFrame(instance['values'], index=[0])
-            model_prediction = self.conversation.get_var("model_prob_predict").contents(instance_pd)[0]
-            id = instance['id']
-            instance_result_dict = {feature_name: val for feature_name, val in instance['values'].items()}
-            instance_result_dict = self.apply_categorical_mapping(instance_result_dict)
-            true_label = self.conversation.get_var("dataset").contents['y'].loc[id]
-            instance_results.append((id, instance_result_dict, model_prediction, true_label))
-        self.data_instances = instance_results
-
-    def load_test_instances(self):
-        test_instances = self.conversation.get_var("test_instances").contents
-        instance_results = {}
-        for instance_id, instances_dict in test_instances.items():
-            new_instances_dict = {}
-            for complexity_string, instance_df in instances_dict.items():
-                modified_df = self.apply_categorical_mapping(instance_df, is_dataframe=True)
-                new_instances_dict[complexity_string] = modified_df
-            instance_results[instance_id] = new_instances_dict
-        self.test_instances = instance_results
 
     def load_model(self, filepath: str):
         """Loads a model.

@@ -205,3 +205,15 @@ class FeatureStatisticsExplainer:
         plt.ylabel("Density")
         plt.legend()
         plt.show()
+
+    def get_feature_ranges(self):
+        """
+        Return the feature ranges for all features in the dataset, either min, max for numerical features or
+        the unique values for categorical features.
+        """
+        feature_ranges = {}
+        for feature_name in self.feature_names:
+            if feature_name in self.numerical_features:
+                feature_ranges[feature_name] = (self.data[feature_name].min(), self.data[feature_name].max())
+            else:
+                feature_ranges[feature_name] = self.data[feature_name].unique()
