@@ -5,10 +5,10 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from experiment_analysis.calculations import calculate_user_score
+from experiment_analysis.calculations import calculate_user_score, get_user_feedback_per_data_point
 from experiment_analysis.filter_out_participants import remove_outliers_by_attention_check, remove_outliers_by_time
 from experiment_analysis.plot_overviews import plot_chatbot_feedback, plot_understanding_over_time, \
-    plot_asked_questions_per_user, plot_understanding_with_questions
+    plot_asked_questions_per_user, plot_understanding_with_questions, plot_question_raking
 
 POSTGRES_USER = "postgres"
 POSTGRES_PASSWORD = "example"
@@ -106,6 +106,7 @@ def main():
     event_df = event_df[event_df["user_id"].isin(remaining_users)]
 
     score_df = pd.DataFrame(columns=["user_id", "study_group", "score"])
+    final_test_feedback_df = pd.DataFrame(columns=["user_id", "study_group", "feedback"])
     print("Remaining users: ", remaining_users)
 
     exit_feedback_answers_dicts = []
@@ -115,9 +116,10 @@ def main():
         study_group = user_df[user_df["id"] == user_id]["study_group"].values[0]
         user_events = event_df[event_df["user_id"] == user_id]
 
-        # Get user score
+        # Extract user predictions and feedback
         user_predictions = user_events[
             (user_events["action"] == "user_prediction") & (user_events["source"] == "final-test")]
+        user_final_test_feedback_per_data_point = get_user_feedback_per_data_point(user_predictions)
         score = calculate_user_score(user_predictions)
         user_predictions_over_time = user_events[
             (user_events["action"] == "user_prediction") & (user_events["source"] == "test")]
@@ -133,7 +135,10 @@ def main():
         except KeyError:
             user_predictions_over_time_list_dict[study_group] = [user_predictions_over_time]
         score_df = append_user_data_to_df(score_df, user_id, study_group, score, "score")
-
+        if not len(user_final_test_feedback_per_data_point) == 0:
+            final_test_feedback_df = append_user_data_to_df(final_test_feedback_df, user_id, study_group,
+                                                            user_final_test_feedback_per_data_point, "feedback")
+        print(final_test_feedback_df)
         # Get User Chatbot Feedback from interactive group
         if study_group == "interactive":
             exit_questionnaire_dict = json.loads(user_df[user_df["id"] == user_id]["questionnaires"].values[0][3])[
@@ -141,17 +146,21 @@ def main():
             exit_feedback_answers_dicts.append(exit_questionnaire_dict)
 
     # plot_chatbot_feedback(exit_feedback_answers_dicts)
+    # Save final_test_feedback_df["score"] as csv
+    final_test_feedback_df['score'].to_csv("final_test_feedback.csv", index=False)
     plot_data(time_df, "study_group", "total_time", 'Boxplot of Time Spent per Study Group')
     # plot_data(score_df, "study_group", "score", 'Barplot of User Scores per Study Group')
     user_end_score_dict = score_df.groupby("user_id")["score"].max().to_dict()
     # plot_understanding_over_time(user_predictions_over_time_list_dict['static'], "static", user_end_score_dict)
     understanding_matrix, user_ids_u = plot_understanding_over_time(user_predictions_over_time_list_dict['interactive'],
-                                                                  "interactive", user_end_score_dict)
+                                                                    "interactive", user_end_score_dict)
 
     questions_matrix, user_ids_q = plot_asked_questions_per_user(user_questions_over_time_list_dict['interactive'],
-                                                               user_end_score_dict)
+                                                                 user_end_score_dict)
 
     plot_understanding_with_questions(understanding_matrix, questions_matrix, user_ids_u, user_ids_q)
+
+    plot_question_raking(questions_matrix)
 
 
 if __name__ == "__main__":
