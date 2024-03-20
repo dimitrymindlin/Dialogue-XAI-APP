@@ -7,6 +7,8 @@ import io
 import matplotlib.pyplot as plt
 import shap
 from matplotlib.ticker import FuncFormatter
+
+from data.response_templates.ceteris_paribus_template import cp_categorical_template, cp_numerical_template
 from explain.actions.utils import gen_parse_op_text
 
 
@@ -83,6 +85,10 @@ def explain_local_feature_importances(conversation,
         return top_features_dict, 1
 
 
+def get_fi_follow_up(conversation, data, parse_op, regen, template_manager):
+    pass
+
+
 def explain_global_feature_importances(conversation, as_plot=True):
     global_shap_explainer = conversation.get_var('global_shap').contents
     # get shap explainer
@@ -136,6 +142,10 @@ def explain_feature_importances_as_plot(conversation,
     labels = list(explanation_dict.keys())
     values = [val[0] for val in explanation_dict.values()]
 
+    # get current attribute values
+    tm = conversation.get_var('template_manager').contents
+    df_with_feature = tm.decode_numeric_columns_to_names(data)
+
     # Reverse the order
     labels = labels[::-1]
     values = values[::-1]
@@ -144,8 +154,9 @@ def explain_feature_importances_as_plot(conversation,
     template_manager = conversation.get_var('template_manager').contents
     feature_name_to_display_name = template_manager.feature_display_names.feature_name_to_display_name
     for feature, display_name in feature_name_to_display_name.items():
+        feature_value_name = df_with_feature[feature].iloc[0]
         if feature in labels:
-            labels[labels.index(feature)] = display_name
+            labels[labels.index(feature)] = f"{display_name} ({feature_value_name})"
 
     fig, ax = plt.subplots(figsize=(10, 6))
     bars = ax.barh(labels, values, color=['red' if v < 0 else 'blue' for v in values])
@@ -284,31 +295,51 @@ def explain_feature_statistic(conversation,
     return explanation
 
 
-def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name):
-    def write_tipping_point_cp():
+def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name, opposite_class, as_text=False):
+    def write_tipping_point_cp_categorical(feature_id):
         ### Simplified Text version
-        x_flip_value = ceteris_paribus_exp.get_simplified_explanation(data, feature_name)
+        x_flip_value_list = ceteris_paribus_exp.get_feature_values_flipping_prediction(data, feature_name)
         """if x_flip_value is None:
             return f"For the given {instance_type_name}, variations only in <b>{feature_name}</b> have no impact on the model prediction and cannot change it to", 1"""
         # get current feature value
-        current_feature_value = data[feature_name].values[0]
+        explanations = []
+        for x_flip_value in x_flip_value_list:
+            x_flip_categorical_value = ceteris_paribus_exp.categorical_mapping[feature_id][x_flip_value]
+            explanations.append(x_flip_categorical_value)
+        return explanations
+
+    def write_tipping_point_cp_numerical():
+        x_flip_value_list = ceteris_paribus_exp.get_feature_values_flipping_prediction(data, feature_name)
+        if len(x_flip_value_list) == 0:
+            return None, None
+        if isinstance(x_flip_value_list, list):
+            x_flip_value = x_flip_value_list[0]  # TODO: What if multiple x tipping points exist?
+        current_feature_value = data[feature_name].iloc[0]
         # get the difference
         difference = current_feature_value - x_flip_value
-        # get the sign
         sign = "decreased" if difference > 0 else "increased"
-        # get the sentence
-        explanation_text = f"If the value of <b>{feature_name}</b> is {sign} to {x_flip_value}, the prediction would change to"
-        # return explanation_text, 1
+        return sign, x_flip_value
 
     ceteris_paribus_exp = conversation.get_var('ceteris_paribus').contents
-    # Plotly figure
-    fig = ceteris_paribus_exp.get_explanation(data, feature_name)
+    feature_id = data.columns.get_loc(feature_name)
+    if as_text:
+        # Check if categorical or numerical
+        if feature_id in ceteris_paribus_exp.categorical_mapping.keys():
+            tipping_categories = write_tipping_point_cp_categorical(feature_id)
+            return cp_categorical_template(feature_name, opposite_class, tipping_categories)
+        else:
+            sign, x_flip_value = write_tipping_point_cp_numerical()
+            return cp_numerical_template(feature_name, opposite_class, sign, x_flip_value,
+                                         template_manager=conversation.get_var('template_manager').contents)
+
     """# plot the figure
     pyo.plot(fig, filename='ceteris_paribus.html', auto_open=True)"""
 
+    # Plotly figure
+    fig = ceteris_paribus_exp.get_explanation(data, feature_name)
+    fig.show()
     # Convert the figure to PNG as a BytesIO object
     image_base64 = fig_to_base64(fig)
-    feature_id = data.columns.get_loc(feature_name)
     if feature_id in ceteris_paribus_exp.categorical_mapping.keys():
         axis = 'X-axis'
     else:
