@@ -5,21 +5,13 @@ import pandas as pd
 import pickle
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
+
+from data import load_config
 from ml_utilities import label_encode_and_save_classes, construct_pipeline, train_model
 import os
 
 config_path = "./data/sf_model_config.json"
 save_path = "./data/sf_crime"
-
-# create folder if it does not exist
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
-
-# Function to load configuration
-def load_config(config_path):
-    with open(config_path, 'r') as file:
-        return json.load(file)
 
 
 # Updated dataset-specific preprocessing function
