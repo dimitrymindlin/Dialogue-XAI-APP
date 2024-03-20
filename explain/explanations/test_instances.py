@@ -24,6 +24,7 @@ class TestInstances:
     def __init__(self,
                  data, model, mega_explainer, experiment_helper, diverse_instance_ids,
                  actionable_features,
+                 max_features_to_vary=2,
                  cache_location: str = "./cache/test-instances.pkl"):
         """
 
@@ -39,6 +40,7 @@ class TestInstances:
         self.experiment_helper = experiment_helper
         self.actionable_features = actionable_features
         self.test_instances = load_cache(cache_location)
+        self.max_features_to_vary = max_features_to_vary
 
     def get_random_instance(self):
         return self.data.sample(1)
@@ -64,14 +66,13 @@ class TestInstances:
         for instance_id in self.diverse_instance_ids:
             # Get the instance as a pandas dataframe
             original_instance = self.data.loc[instance_id].to_frame().transpose()
-            test_instance = self.get_random_instance()
             if not close_instances:
+                test_instance = self.get_random_instance()
                 test_instances[original_instance.index[0]] = {"most_complex_instance": test_instance,
                                                               "least_complex_instance": test_instance,
                                                               "easy_counterfactual_instance": test_instance,
                                                               "hard_counterfactual_instance": test_instance}
             else:
-
                 # Get model prediction
                 original_class_prediction = np.argmax(self.model.predict_proba(original_instance)[0])
                 # Get the feature importances
@@ -79,10 +80,15 @@ class TestInstances:
                     original_class_prediction]
                 # get a list of similar instances
                 similar_instances = [
-                    self.experiment_helper.get_similar_instance(original_instance, self.model, self.actionable_features)
+                    self.experiment_helper.get_similar_instance(original_instance, self.model, self.actionable_features,
+                                                                max_features_to_vary=self.max_features_to_vary)
                     for _
                     in range(instance_count)]
                 similar_instances = pd.concat(similar_instances)
+                # Only keep instances where the model prediction is correct
+                similar_instances = similar_instances[
+                    similar_instances.apply(lambda x: np.argmax(self.model.predict_proba(x.to_frame().transpose())[0]) ==
+                                                     original_class_prediction, axis=1)]
                 # Sort instances by complexity
                 similar_instances = self.sort_instances_by_complexity(original_instance, similar_instances,
                                                                       feature_importances,
@@ -147,6 +153,10 @@ class TestInstances:
             original_instance = original_instance.transpose()
         if new_instance.shape[0] != 1:
             new_instance = new_instance.transpose()
+
+        # Make sure the instances have the same columns and all values are floats
+        original_instance = original_instance.astype('float64')
+        new_instance = new_instance.astype('float64')
 
         # Calculate similarity between original and new instance
         similarity = cosine_similarity(original_instance, new_instance)[0][0]  # cos similarity, 0 = different, 1 = same
