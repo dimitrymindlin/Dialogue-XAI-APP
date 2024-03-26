@@ -179,18 +179,22 @@ def run_action_by_id(conversation: Conversation,
         pass
     if question_id == 11:
         # What attributes must be present or absent to guarantee this prediction?
-        explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
-                                                                          template_manager)
-        result_text = f"The following group of attributes definitely predicts the current outcome: <br>"
-        result_text = result_text + explanation + "." + "<br> That means that other attributes can change and the prediction will still be the same."
-        return result_text
+        explanation, success = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
+                                                                                   template_manager)
+        if success:
+            result_text = f"The following group of attributes definitely predicts the current outcome: <br>"
+            result_text = result_text + explanation + "<br> That means that other attributes can change and the prediction will still be the same."
+            return result_text
+        else:
+            return "I'm sorry, I couldn't find a group of attributes that guarantees the current prediction."
+
     if question_id == 12:
         # How does the prediction change when this attribute changes? Ceteris Paribus
         # explanation = explain_ceteris_paribus(conversation, data, parse_op, regen)
         return f"This is a mocked answer to your question with id {question_id}."
     if question_id == 13:
         # 13;How common is the current values for this attribute?
-        explanation = explain_feature_statistic(conversation, feature_name)
+        explanation = explain_feature_statistic(conversation, template_manager, feature_name, as_plot=True)
         return explanation
     if question_id == 20:
         # 20;Why is this instance predicted as [current prediction]?
@@ -275,7 +279,7 @@ def compute_explanation_report(conversation,
     anchors_string = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
                                                                          template_manager)
 
-    feature_statistics = explain_feature_statistic(conversation, as_string=False)
+    feature_statistics = explain_feature_statistic(conversation, template_manager, as_plot=True)
     # map feature names to display names
     if feature_display_name_mapping is not None:
         feature_statistics = {feature_display_name_mapping.get(key): value for key, value in
