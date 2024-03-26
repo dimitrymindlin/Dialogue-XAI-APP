@@ -66,7 +66,7 @@ class TabularAnchor(Explanation):
         if self.mode == "tabular":
             output = self.explainer.explain_instance(data_x[0],
                                                      self.model.predict,
-                                                     threshold=0.95,
+                                                     threshold=0.8,
                                                      max_anchor_size=3)
             return output
 
@@ -121,6 +121,8 @@ class TabularAnchor(Explanation):
                                             ids_to_regenerate=ids_to_regenerate,
                                             save_to_cache=save_to_cache)
         exp = explanation[key]
+        if len(exp.exp_map['feature']) == 0:
+            return "No anchor explanation could be generated for this instance.", False
         response = anchor_template(exp, template_manager)
 
-        return response
+        return response, True
