@@ -20,8 +20,7 @@ import gin
 
 from create_experiment_data.experiment_helper import ExperimentHelper
 from data.response_templates.template_manager import TemplateManager
-from explain.explanations.shap_global_explainer import ShapGlobalExplainer
-from explain.explanations.test_instances import TestInstances
+from create_experiment_data.test_instances import TestInstances
 from explain.action import run_action, run_action_by_id, compute_explanation_report
 from explain.actions.explanation import explain_cfe_by_given_features
 from explain.conversation import Conversation
@@ -75,7 +74,8 @@ class ExplainBot:
                  actionable_features=None,
                  instance_type_naming: str = "instance",
                  feature_units_mapping=None,
-                 encoded_col_mapping_path: dict = None, ):
+                 encoded_col_mapping_path: dict = None,
+                 feature_ordering: List[str] = None, ):
         """The init routine.
 
         Arguments:
@@ -136,6 +136,7 @@ class ExplainBot:
         self.actionable_features = actionable_features
         self.instance_type_naming = instance_type_naming
         self.encoded_col_mapping_path = encoded_col_mapping_path
+        self.feature_ordering = feature_ordering
 
         # A variable used to help file uploads
         self.manual_var_filename = None
@@ -206,7 +207,8 @@ class ExplainBot:
         helper = ExperimentHelper(self.conversation,
                                   self.categorical_mapping,
                                   self.categorical_features,
-                                  template_manager)
+                                  template_manager,
+                                  self.feature_ordering)
         self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
 
         # Load the explanations
@@ -254,14 +256,15 @@ class ExplainBot:
         correctness_string = f"{correct_counter} out of {total_counter}"
         return correctness_string
 
-    def get_next_instance_triple(self, train=True, return_probability=False):
+    def get_next_instance_triple(self, instance_type, return_probability=False):
         """
         Returns the next instance in the data_instances list if possible.
-        param train: Whether to return a training instance or a test instance
+        param instance_type: type of instance to return, can be train, test or final_test
         """
         experiment_helper = self.conversation.get_var('experiment_helper').contents
-        self.current_instance, counter, self.current_instance_type = experiment_helper.get_next_instance(train=train,
-                                                                                                         return_probability=return_probability)
+        self.current_instance, counter, self.current_instance_type = experiment_helper.get_next_instance(
+            instance_type=instance_type,
+            return_probability=return_probability)
         return self.current_instance, counter
 
     def get_study_group(self):
@@ -288,6 +291,28 @@ class ExplainBot:
         """
         return self.feature_units_mapping
 
+    def get_feature_names(self):
+        template_manager = self.conversation.get_var("template_manager").contents
+        feature_display_names = template_manager.feature_display_names.feature_name_to_display_name
+        feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
+        original_feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
+
+        # Sort
+        if self.feature_ordering is not None:
+            # Sort feature names by feature_ordering
+            feature_names = sorted(feature_names, key=lambda k: self.feature_ordering.index(k))
+        else:
+            feature_names = sorted(feature_names)
+
+        # Map feature names to their original IDs and display names, if available
+        feature_names_id_mapping = [
+            {'id': original_feature_names.index(feature_name),
+             'feature_name': feature_display_names.get(feature_name, feature_name)}
+            for feature_name in feature_names
+        ]
+
+        return feature_names_id_mapping
+
     def init_loaded_var(self, name: bytes):
         """Inits a var from manual load."""
         self.manual_var_filename = name.decode("utf-8")
@@ -297,17 +322,6 @@ class ExplainBot:
         Returns the questions and attributes and feature names for the current dataset.
         """
         question_pd = pd.read_csv(self.conversation.question_bank_path, delimiter=";")
-        # Handle Feature Names
-        # Get dispplay feature names
-        template_manager = self.conversation.get_var("template_manager").contents
-        feature_display_names = template_manager.feature_display_names.feature_name_to_display_name
-        # Create list of dicts {id: feature_name} where feature_name is the display name
-        feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
-        feature_names = [{'id': feature_id, 'feature_name': feature_display_names[feature_name]} for
-                         feature_id, feature_name in
-                         enumerate(feature_names)]
-        # sort feature names by feature_name
-        feature_names = sorted(feature_names, key=lambda k: k['feature_name'])
 
         # Replace "instance" in questions with instance_type_naming
         for i, row in question_pd.iterrows():
@@ -320,7 +334,6 @@ class ExplainBot:
             "feature_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in
                                   question_pd[question_pd["question_type"] == "feature"].iterrows()],
             # list(question_pd[question_pd["question_type"] == "feature"][["q_id", "paraphrased"]].values),
-            "feature_names": feature_names,
         }
         return answer_dict
 
@@ -435,7 +448,6 @@ class ExplainBot:
                                                 self.conversation.get_var("experiment_helper").contents,
                                                 diverse_instance_ids=diverse_instance_ids,
                                                 actionable_features=self.actionable_features)
-        # TODO: HOW ARE TEST INSTANCES CHOSEN AND WHAT ARE THEIR IDS?
         test_instances = test_instance_explainer.get_test_instances()
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
 
