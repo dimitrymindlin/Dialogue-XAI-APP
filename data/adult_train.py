@@ -30,6 +30,8 @@ def map_education_levels(data):
         return -1
 
     data['Education.num'] = data['Education.num'].apply(transform_num)
+    # Rename col to 'Education'
+    data.rename(columns={'Education.num': 'Education'}, inplace=True)
 
 
 def standardize_column_names(data):
@@ -47,9 +49,10 @@ def add_work_life_balance(data):
     return mapping
 
 
-def clean_data(data):
-    data[data == '?'] = np.nan
-    for col in ['Workclass', 'Native.country', 'Age']:
+def fil_nans_with_mode(data):
+    cols_with_nan_names_list = data.columns[data.isna().any()].tolist()
+    data[data == '?'] = np.nan  # Replace '?' with NaN
+    for col in cols_with_nan_names_list:
         data[col].fillna(data[col].mode()[0], inplace=True)
 
     # Check outliars in work hours (working with std dev)
@@ -62,7 +65,7 @@ def clean_data(data):
 
 def map_ordinal_columns(data, config):
     for col, mapping in config["ordinal_mapping"].items():
-        if col == "WorkLifeBalance":
+        if col in ["WorkLifeBalance", "Education"]:
             continue
         data[col] = data[col].map(mapping)
 
@@ -88,7 +91,16 @@ def bin_workclass_col(data):
 
     # Apply the mapping to the "Workclass" column
     data["Workclass"] = data["Workclass"].map(workclass_map)
+    return data
 
+
+def map_race_col(data):
+    # print counts of unique race values
+    print(data["Race"].value_counts())
+    # Only take "white" as race and remove the rest
+    data = data[data["Race"] == "White"]
+    # Drop the "Race" column
+    data.drop(columns=["Race"], inplace=True)
     return data
 
 
@@ -116,7 +128,6 @@ def map_occupation_col(data):
     data['Occupation'] = data['Occupation'].map(profession_to_subgroup)
     return data
 
-
 def preprocess_marital_status(data):
     data["Marital.status"] = data["Marital.status"].replace(['Never-married', 'Divorced', 'Separated', 'Widowed'],
                                                             'Single')
@@ -125,24 +136,30 @@ def preprocess_marital_status(data):
 
 
 def preprocess_data_specific(data, config):
+    if "drop_columns" in config:
+        data.drop(columns=config["drop_columns"], inplace=True)
+
     standardize_column_names(data)
+
     # Following functions assume capitalized col names
     config["ordinal_mapping"]['WorkLifeBalance'] = add_work_life_balance(data)
-    map_ordinal_columns(data, config)
-    data = clean_data(data)
-
     map_education_levels(data)
+    map_ordinal_columns(data, config)
     preprocess_marital_status(data)
     bin_age_column(data)
-    bin_workclass_col(data)
-    map_occupation_col(data)
+    data = bin_workclass_col(data)
+    data = map_occupation_col(data)
+    data = map_race_col(data)
+    data = fil_nans_with_mode(data)
+
+    # Check which column has "Other" values
+    for col in data.columns:
+        if "Other" in data[col].unique():
+            print(f"Column '{col}' has 'Other' values.")
 
     target_col = config["target_col"]
     X = data.drop(columns=[target_col])
     y = data[target_col]
-
-    if "drop_columns" in config:
-        X.drop(columns=config["drop_columns"], inplace=True)
 
     if "rename_columns" in config:
         X = X.rename(columns=config["rename_columns"])
@@ -176,6 +193,7 @@ def main():
 
     # Check if there are nan values in the data and raise an error if there are
     if X_train.isna().sum().sum() > 0:
+        print(X_train.isna().sum())
         raise ValueError("There are NaN values in the training data.")
 
     # Copy the config file to the save path
