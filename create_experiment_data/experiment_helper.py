@@ -9,15 +9,17 @@ class ExperimentHelper:
     def __init__(self, conversation,
                  categorical_mapping,
                  categorical_features,
-                 template_manager):
+                 template_manager,
+                 feature_ordering=None):
         self.conversation = conversation
         self.categorical_mapping = categorical_mapping
         self.categorical_features = categorical_features
         self.template_manager = template_manager
-        self.instances = {"data": [], "test": {}}
+        self.instances = {"train": [], "test": {}}
         self.current_instance = None
         self.current_instance_type = None
-        self.instance_counters = {"train": 0, "test": 0}
+        self.instance_counters = {"train": 0, "test": 0, "final_test": 0}
+        self.feature_ordering = feature_ordering
 
     def load_instances(self):
         self._load_data_instances()
@@ -25,33 +27,79 @@ class ExperimentHelper:
 
     def _load_data_instances(self):
         diverse_instances = self.conversation.get_var("diverse_instances").contents
-        self.instances["data"] = [self._prepare_instance_data(instance) for instance in diverse_instances]
+        self.instances["train"] = [self._prepare_instance_data(instance) for instance in diverse_instances]
 
     def _load_test_instances(self):
         test_instances = self.conversation.get_var("test_instances").contents
         self.instances["test"] = {instance_id: self._process_test_instances(instances_dict)
                                   for instance_id, instances_dict in test_instances.items()}
 
-    def get_next_instance(self, train=True, return_probability=False):
-        if train:
-            if not self.instances["data"]:
-                self._load_data_instances()
-            instance, counter, probability = self._get_training_instance(return_probability)
-            self.current_instance_type = "train"
-        else:
-            if not self.instances["test"]:
-                self._load_test_instances()
-            instance_id, instance, counter = self._get_test_instance()
-            true_label = self.conversation.get_var("dataset").contents['y'].loc[instance_id]
-            true_label_name = self.conversation.class_names[true_label]
+    def _convert_values_to_string(self, instance):
+        for key, value in instance.items():
+            # Check if the value is a dictionary (to handle 'current' and 'old' values)
+            if isinstance(value, dict):
+                # Iterate through the inner dictionary and convert its values to strings
+                for inner_key, inner_value in value.items():
+                    # Turn floats to strings, converting to int first if no decimal part
+                    if isinstance(inner_value, float) and inner_value.is_integer():
+                        inner_value = int(inner_value)
+                    value[inner_key] = str(inner_value)
+            else:
+                # Handle non-dictionary values as before
+                if isinstance(value, float) and value.is_integer():
+                    value = int(value)
+                instance[key] = str(value)
+
+    def _make_displayable_instance(self, instance):
+        # Round instance features
+        self._round_instance_features(instance[1])
+        self.template_manager.apply_categorical_mapping(instance[1])
+        # Order instance features and values according to the feature ordering
+        if self.feature_ordering is not None:
+            # Order instance features according to the feature ordering
+            instance_features = instance[1]
+            instance_features = {feature: instance_features[feature] for feature in self.feature_ordering}
+            instance = (instance[0], instance_features, instance[2], instance[3])
+        else:  # alphabetically order features
+            instance = (instance[0], dict(sorted(instance[1].items())), instance[2], instance[3])
+        # Make sure all values are strings
+        self._convert_values_to_string(instance[1])
+        # Make display feature names for the instance keys
+        new_instance = self.template_manager.replace_feature_names_by_display_names(instance[1])
+        instance = (instance[0], new_instance, instance[2], instance[3])
+        return instance
+
+    def get_next_instance(self, instance_type, return_probability=False):
+        old_instance = None
+        load_instance_methods = {"train": self._load_data_instances, "test": self._load_test_instances}
+        get_instance_methods = {
+            "train": lambda: self._get_training_instance(return_probability),
+            "test": lambda: self._get_test_instance(self.current_instance[0] if self.current_instance else None),
+            "final_test": self._get_final_test_instance
+        }
+
+        if not self.instances.get(instance_type, []):
+            load_instance_methods.get(instance_type, lambda: None)()
+
+        if instance_type in ["test", "final_test"]:
+            instance_id, instance, counter = get_instance_methods[instance_type]()
+            old_instance = self.current_instance
+            predicted_label_index = np.argmax(
+                self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance, index=[0])))
+            true_label_name = self.conversation.class_names[predicted_label_index]
             probability = None
             instance = (instance_id, instance, probability, true_label_name)
-            self.current_instance_type = "test"
+        else:  # "train"
+            instance, counter, probability = get_instance_methods[instance_type]()
 
-        if instance:
-            self._round_instance_features(instance[1])
-            self.template_manager.apply_categorical_mapping(instance[1])
-            self.current_instance = instance
+        self.current_instance_type = instance_type
+        instance = self._make_displayable_instance(instance)
+
+        if old_instance and not instance_type == "final_test":
+            for key, value in instance[1].items():
+                if value != old_instance[1][key]:
+                    instance[1][key] = {"old": old_instance[1][key], "current": value}
+        self.current_instance = instance
         return self.current_instance, counter, self.current_instance_type
 
     def _prepare_instance_data(self, instance):
@@ -65,25 +113,38 @@ class ExperimentHelper:
         # Example process for test instances
         return {comp: pd.DataFrame(data).to_dict('records')[0] for comp, data in instances_dict.items()}
 
-    def _get_training_instance(self, return_probability):
-        if not self.instances["data"]:
-            return None, self.instance_counters["train"]
-        self.current_instance = self.instances["data"].pop(0)
-        self.instance_counters["train"] += 1
+    def _get_training_instance(self, return_probability, instance_type="train"):
+        if not self.instances[instance_type]:
+            return None, self.instance_counters[instance_type]
+        self.current_instance = self.instances[instance_type][self.instance_counters[instance_type]]
+        # Increment the counter for the next call.
+        self.instance_counters[instance_type] += 1
         if return_probability:
-            return self.current_instance, self.instance_counters["train"], self.current_instance[2]
-        return self.current_instance, self.instance_counters["train"]
+            return self.current_instance, self.instance_counters[instance_type], self.current_instance[2]
+        return self.current_instance, self.instance_counters[instance_type]
 
-    def _get_test_instance(self):
+    def _get_test_instance(self, train_instance_id, instance_type="test"):
+        if not self.instances[instance_type]:
+            return None, self.instance_counters[instance_type]
+
+        instance_key = "least_complex_instance" if self.instance_counters[
+                                                       instance_type] % 2 == 0 else "easy_counterfactual_instance"
+        test_instances_dict = self.instances[instance_type][train_instance_id]
+        instance = test_instances_dict[instance_key]
+        self.instance_counters[instance_type] += 1
+        return train_instance_id, instance, self.instance_counters[instance_type]
+
+    def _get_final_test_instance(self, instance_type="final_test"):
         if not self.instances["test"]:
             return None, self.instance_counters["test"]
 
-        instance_key = "least_complex_instance" if self.instance_counters[
-                                                       "test"] % 2 == 0 else "easy_counterfactual_instance"
-        test_id, test_instances_dict = self.instances["test"].popitem()
+        instance_key = "most_complex_instance"
+        # Get final test instance based on train instance id
+        train_instance_id = self.instances["train"][self.instance_counters[instance_type]][0]
+        test_instances_dict = self.instances["test"][train_instance_id]
         instance = test_instances_dict[instance_key]
-        self.instance_counters["test"] += 1
-        return test_id, instance, self.instance_counters["test"]
+        self.instance_counters[instance_type] += 1
+        return train_instance_id, instance, self.instance_counters[instance_type]
 
     def _round_instance_features(self, features):
         for feature, value in features.items():
@@ -166,10 +227,18 @@ class ExperimentHelper:
 
                 tmp_instance.at[tmp_instance.index[0], feature_name] = random_change
 
-            # Check if prediction stays the same
-            # if model.predict(tmp_instance)[0] == model.predict(original_instance)[0]:
-            result_instance = tmp_instance.copy()
-            changed_features += 1
+            # After modifying the feature, check if it has actually changed compared to the original_instance
+            if not tmp_instance.at[tmp_instance.index[0], feature_name] == original_instance.at[
+                original_instance.index[0], feature_name]:
+                result_instance = tmp_instance.copy()
+                changed_features += 1  # Increment only if the feature has actually changed
+            else:
+                # Optionally, you can add logging here to indicate no change was made
+                continue  # Skip to the next feature if no change was detected
+
+            # Removed the redundant increment of changed_features and assignment of result_instance here
+
             if changed_features == max_features_to_vary:
                 break
+
         return result_instance
