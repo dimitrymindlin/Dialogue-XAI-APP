@@ -41,7 +41,7 @@ class FeatureStatisticsExplainer:
             result_text += f"The value <b>{value}</b> occurs <b>{frequency}</b> times.<br>"
         return result_text"""
 
-    def get_numerical_statistics(self, feature_name, as_string=True, as_plot=False):
+    def get_numerical_statistics(self, feature_name, template_manager, as_string=True, as_plot=False):
         """
         Returns a string with the mean, standard deviation, minimum and maximum values of a numerical feature.
         If as_string is False, returns a tuple with the mean, standard deviation, minimum and maximum values.
@@ -62,7 +62,7 @@ class FeatureStatisticsExplainer:
         max_v = str(max_v).replace(".", ",")
         if not as_string:
             return mean, std, min_v, max_v
-        return feature_statistics_template(feature_name, mean, std, min_v, max_v, self.feature_units)
+        return feature_statistics_template(feature_name, mean, std, min_v, max_v, self.feature_units, template_manager)
 
     def get_categorical_frequencies_fig(self, value_counts, feature_name):
         """
@@ -128,20 +128,20 @@ class FeatureStatisticsExplainer:
             result_text += f"The value <b>{value}</b> occurs <b>{frequency}</b> times.<br>"
         return result_text
 
-    def get_single_feature_statistic(self, feature_name, as_string=True):
+    def get_single_feature_statistic(self, feature_name, template_manager, as_string=True):
         # Check if feature is numerical or categorical
         if feature_name in self.numerical_features:
-            return self.get_numerical_statistics(feature_name, as_string=as_string)
+            return self.get_numerical_statistics(feature_name, template_manager, as_string=as_string)
         else:
-            as_plot = True if not as_string else False
-            return self.get_categorical_statistics(feature_name, as_string=as_string, as_plot=as_plot)
+            return self.get_categorical_statistics(feature_name, as_string=as_string, as_plot=True)
 
     def get_all_feature_statistics(self, as_string=True):
         feature_stats = {}
         for feature_name in self.feature_names:
             # Make dict of feature names to feature statistics (min, max, mean)
             if feature_name in self.numerical_features:
-                mean, _, min_v, max_v = self.get_numerical_statistics(feature_name, as_string=as_string)
+                mean, _, min_v, max_v = self.get_numerical_statistics(feature_name, template_manager,
+                                                                      as_string=as_string)
                 feature_stats[feature_name] = {"mean": mean, "min": min_v, "max": max_v}
             else:
                 raise NotImplementedError("Categorical feature statistics are not implemented yet.")

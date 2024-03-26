@@ -275,22 +275,28 @@ def explain_anchor_changeable_attributes_without_effect(conversation, data, pars
 
 
 def explain_feature_statistic(conversation,
+                              template_manager,
                               feature_name=None,
-                              as_string=False):
+                              as_plot=False):
     """
     Get feature statistics explanation for a single feature or all features.
     """
     feature_stats_exp = conversation.get_var('feature_statistics_explainer').contents
+
     if feature_name is not None:
-        explanation = feature_stats_exp.get_single_feature_statistic(feature_name, as_string=as_string)
+        explanation = feature_stats_exp.get_single_feature_statistic(feature_name, template_manager,
+                                                                     as_string=True)
     else:
-        explanation = feature_stats_exp.get_all_feature_statistics(as_string=as_string)
-    if not as_string:
+        explanation = feature_stats_exp.get_all_feature_statistics(as_string=True)
+
+    # If as plot and not numerical, return plot
+    if as_plot and feature_name in template_manager.encoded_col_mapping.keys():
+        feature_name = template_manager.get_feature_display_name_by_name(feature_name)
         # Convert the figure to PNG as a BytesIO object
         image_base64 = fig_to_base64(explanation)
         # Create the HTML string with the base64 image
         html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                      f'<span>Distribution of the possible values for {feature_name}.</span>'
+                      f'<span>Distribution of the possible values for <b>{feature_name}</b>.</span>'
         return html_string
     return explanation
 
@@ -326,7 +332,8 @@ def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name
         # Check if categorical or numerical
         if feature_id in ceteris_paribus_exp.categorical_mapping.keys():
             tipping_categories = write_tipping_point_cp_categorical(feature_id)
-            return cp_categorical_template(feature_name, opposite_class, tipping_categories)
+            return cp_categorical_template(feature_name, opposite_class, tipping_categories,
+                                           template_manager=conversation.get_var('template_manager').contents)
         else:
             sign, x_flip_value = write_tipping_point_cp_numerical()
             return cp_numerical_template(feature_name, opposite_class, sign, x_flip_value,
