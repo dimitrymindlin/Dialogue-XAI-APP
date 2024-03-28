@@ -14,8 +14,17 @@ DATASET_NAME = "adult"
 config_path = f"./{DATASET_NAME}_model_config.json"
 save_path = f"./{DATASET_NAME}"
 
+# Mapping of categories to new integer representations
+category_to_int = {
+    'Primary Education': 1,
+    'Middle School': 2,
+    'High School': 3,
+    'Undergraduate Level': 4,
+    'Masters Level': 5,
+    'Doctorate/Prof Level': 6
+}
 
-def map_education_levels(data):
+"""def map_education_levels(data):
     new_bins = {
         0: ('Primary Education', [1, 2, 3, 4, 5]),
         1: ('Secondary Education', [6, 7, 8, 9]),
@@ -31,7 +40,63 @@ def map_education_levels(data):
 
     data['Education.num'] = data['Education.num'].apply(transform_num)
     # Rename col to 'Education'
-    data.rename(columns={'Education.num': 'Education'}, inplace=True)
+    data.rename(columns={'Education.num': 'Education'}, inplace=True)"""
+
+
+def map_education_to_int(education_str):
+    """
+    Maps an education string to its corresponding broad education category integer.
+
+    Parameters:
+    - education_str: A string representing the education level.
+
+    Returns:
+    - An integer representing the broad education category.
+    """
+    # Mapping of education levels to categories
+    category_map = {
+        'Preschool': 'Primary Education',
+        '1st-4th': 'Primary Education',
+        '5th-6th': 'Primary Education',
+        '7th-8th': 'Middle School',
+        '9th': 'High School',
+        '10th': 'High School',
+        '11th': 'High School',
+        '12th': 'High School',
+        'HS-grad': 'High School',
+        'Some-college': 'Undergraduate Level',
+        'Assoc-acdm': 'Undergraduate Level',
+        'Assoc-voc': 'Undergraduate Level',
+        'Bachelors': 'Undergraduate Level',
+        'Masters': 'Masters Level',
+        'Doctorate': 'Doctorate/Prof Level',
+        'Prof-school': 'Doctorate/Prof Level'
+    }
+
+    # Get the category from the education level
+    category = category_map.get(education_str, "Unknown")
+    return category
+
+
+def map_education_levels(df, config):
+    """
+    Updates the provided config dictionary with the education to integer mapping
+    based on the 'Education' column in the given DataFrame.
+
+    Parameters:
+    - df: pandas DataFrame containing an 'Education' column with education level strings.
+    - config: Dictionary where the mapping will be stored under "ordinal_mapping" > "Education".
+
+    Returns:
+    - The updated config dictionary.
+    """
+    # Apply the mapping function to the 'Education' column
+    df['Education'] = df['Education'].apply(map_education_to_int)
+
+    # Ensure "ordinal_mapping" exists in config and update it with the "Education" mapping
+    if "ordinal_mapping" not in config:
+        config["ordinal_mapping"] = {}
+    config["ordinal_mapping"]["Education"] = category_to_int
 
 
 def standardize_column_names(data):
@@ -40,8 +105,21 @@ def standardize_column_names(data):
 
 def add_work_life_balance(data):
     categories = ['Poor', 'Fair', 'Good', 'Excellent']
-    # Assign random categories for demonstration
-    data['WorkLifeBalance'] = np.random.choice(categories, size=len(data))
+    mean = categories.index('Fair')  # Mean set to index of 'Fair' for Gaussian center
+    std_dev = 0.75  # Standard deviation, adjust as needed for spread
+
+    # Generate indices from a Gaussian distribution
+    gaussian_indices = np.random.normal(loc=mean, scale=std_dev, size=len(data))
+
+    # Clip the indices to lie within the range of categories to avoid out-of-bounds indices
+    gaussian_indices_clipped = np.clip(gaussian_indices, 0, len(categories) - 1)
+
+    # Round indices to nearest integer to use as valid category indices
+    category_indices = np.round(gaussian_indices_clipped).astype(int)
+
+    # Assign categories based on Gaussian-distributed indices
+    data['WorkLifeBalance'] = [categories[i] for i in category_indices]
+
     # Create a mapping from string values to integers
     mapping = {category: i for i, category in enumerate(categories)}
     # Apply the mapping to the 'WorkLifeBalance' column
@@ -65,7 +143,7 @@ def fil_nans_with_mode(data):
 
 def map_ordinal_columns(data, config):
     for col, mapping in config["ordinal_mapping"].items():
-        if col in ["WorkLifeBalance", "Education"]:
+        if col in ["WorkLifeBalance"]:
             continue
         data[col] = data[col].map(mapping)
 
@@ -128,6 +206,7 @@ def map_occupation_col(data):
     data['Occupation'] = data['Occupation'].map(profession_to_subgroup)
     return data
 
+
 def preprocess_marital_status(data):
     data["Marital.status"] = data["Marital.status"].replace(['Never-married', 'Divorced', 'Separated', 'Widowed'],
                                                             'Single')
@@ -143,7 +222,7 @@ def preprocess_data_specific(data, config):
 
     # Following functions assume capitalized col names
     config["ordinal_mapping"]['WorkLifeBalance'] = add_work_life_balance(data)
-    map_education_levels(data)
+    map_education_levels(data, config)
     map_ordinal_columns(data, config)
     preprocess_marital_status(data)
     bin_age_column(data)
