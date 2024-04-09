@@ -6,7 +6,20 @@ def anchor_template(exp, template_manager):
     display_names_exp_names = []
     for idx, change_string in enumerate(exp.names()):
         feature = change_string.split(" ")[0].strip()
-        value = change_string.split("=")[1].strip()
+        try:
+            value = change_string.split("=")[1].strip()
+        except IndexError:
+            # Check if < or > is in the string and split
+            if "<" in change_string:
+                value = change_string.split("<")[1].strip()
+            elif "<=" in change_string:
+                value = change_string.split("<=")[1].strip()
+            elif ">" in change_string:
+                value = change_string.split(">")[1].strip()
+            elif ">=" in change_string:
+                value = change_string.split(">=")[1].strip()
+            else:
+                raise ValueError("Could not split the change string.")
         # If its a categorical feature, get the display name of the value
         """if feature in template_manager.encoded_col_mapping.keys(): NOT NEEDED?!
             value = template_manager.get_encoded_feature_name(feature, value)"""
