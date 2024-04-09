@@ -60,7 +60,7 @@ regex==2022.3.15
 requests==2.27.1
 s3transfer==0.5.2
 sacremoses==0.0.49
-scikit-image==0.19.2
+what-image==0.19.2
 scikit-learn==1.0.2
 scipy==1.8.0
 sentencepiece==0.1.95

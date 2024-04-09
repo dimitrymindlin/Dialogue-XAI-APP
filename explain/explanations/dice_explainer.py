@@ -133,6 +133,7 @@ class TabularDice(Explanation):
                                                             desired_class=desired_class_tmp,
                                                             features_to_vary=features_to_vary,
                                                             permitted_range=self.permitted_range_dict)
+
             cfes[d] = cur_cfe
         return cfes
 
@@ -175,7 +176,7 @@ class TabularDice(Explanation):
                 if isinstance(cfe_f, float):
                     cfe_f = str(round(cfe_f, self.rounding_precision))
                 feature_display_name = feature_display_names_dict[feature]
-                change_string += f"{inc_dec} <b>{feature_display_name}</b> to </b>{cfe_f}</b>"
+                change_string += f"{inc_dec} <b>{feature_display_name}</b> to <b>{cfe_f}</b>"
                 change_string += " and "
         # Strip off last and
         change_string = change_string[:-5]

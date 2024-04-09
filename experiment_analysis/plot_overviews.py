@@ -120,7 +120,12 @@ def plot_understanding_over_time(user_predictions_over_time_list, study_group_na
     """
     matrix_data, user_ids = get_user_id_predictions_over_time_matrix(user_predictions_over_time_list)
     plot_user_predictions(matrix_data, user_ids, study_group_name, users_end_score_dict)
-    return matrix_data, user_ids
+    # Turn to df for easier analysis
+    df = pd.DataFrame(matrix_data, index=user_ids, columns=[f"Datapoint {i}" for i in range(1, len(matrix_data[0]) + 1)])
+    # rename last column to objective score
+    if users_end_score_dict:
+        df = df.rename(columns={f"Datapoint {len(matrix_data[0])}": "Objective Score"})
+    return df, matrix_data, user_ids
 
 
 def print_feedback_json(user_df):

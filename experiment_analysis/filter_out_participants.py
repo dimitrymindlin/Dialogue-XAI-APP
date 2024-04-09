@@ -3,7 +3,7 @@ import json
 from experiment_analysis.plot_overviews import print_feedback_json
 
 
-def remove_outliers_by_time(df, user_df, event_df):
+def remove_outliers_by_time(time_df, user_df, event_df):
     """
     Removes outliers based on total_time and filters user_df and event_df to only include remaining users.
 
@@ -16,19 +16,19 @@ def remove_outliers_by_time(df, user_df, event_df):
     - Tuple of DataFrames (df, user_df, event_df) after removing outliers.
     """
     # Calculate mean and standard deviation for total_time by study_group
-    mean_time = df.groupby('study_group')['total_time'].transform('mean')
-    std_time = df.groupby('study_group')['total_time'].transform('std')
+    mean_time = time_df.groupby('study_group')['total_time'].transform('mean')
+    std_time = time_df.groupby('study_group')['total_time'].transform('std')
 
     # Filter out outliers
-    df = df[((df['total_time'] > (mean_time - 2 * std_time)) &
-             (df['total_time'] < (mean_time + 2 * std_time)))]
+    time_df = time_df[((time_df['total_time'] > (mean_time - 2 * std_time)) &
+                       (time_df['total_time'] < (mean_time + 2 * std_time)))]
 
     # Filter user_df and event_df based on remaining users in df
-    remaining_users = df["user_id"].unique()
+    remaining_users = time_df["user_id"].unique()
     user_df = user_df[user_df["id"].isin(remaining_users)]
     event_df = event_df[event_df["user_id"].isin(remaining_users)]
-
-    return df, user_df, event_df
+    print("Remaining users after removing by time: ", len(remaining_users))
+    return time_df, user_df, event_df
 
 
 def remove_outliers_by_attention_check(user_df):
@@ -61,5 +61,5 @@ def remove_outliers_by_attention_check(user_df):
           len(user_df[user_df["attention_2_passed"] == False]), "failed")
     # Remove users that failed attention check 1 or 2 or have "None" in attention_2_passed
     user_df = user_df[(user_df["attention_1_passed"] == True) & (user_df["attention_2_passed"] == True)]
-
+    print("Remaining users after removing by attention check: ", len(user_df))
     return user_df

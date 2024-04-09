@@ -4,15 +4,14 @@ This file implements routines to take actions in the conversation, returning
 outputs to the user. Actions in the conversation are called `operations` and
 are things like running an explanation or performing filtering.
 """
-from flask import Flask
-from jinja2 import Environment, FileSystemLoader
 import numpy as np
-
+from flask import Flask
 from explain.actions.explanation import explain_local_feature_importances, explain_cfe, \
     get_feature_importance_by_feature_id, explain_cfe_by_given_features, \
     explain_anchor_changeable_attributes_without_effect, explain_feature_statistic, explain_feature_importances_as_plot, \
     explain_global_feature_importances, explain_ceteris_paribus
 from explain.actions.filter import filter_operation
+from explain.actions.interaction_effects import measure_interaction_effects
 from explain.actions.prediction_likelihood import predict_likelihood
 from explain.conversation import Conversation
 from explain.actions.get_action_functions import get_all_action_functions_map
@@ -162,7 +161,7 @@ def run_action_by_id(conversation: Conversation,
         explanation, desired_class = explain_cfe(conversation, data, parse_op, regen)
         desired_class_str = conversation.get_class_name_from_label(desired_class)
         explanation = f"Here are possible scenarios that would change the prediction to <b>{desired_class_str}</b>:<br> <br>" + \
-                      explanation + "There might be other possible changes. These are examples."
+                      explanation + "<br>There might be other possible changes. These are examples."
         return explanation
     if question_id == 8:
         # How should this attribute change to get a different prediction?
@@ -182,8 +181,8 @@ def run_action_by_id(conversation: Conversation,
         explanation, success = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
                                                                                    template_manager)
         if success:
-            result_text = f"The following group of attributes definitely predicts the current outcome: <br>"
-            result_text = result_text + explanation + "<br> That means that other attributes can change and the prediction will still be the same."
+            result_text = f"Keeping these conditions: <br>"
+            result_text = result_text + explanation + "<br>the prediction will most likely stay the same."
             return result_text
         else:
             return "I'm sorry, I couldn't find a group of attributes that guarantees the current prediction."
@@ -210,26 +209,29 @@ def run_action_by_id(conversation: Conversation,
         parse_op = "top 3"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
                                                         template_manager=template_manager)
-        answer = f"Here are the 3 <b>most</b> important attributes for the current prediction: <br><br>"
+        answer = f"Here are the 3 <b>most</b> important attributes for predicting <b>{current_prediction_str}</b>: <br><br>"
         return answer + explanation[0]
 
     if question_id == 24:
         # 24;What are the attributes and their impact for the current prediction of [curent prediction]?
         explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction_str,
                                                           current_prediction_id)
-        return explanation[0]
+        return explanation
     if question_id == 25:
+        print(measure_interaction_effects(conversation, parse_text=parse_op))
         # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
         explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming, opposite_class,
                                               as_text=True)
+        if opposite_class not in explanation and not explanation.startswith("No"):
+            explanation = explanation + opposite_class + "."
         return explanation
     if question_id == 27:
         # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the instance?
         parse_op = "least 3"
-        answer = "Here are the <b>least</b> important attributes for the current prediction: <br><br>"
+        answer = f"Here are the <b>least</b> important attributes for predicting <b>{current_prediction_str}</b>: <br><br>"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
                                                         template_manager=template_manager)
-        return explanation[0]
+        return answer + explanation[0]
     else:
         return f"This is a mocked answer to your question with id {question_id}."
     """if question_id == 12:
@@ -252,17 +254,18 @@ def compute_explanation_report(conversation,
     data = conversation.temp_dataset.contents['X']
     regen = conversation.temp_dataset.contents['ids_to_regenerate']
     parse_op = f"ID {instance_id}"
-
     model_prediction_probas, _ = predict_likelihood(conversation, as_text=False)
+    current_prediction_str = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
+    current_prediction_id = conversation.temp_dataset.contents['y'][instance_id]
+
     model_prediction_str = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
-    model_prediction_int = np.argmax(model_prediction_probas)
     opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction_probas))
     template_manager = conversation.get_var('template_manager').contents
 
     # Get already sorted feature importances
-    feature_importances, _ = explain_feature_importances_as_plot(conversation, data, parse_op, regen,
-                                                                 model_prediction_str,
-                                                                 model_prediction_int)
+    feature_importances = explain_feature_importances_as_plot(conversation, data, parse_op, regen,
+                                                              current_prediction_str,
+                                                              current_prediction_id)
     """# Turn list of values into int
     feature_importances = {key: round(float(value[0]), ndigits=3) for key, value in feature_importances.items()}
 
@@ -273,13 +276,19 @@ def compute_explanation_report(conversation,
     # Create a new dict of feature importances to preserve order
     feature_importances = {key: value for key, value in sorted(feature_importances.items(), key=lambda item: item[1],
                                                                reverse=True)}"""
-    counterfactual_strings, desired_class = explain_cfe(conversation, data, parse_op, regen)
-    counterfactual_strings = counterfactual_strings + " <br>There are other possible changes. These are just examples."
+    cfe_string, desired_class = explain_cfe(conversation, data, parse_op, regen)
+    counterfactual_strings = cfe_string + " <br>There are other possible changes. These are just examples."
 
-    anchors_string = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
-                                                                         template_manager)
+    anchors_string, success = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
+                                                                                  template_manager)
+    if success:
+        result_text = f"Keeping these conditions: <br>"
+        result_text = result_text + anchors_string + "<br>the prediction will most likely stay the same."
+        anchors_string = result_text
+    else:
+        anchors_string = "There is no group of attributes that guarantees the current prediction."
 
-    feature_statistics = explain_feature_statistic(conversation, template_manager, as_plot=True)
+    feature_statistics = explain_feature_statistic(conversation, template_manager, as_plot=False)
     # map feature names to display names
     if feature_display_name_mapping is not None:
         feature_statistics = {feature_display_name_mapping.get(key): value for key, value in
@@ -288,8 +297,8 @@ def compute_explanation_report(conversation,
     # get ceteris paribus for all features
     ceteris_paribus_sentences = []
     for feature in data.columns:
-        ceteris_paribus, _ = explain_ceteris_paribus(conversation, data, feature, instance_type_naming)
-        ceteris_paribus += f" <b>{opposite_class}</b>."
+        ceteris_paribus = explain_ceteris_paribus(conversation, data, feature, instance_type_naming, opposite_class,
+                                                  as_text=True)
         ceteris_paribus_sentences.append(ceteris_paribus)
 
     return {

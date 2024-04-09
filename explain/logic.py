@@ -75,7 +75,8 @@ class ExplainBot:
                  instance_type_naming: str = "instance",
                  feature_units_mapping=None,
                  encoded_col_mapping_path: dict = None,
-                 feature_ordering: List[str] = None, ):
+                 feature_ordering: List[str] = None,
+                 use_selection: bool = False):
         """The init routine.
 
         Arguments:
@@ -137,6 +138,7 @@ class ExplainBot:
         self.instance_type_naming = instance_type_naming
         self.encoded_col_mapping_path = encoded_col_mapping_path
         self.feature_ordering = feature_ordering
+        self.use_selection = use_selection
 
         # A variable used to help file uploads
         self.manual_var_filename = None
@@ -233,6 +235,7 @@ class ExplainBot:
         except KeyError:
             user_prediction_as_int = int(1000)
             # for "I don't know" option
+        print(f"User prediction: {user_prediction_as_int}, True label: {true_label_as_int}")
         # Make 2d dict with self.current_instance_type as first key and current_id as second key
         if self.current_instance_type not in self.user_prediction_dict:
             self.user_prediction_dict[self.current_instance_type] = {}
@@ -364,8 +367,7 @@ class ExplainBot:
                                        data=background_ds_x,
                                        cat_features=categorical_f,
                                        class_names=self.conversation.class_names,
-                                       categorical_mapping=self.categorical_mapping,
-                                       use_selection=False)
+                                       categorical_mapping=self.categorical_mapping)
 
         # Load diverse instances (explanations)
         app.logger.info("...loading DiverseInstances...")
@@ -373,7 +375,8 @@ class ExplainBot:
             lime_explainer=mega_explainer.mega_explainer.explanation_methods['lime_0.75'])
         diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=test_data,
                                                                                     model=model,
-                                                                                    y_values=test_data_y)
+                                                                                    y_values=test_data_y,
+                                                                                    submodular_pick=False)
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
         app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")

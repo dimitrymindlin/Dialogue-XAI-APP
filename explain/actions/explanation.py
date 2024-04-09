@@ -169,6 +169,17 @@ def explain_feature_importances_as_plot(conversation,
     # Format x-ticks to have only two decimal places
     ax.xaxis.set_major_formatter(FuncFormatter('{:.2f}'.format))
 
+    # Get current x-tick labels
+    xticks = ax.get_xticklabels()
+
+    # Show only every second x-tick
+    for i in range(len(xticks)):
+        if i % 2 == 0:  # Skip every second tick
+            xticks[i].set_visible(False)
+
+    # Apply the changes to the x-ticks
+    ax.set_xticklabels(xticks)
+
     # Save the plot to a BytesIO object
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
@@ -187,7 +198,7 @@ def explain_feature_importances_as_plot(conversation,
                   f'<span>Blue bars = attributes in favor of predicting <b>{current_prediction_string}</b>. <br>' \
                   f'Red bars = attributes against current prediction.</span>'
 
-    return html_string, 1
+    return html_string
 
 
 def get_feature_importance_by_feature_id(conversation,
@@ -287,17 +298,19 @@ def explain_feature_statistic(conversation,
         explanation = feature_stats_exp.get_single_feature_statistic(feature_name, template_manager,
                                                                      as_string=True)
     else:
-        explanation = feature_stats_exp.get_all_feature_statistics(as_string=True)
+        explanation = feature_stats_exp.get_all_feature_statistics(template_manager, as_string=True)
 
     # If as plot and not numerical, return plot
     if as_plot and feature_name in template_manager.encoded_col_mapping.keys():
         feature_name = template_manager.get_feature_display_name_by_name(feature_name)
         # Convert the figure to PNG as a BytesIO object
-        image_base64 = fig_to_base64(explanation)
-        # Create the HTML string with the base64 image
-        html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                      f'<span>Distribution of the possible values for <b>{feature_name}</b>.</span>'
-        return html_string
+        if isinstance(explanation, plt.Figure):
+            image_base64 = fig_to_base64(explanation)
+            # Create the HTML string with the base64 image
+            html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
+                          f'<span>Distribution of the possible values for <b>{feature_name}</b>.</span>'
+            return html_string
+        return explanation
     return explanation
 
 

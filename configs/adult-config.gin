@@ -21,11 +21,12 @@ ExplainBot.instance_type_naming = "Person"
 # Dataset feature information
 ExplainBot.dataset_index_column = 0
 ExplainBot.target_variable_name = "Income"
-ExplainBot.categorical_features = ['Age', 'MaritalStatus', 'Education', 'WorkLifeBalance', 'Occupation', 'Workclass']
-ExplainBot.ordinary_features = ['Age', 'Education', 'WorkLifeBalance']
-ExplainBot.numerical_features = ['WeeklyWorkingHours']
+ExplainBot.categorical_features = ['MaritalStatus', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
+ExplainBot.ordinary_features = ['InvestmentOutcome','EducationLevel', 'WorkLifeBalance']
+ExplainBot.numerical_features = ['Age', 'WeeklyWorkingHours']
 ExplainBot.remove_underscores = True
-ExplainBot.actionable_features = ["MaritalStatus", "WeeklyWorkingHours", "Education", "Occupation", "Workclass"]
+ExplainBot.actionable_features = ["InvestmentOutcome", "EducationLevel", "Occupation"]
+ExplainBot.feature_ordering = ['Age', 'EducationLevel', 'MaritalStatus', 'Occupation', 'WeeklyWorkingHours', 'WorkLifeBalance', 'InvestmentOutcome']
 
 
 # Explanation Params
@@ -33,7 +34,7 @@ Explanation.max_cache_size = 1_000_000
 
 # MegaExplainer Params
 MegaExplainer.cache_location = "./cache/adult-mega-explainer-tabular.pkl"
-MegaExplainer.use_selection = False
+MegaExplainer.use_selection = True
 
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/adult-dice-tabular.pkl"
@@ -41,7 +42,7 @@ TabularDice.final_cfe_amount = 3
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"
-DiverseInstances.instance_amount = 10
+DiverseInstances.instance_amount = 11
 
 # Test Instances
 TestInstances.cache_location = "./cache/adult-test-instances.pkl"
@@ -64,24 +65,25 @@ DatasetDescription.model_description = "random forest model"
 
 # Feature Tooltip
 ExplainBot.feature_tooltip_mapping = {
-    "age": "The age group of the person.",
-    "education": "The education level of the person: Primary, Middle School, High School, Undergraduate, Masters, Doctorate / Professor level.",
-    "gender": "Gender of the person, either Male or Female.",
-    "weekly working hours": "Working hours per week.",
-    "marital status": "Marital status of the person, either Married or Single.",
-    "work life balance": "Self reported work life balance of the person from poor to excellent.",
-    "occupation": "The occupation of the person: White-Collar, Blue-Collar, Service Industry, Specialized and Miscellaneous.",
-    "workclass": "The work class of the person: Government, Private Sector, Self-Employed / Entrepreneurial, Unemployed and Other."
+    "age": "The individual's age, represented in years.",
+    "education level": "Highest level of education attained by the individual, categorized as: Dropout, High School grad, Associates, Bachelors grad, Masters grad, Professional Degree or Doctorate/Prof Level.",
+    "weekly working hours": "The total number of hours the individual works in a typical week.",
+    "marital status": "The individual's marital status, indicating whether they are Married or Single. This simplification may encompass a broader range of legal statuses.",
+    "work life balance": "A self-reported assessment of the individual's work-life balance, ranging from poor to excellent. This subjective measure reflects the individual's satisfaction with their ability to balance work and personal life.",
+    "occupation": "The general category of the individual's occupation, such as White-Collar (professional or managerial roles), Blue-Collar (manual labor), Service Industry, Specialized (requiring specific skills or training), and Miscellaneous.",
+    "workclass": "The work class of the person: Government, Private Sector, Self-Employed / Entrepreneurial, Unemployed and Other.",
+    "investment outcome": "The result of the individual's investment activities, categorized as: No investment, Loss, or Gain. This reflects whether the individual has investments and if so, whether they have made a profit or a loss over a given period."
 }
 
 # Feature Units
 ExplainBot.feature_units_mapping = {
-    "age": "",
+    "age": "years",
     "education": "",
     "gender": "",
     "weekly working hours": "hours",
     "marital status": "",
     "work life balance": "",
     "occupation": "",
-    "workclass": ""
+    "workclass": "",
+    "investment outcome": ""
 }

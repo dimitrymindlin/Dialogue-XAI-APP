@@ -1,10 +1,12 @@
 def cp_categorical_template(feature_name, opposite_class, categories, template_manager):
     feature_display_name = template_manager.get_feature_display_name_by_name(feature_name)
+    if categories == []:
+        return f"No changes in <b>{feature_display_name}</b> alone can change the model prediction."
     categories_text = ""
     for i, category in enumerate(categories):
         categories_text += f"<b>{category}</b>"
         if i + 1 != len(categories):
-            categories_text += ",<br> or "
+            categories_text += " or,<br>"
         else:
             categories_text += " "
     answer_text = f"Changing <b>{feature_display_name}</b> to <br> {categories_text} will switch the prediction to <b>{opposite_class}."

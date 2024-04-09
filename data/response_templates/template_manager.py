@@ -59,12 +59,13 @@ class TemplateManager:
         :param df: dataframe
         :return: dataframe with feature names
         """
+        df_copy = df.copy()  # Create a copy of the DataFrame
         if self.encoded_col_mapping is None:
-            return df
-        for col in df.columns:
+            return df_copy
+        for col in df_copy.columns:
             if col in self.encoded_col_mapping:
-                df[col] = df[col].apply(lambda x: self.encoded_col_mapping[col].get(str(x), x))
-        return df
+                df_copy[col] = df_copy[col].apply(lambda x: self.encoded_col_mapping[col].get(str(x), x))
+        return df_copy
 
     def apply_categorical_mapping(self, instance, is_dataframe=False):
         """

@@ -3,7 +3,7 @@ from typing import List
 
 import numpy as np
 import pandas as pd
-
+import copy
 
 class ExperimentHelper:
     def __init__(self, conversation,
@@ -18,7 +18,7 @@ class ExperimentHelper:
         self.instances = {"train": [], "test": {}}
         self.current_instance = None
         self.current_instance_type = None
-        self.instance_counters = {"train": 0, "test": 0, "final_test": 0}
+        self.instance_counters = {"train": 0, "test": 0, "final_test": 0, "intro_test": 0}
         self.feature_ordering = feature_ordering
 
     def load_instances(self):
@@ -52,6 +52,7 @@ class ExperimentHelper:
 
     def _make_displayable_instance(self, instance):
         # Round instance features
+        instance = copy.deepcopy(instance)
         self._round_instance_features(instance[1])
         self.template_manager.apply_categorical_mapping(instance[1])
         # Order instance features and values according to the feature ordering
@@ -75,13 +76,14 @@ class ExperimentHelper:
         get_instance_methods = {
             "train": lambda: self._get_training_instance(return_probability),
             "test": lambda: self._get_test_instance(self.current_instance[0] if self.current_instance else None),
-            "final_test": self._get_final_test_instance
+            "final_test": self._get_final_test_instance,
+            "intro_test": self._get_intro_test_instance
         }
 
         if not self.instances.get(instance_type, []):
             load_instance_methods.get(instance_type, lambda: None)()
 
-        if instance_type in ["test", "final_test"]:
+        if instance_type != "train":
             instance_id, instance, counter = get_instance_methods[instance_type]()
             old_instance = self.current_instance
             predicted_label_index = np.argmax(
@@ -95,7 +97,7 @@ class ExperimentHelper:
         self.current_instance_type = instance_type
         instance = self._make_displayable_instance(instance)
 
-        if old_instance and not instance_type == "final_test":
+        if old_instance and not instance_type in ["final_test", "intro_test"]:
             for key, value in instance[1].items():
                 if value != old_instance[1][key]:
                     instance[1][key] = {"old": old_instance[1][key], "current": value}
@@ -146,6 +148,22 @@ class ExperimentHelper:
         self.instance_counters[instance_type] += 1
         return train_instance_id, instance, self.instance_counters[instance_type]
 
+    def _get_intro_test_instance(self, instance_type="intro_test"):
+        if not self.instances["test"]:
+            # Load test instances if not already loaded
+            self._load_test_instances()
+        if not self.instances["train"]:
+            # Load training instances if not already loaded
+            self._load_data_instances()
+
+        instance_key = "most_complex_instance"  # (Dimi) Same as final test for now...
+        # Get intro test instance based on train instance id
+        train_instance_id = self.instances["train"][self.instance_counters[instance_type]][0]
+        test_instances_dict = self.instances["test"][train_instance_id]
+        instance = test_instances_dict[instance_key]
+        self.instance_counters[instance_type] += 1
+        return train_instance_id, instance, self.instance_counters[instance_type]
+
     def _round_instance_features(self, features):
         for feature, value in features.items():
             if isinstance(value, float):
@@ -187,7 +205,7 @@ class ExperimentHelper:
             if self.categorical_features is not None and feature_name in self.categorical_features:
                 max_feature_value = len(
                     self.categorical_mapping[original_instance.columns.get_loc(feature_name)])
-                random_change = np.random.randint(0, max_feature_value)
+                random_change = np.random.randint(1, max_feature_value)
                 tmp_instance.at[tmp_instance.index[0], feature_name] += random_change
                 tmp_instance.at[tmp_instance.index[0], feature_name] %= max_feature_value
             else:
@@ -233,12 +251,10 @@ class ExperimentHelper:
                 result_instance = tmp_instance.copy()
                 changed_features += 1  # Increment only if the feature has actually changed
             else:
-                # Optionally, you can add logging here to indicate no change was made
                 continue  # Skip to the next feature if no change was detected
 
             # Removed the redundant increment of changed_features and assignment of result_instance here
-
             if changed_features == max_features_to_vary:
                 break
 
-        return result_instance
+        return result_instance, changed_features

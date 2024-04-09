@@ -2,44 +2,28 @@
 # Name of the parsing model: {ucinlp/german-t5-small, ucinlp/german-t5-large}
 ExplainBot.parsing_model_name = "nearest-neighbor"
 
-# Set skip_prompts to true for quicker startup for finetuned models
-# make sure to set to false using few-shot models
-ExplainBot.skip_prompts = True
 
 ExplainBot.t5_config = "./parsing/t5/gin_configs/t5-large.gin"
 ExplainBot.seed = 0
 
-ExplainBot.model_file_path = "./data/german_model_short_grad_tree.pkl"
-ExplainBot.background_dataset_file_path = "./data/german_train.csv"
-ExplainBot.dataset_file_path = "./data/german_test.csv"
+ExplainBot.model_file_path = "./data/german/german_model_rf.pkl"
+ExplainBot.encoded_col_mapping_path = "./data/german/encoded_col_mapping.json"
+ExplainBot.categorical_mapping_path = "./data/german/categorical_mapping.json"
+ExplainBot.background_dataset_file_path = "./data/german/german_train.csv"
+ExplainBot.dataset_file_path = "./data/german/german_test.csv"
 
 ExplainBot.name = "german"
 
 ExplainBot.dataset_index_column = 0
-ExplainBot.target_variable_name = "y"
+ExplainBot.target_variable_name = "Risk"
 # ExplainBot.categorical_features = ["gender", "foreignworker", "single", "hastelephone", "checkingaccountbalancegreaterorequalto0", "checkingaccountbalancegreaterorequalthan200", "savingsaccountbalancegreaterorequalthan200", "savingsaccountbalancegreaterorequalthan500", "missedpayments", "nocurrentloan", "criticalaccountorloanselsewhere", "otherloansatbank", "otherloansatstore", "hascoapplicant", "hasguarantor", "ownshouse", "rentshouse", "unemployed", "yearsatcurrentjoblessthan1", "yearsatcurrentjobgreaterorequalthan4", "jobclassisskilled"]
 # ExplainBot.numerical_features = ["age", "loanduration", "loanamount", "yearsatcurrenthome", "loanrateaspercentofincome", "numberofotherloansatbank", "numberofliableindividuals", 'loanpurposebusiness', 'loanpurposeeducation', 'loanpurposeelectronics', 'loanpurposefurniture', 'loanpurposehomeappliances', 'loanpurposenewcar', 'loanpurposeother', 'loanpurposerepairs', 'loanpurposeretraining', 'loanpurposeusedcar']
-ExplainBot.categorical_features = ['Age Group','Gender', 'Job Level', 'Housing Type', 'Saving accounts', 'Checking account', 'Credit Purpose']
-ExplainBot.numerical_features = ['Credit amount', 'Credit Duration']
+ExplainBot.categorical_features = ['AgeGroup','Gender', 'JobLevel', 'HousingType', 'SavingAccounts', 'CreditPurpose', 'CreditDuration']
+ExplainBot.ordinary_features = ['AgeGroup', 'JobLevel']
+ExplainBot.numerical_features = ['CreditAmount']
 ExplainBot.remove_underscores = True
-ExplainBot.categorical_mapping_path = "./data/german_column_id_to_values_mapping.json"
-ExplainBot.actionable_features = ['Age Group', 'Job Level', 'Housing Type', 'Saving accounts', 'Checking account', 'Credit Purpose', 'Credit amount', 'Credit Duration']
-ExplainBot.feature_units = {'Credit amount': 'DM', 'Credit Duration': 'months'}
-
-
-
-ExplainBot.prompt_metric = "cosine"
-ExplainBot.prompt_ordering = "ascending"
-
-# Prompt params
-Prompts.prompt_cache_size = 1_000_000
-Prompts.prompt_cache_location = "./cache/german-prompts.pkl"
-Prompts.max_values_per_feature = 2
-Prompts.sentence_transformer_model_name = "all-mpnet-base-v2"
-Prompts.prompt_folder = "./explain/prompts"
-
-Prompts.num_per_knn_prompt_template = 1
-Prompts.num_prompt_template = 7
+ExplainBot.actionable_features = ['AgeGroup', 'JobLevel', 'HousingType', 'SavingAccounts', 'CreditPurpose', 'CreditAmount', 'CreditDuration']
+ExplainBot.feature_ordering = ['AgeGroup', 'Gender', 'JobLevel', 'HousingType', 'SavingAccounts', 'CreditPurpose', 'CreditAmount', 'CreditDuration']
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
@@ -50,15 +34,18 @@ MegaExplainer.use_selection = False
 
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/german-dice-tabular.pkl"
+TabularDice.final_cfe_amount = 3
 
 # Tabular Anchor Params
 TabularAnchor.cache_location = "./cache/german-anchor-tabular.pkl"
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/german-diverse-instances.pkl"
+DiverseInstances.instance_amount = 10
 
 # Test Instances
 TestInstances.cache_location = "./cache/german-test-instances.pkl"
+TestInstances.max_features_to_vary = 2
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/german-ceteris-paribus.pkl"
@@ -74,12 +61,23 @@ DatasetDescription.model_description = "gradient boosted tree"
 
 # Tool tips
 ExplainBot.feature_tooltip_mapping = {
-'Age Range': "The age range to which the applicant belongs.",
-'Gender': "The gender of the applicant. (Male / Female)",
-'Job Level': "The skill level of the applicant's job, measured on a scale from 0 to 3, with 0 indicating unskilled and 3 indicating highly skilled.",
-'Housing Type': "The type of housing the applicant resides in, indicating whether they own or rent.",
-'Saving accounts': "The balance in the applicant's savings account, indicating whether they have a balance and, if so, the amount.",
-'Checking account': "The balance in the applicant's checking account, indicating whether they have a balance and, if so, the amount.",
-'Credit amount': "The requested amount of credit by the applicant.",
-'Credit Duration': "The requested duration of the credit by the applicant."
+'age group': "The age range to which the applicant belongs.",
+'gender': "The gender of the applicant. (Male / Female)",
+'job level': "The skill level of the applicant's job, measured in 4 categories, with the lowest being unskilled and non-resident and the highest being highly skilled.",
+'housing type': "The type of housing the applicant resides in, indicating whether they own, rent or life for free.",
+'saving accounts': "The balance in the applicant's savings account, indicating whether they have a balance and, if so, the amount.",
+'credit amount': "The requested amount of credit by the applicant.",
+'credit duration': "The requested duration of the credit by the applicant in categories from Short-term, Mid-term to Long-term."
+}
+
+# Feature Units
+ExplainBot.feature_units_mapping = {
+'age group': "",
+'gender': "",
+'job level': "",
+'housing type': "",
+'saving accounts': "",
+'credit amount': "$",
+'credit duration': "",
+'credit purpose': "",
 }

@@ -70,11 +70,13 @@ def init():
     feature_tooltip = bot_dict[user_id].get_feature_tooltips()
     feature_units = bot_dict[user_id].get_feature_units()
     questions = bot_dict[user_id].get_questions_attributes_featureNames()
+    ordered_feature_names = bot_dict[user_id].get_feature_names()
     user_experiment_prediction_choices = bot_dict[user_id].conversation.class_names
     result = {
         "feature_tooltips": feature_tooltip,
         "feature_units": feature_units,
         'questions': questions,
+        'feature_names': ordered_feature_names,
         'prediction_choices': user_experiment_prediction_choices,
     }
     return result
@@ -97,6 +99,20 @@ def finish():
     print(f"User {user_id} finished the experiment. And the Bot was removed from the dict.")
     return "200 OK"
 
+
+def get_datapoint(user_id, datapoint_type):
+    """
+    Get a datapoint from the dataset based on the datapoint type.
+    """
+    if user_id is None:
+        user_id = "TEST"
+    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple(datapoint_type)
+    (instance_id, instance_dict, prediction_proba, true_label) = current_instance_with_units
+    instance_dict["id"] = str(instance_id)
+    instance_dict["true_label"] = true_label
+    return instance_dict
+
+
 @bp.route('/get_train_datapoint', methods=['GET'])
 def get_train_datapoint():
     """
@@ -106,25 +122,18 @@ def get_train_datapoint():
     if user_id is None:
         user_id = "TEST"
 
-    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple(
-        return_probability=True)
+    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple("train",
+                                                                                               return_probability=True)
     (instance_id, instance_dict, prediction_proba, true_label) = current_instance_with_units
     instance_dict["id"] = str(instance_id)
     instance_dict["true_label"] = true_label
-
-    # Make sure all values are strings
-    for key, value in instance_dict.items():
-        # turn floats to strings if float has zeroes after decimal point
-        if isinstance(value, float) and value.is_integer():
-            value = int(value)
-        instance_dict[key] = str(value)
 
     instance_dict["prediction_probability"] = json.dumps(prediction_proba.tolist())
 
     # Get initial prompt
     current_prediction = bot_dict[user_id].get_current_prediction()
     prompt = f"""
-        The model predicts that the current {bot_dict[user_id].instance_type_naming} is earning <b>{current_prediction}</b>. <br>
+        The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{current_prediction}</b>. <br>
         If you have questions about the prediction, select questions from the right and I will answer them.
         """
     instance_dict["initial_prompt"] = prompt
@@ -133,6 +142,7 @@ def get_train_datapoint():
     if user_study_group == "static":
         # Get the explanation report
         static_report = bot_dict[user_id].get_explanation_report()
+        static_report["instance_type"] = bot_dict[user_id].instance_type_naming
         instance_dict["static_report"] = static_report
     return instance_dict
 
@@ -143,19 +153,25 @@ def get_test_datapoint():
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple(train=False)
-    (instance_id, instance_dict, prediction_proba, true_label) = current_instance_with_units
-    instance_dict["id"] = str(instance_id)
+    return get_datapoint(user_id, "test")
 
-    # Make sure all values are strings
-    for key, value in instance_dict.items():
-        # turn floats to strings if float has zeroes after decimal point
-        if isinstance(value, float) and value.is_integer():
-            value = int(value)
-        instance_dict[key] = str(value)
-    return instance_dict
+
+@bp.route('/get_final_test_datapoint', methods=['GET'])
+def get_final_test_datapoint():
+    """
+    Get a final test datapoint from the dataset.
+    """
+    user_id = request.args.get("user_id")
+    return get_datapoint(user_id, "final_test")
+
+
+@bp.route('/get_intro_test_datapoint', methods=['GET'])
+def get_intro_test_datapoint():
+    """
+    Get a final test datapoint from the dataset.
+    """
+    user_id = request.args.get("user_id")
+    return get_datapoint(user_id, "intro_test")
 
 
 @bp.route("/set_user_prediction", methods=['POST'])

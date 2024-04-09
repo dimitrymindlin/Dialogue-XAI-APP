@@ -15,7 +15,8 @@ def anchor_template(exp, template_manager):
         precision_string = f"{precision * 100:.2f}%"
         coverage = exp.coverage()
         coverage_string = f"{coverage * 100:.2f}%"
-        exp_string = f"For {display_name} {change_string.split(' ')[1]} {value}, the prediction is {precision_string} accurate and this condition applies for {coverage_string} of similar cases."
+        #exp_string = f"For {display_name} {change_string.split(' ')[1]} {value}, the prediction is {precision_string} accurate and this condition applies for {coverage_string} of similar cases."
+        exp_string = f"{display_name} {change_string.split(' ')[1]} {value}"
         display_names_exp_names.append(exp_string)
 
     # Initialize an empty list to hold the updated display names

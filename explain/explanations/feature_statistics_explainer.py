@@ -1,3 +1,6 @@
+import base64
+import io
+
 import pandas as pd
 
 from data.response_templates.feature_statistics_template import feature_statistics_template
@@ -64,7 +67,7 @@ class FeatureStatisticsExplainer:
             return mean, std, min_v, max_v
         return feature_statistics_template(feature_name, mean, std, min_v, max_v, self.feature_units, template_manager)
 
-    def get_categorical_frequencies_fig(self, value_counts, feature_name):
+    def get_categorical_frequencies_fig(self, value_counts, feature_name, as_html=True):
         """
         Creates a bar plot for the frequencies of values for a categorical feature and returns the figure.
 
@@ -96,7 +99,18 @@ class FeatureStatisticsExplainer:
 
         plt.tight_layout()
 
-        return fig
+        if not as_html:
+            return fig
+
+        # turn to html
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        buf.close()
+        html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">'
+
+        return html_string
 
     def get_categorical_statistics(self, feature_name, as_string=True, as_plot=False):
         """
@@ -133,19 +147,22 @@ class FeatureStatisticsExplainer:
         if feature_name in self.numerical_features:
             return self.get_numerical_statistics(feature_name, template_manager, as_string=as_string)
         else:
-            return self.get_categorical_statistics(feature_name, as_string=as_string, as_plot=True)
+            return self.get_categorical_statistics(feature_name, as_plot=True)
 
-    def get_all_feature_statistics(self, as_string=True):
+    def get_all_feature_statistics(self, template_manager, as_string=True):
         feature_stats = {}
         for feature_name in self.feature_names:
             # Make dict of feature names to feature statistics (min, max, mean)
             if feature_name in self.numerical_features:
-                mean, _, min_v, max_v = self.get_numerical_statistics(feature_name, template_manager,
-                                                                      as_string=as_string)
-                feature_stats[feature_name] = {"mean": mean, "min": min_v, "max": max_v}
+                if as_string:
+                    feature_stats[feature_name] = self.get_numerical_statistics(feature_name, template_manager,
+                                                                                as_string=as_string)
+                else:
+                    mean, _, min_v, max_v = self.get_numerical_statistics(feature_name, template_manager,
+                                                                          as_string=as_string)
+                    feature_stats[feature_name] = {"mean": mean, "min": min_v, "max": max_v}
             else:
-                raise NotImplementedError("Categorical feature statistics are not implemented yet.")
-                feature_stats[feature_name] = self.get_categorical_statistics(feature_name)
+                feature_stats[feature_name] = self.get_categorical_statistics(feature_name, as_plot=True)
         return feature_stats
 
     def explain_numerical_statistics_as_plot(self, feature_data, feature_name):

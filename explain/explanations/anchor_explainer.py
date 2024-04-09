@@ -64,10 +64,14 @@ class TabularAnchor(Explanation):
 
         """
         if self.mode == "tabular":
-            output = self.explainer.explain_instance(data_x[0],
-                                                     self.model.predict,
-                                                     threshold=0.8,
-                                                     max_anchor_size=3)
+            try:
+                output = self.explainer.explain_instance(data_x[0],
+                                                         self.model.predict,
+                                                         threshold=0.98,
+                                                         max_anchor_size=3)
+            except IndexError:
+                print("HEY")
+
             return output
 
     def run_explanation(self,

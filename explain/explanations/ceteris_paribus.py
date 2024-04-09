@@ -52,21 +52,33 @@ def find_categories_crossing_threshold_scatter(fig, threshold, current_feature_v
         x_data = np.array(trace.x)
         y_data = np.array(trace.y)
         indices = np.where(x_data == current_feature_value)[0]
+
+        # Check if indices are found; if not, return None for current_proba
+        if len(indices) == 0:
+            return None, {}
+
         current_proba = y_data[indices][0]
+        # Since we're interested in comparing to other categories, remove the current feature value
         x_data = np.delete(x_data, indices)
         y_data = np.delete(y_data, indices)
+
         # Make a dict from x_data to y_data
-        cp_dict = dict(zip(x_data, y_data))
-        return current_proba, cp_dict
+        category_proba_dict = dict(zip(x_data, y_data))
+        return current_proba, category_proba_dict
 
     for trace in fig.data:
-        current_probability, attribute_threshold_dict = get_categories_and_values_dict(trace)
-        greater_or_smaller = 'greater' if current_probability > threshold else 'smaller'
-        for attribute, threshold in attribute_threshold_dict.items():
-            if threshold < current_probability and greater_or_smaller == 'greater':
-                crossing_categories.append(attribute)
-            elif threshold > current_probability and greater_or_smaller == 'smaller':
-                crossing_categories.append(attribute)
+        current_probability, category_proba_dict = get_categories_and_values_dict(trace)
+
+        # Check if current_probability is None (current_feature_value was not found)
+        if current_probability is None:
+            continue
+
+        for category, proba in category_proba_dict.items():
+            if proba < threshold and current_probability > threshold:
+                crossing_categories.append(category)
+            elif proba > threshold and current_probability < threshold:
+                crossing_categories.append(category)
+
     return crossing_categories
 
 

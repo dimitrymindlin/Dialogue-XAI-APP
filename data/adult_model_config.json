@@ -1,11 +1,8 @@
 {
   "target_col": "Income",
   "columns_to_encode": [
-    "MaritalStatus",
-    "Age",
-    "Workclass",
     "Occupation",
-    "Gender"
+    "MaritalStatus"
   ],
   "ordinal_mapping": {
     "Income": {
@@ -13,24 +10,13 @@
       ">50K": 1,
       "<=50K.": 0,
       ">50K.": 1
-    },
-    "WorkLifeBalance": {
-      "Poor": 0,
-      "Fair": 1,
-      "Good": 2,
-      "Excellent": 3
-    },
-
+    }
   },
   "model_params": {
-    "n_estimators": [
-      100,
-      200,
-      500
-    ],
     "max_depth": [
+      3,
       5,
-      10
+      8
     ],
     "min_samples_split": [
       2,
@@ -38,22 +24,23 @@
     ],
     "min_samples_leaf": [
       1,
-      2
+      2,
+      3
     ]
   },
   "rename_columns": {
     "Hours.per.week": "WeeklyWorkingHours",
-    "Marital.status": "MaritalStatus",
     "Education.num": "Education",
-    "Sex": "Gender"
+    "Marital.status": "MaritalStatus"
   },
   "drop_columns": [
     "fnlwgt",
-    "education.num",
+    "education",
+    "sex",
+    "race",
     "native.country",
-    "relationship",
-    "capital.gain",
-    "capital.loss"
+    "workclass",
+    "relationship"
   ],
   "random_search_params": {
     "n_iter": 10,

@@ -5,8 +5,11 @@ import pickle
 
 import numpy as np
 import pandas as pd
+import seaborn as sns
+from matplotlib import pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
+
 from data import load_config, create_folder_if_not_exists
 from data.ml_utilities import label_encode_and_save_classes, construct_pipeline, train_model
 
@@ -43,6 +46,39 @@ category_to_int = {
     data.rename(columns={'Education.num': 'Education'}, inplace=True)"""
 
 
+def map_capital_col(data, config):
+    """Refine Investment Outcome with categories including Break-Even and No Activity."""
+    # Initialize default category for all as 'No Activity (0$)'
+    data['InvestmentOutcome'] = 'No Investment'
+
+    # Calculate Investment Outcome for other cases
+    investment_outcome = data['Capital.gain'] - data['Capital.loss']
+
+    # Define bins and labels excluding the default 'No Activity' and 'Break-Even'
+    bins = [-float('inf'), -1000, 0, 5000, float('inf')]
+    labels = ['Major Loss (more than 1k$)', 'Minor Loss (up to 1k$)', 'Minor Gain (up to 5k$)',
+              'Major Gain (above 5k$)']
+    # Update categories based on bins and labels for non-default cases
+    non_default_cases = investment_outcome != 0
+    categorized_outcomes = pd.cut(investment_outcome[non_default_cases], bins=bins, labels=labels)
+    data.loc[non_default_cases, 'InvestmentOutcome'] = categorized_outcomes
+
+    # Updated mapping with new categories
+    mapping = {
+        "Major Loss (more than 1k$)": 0,
+        "Minor Loss (up to 1k$)": 1,
+        "No Investment": 2,
+        "Minor Gain (up to 5k$)": 3,
+        "Major Gain (above 5k$)": 4
+    }
+
+    # Add the new mapping to the config
+    config["ordinal_mapping"]["InvestmentOutcome"] = mapping
+
+    # Optionally, you may drop the original capital gain and loss columns
+    data.drop(columns=['Capital.gain', 'Capital.loss'], inplace=True)
+
+
 def map_education_to_int(education_str):
     """
     Maps an education string to its corresponding broad education category integer.
@@ -55,22 +91,22 @@ def map_education_to_int(education_str):
     """
     # Mapping of education levels to categories
     category_map = {
-        'Preschool': 'Primary Education',
-        '1st-4th': 'Primary Education',
-        '5th-6th': 'Primary Education',
-        '7th-8th': 'Middle School',
-        '9th': 'High School',
-        '10th': 'High School',
-        '11th': 'High School',
-        '12th': 'High School',
-        'HS-grad': 'High School',
-        'Some-college': 'Undergraduate Level',
-        'Assoc-acdm': 'Undergraduate Level',
-        'Assoc-voc': 'Undergraduate Level',
-        'Bachelors': 'Undergraduate Level',
-        'Masters': 'Masters Level',
-        'Doctorate': 'Doctorate/Prof Level',
-        'Prof-school': 'Doctorate/Prof Level'
+        'Preschool': 'Dropout',
+        '1st-4th': 'Dropout',
+        '5th-6th': 'Dropout',
+        '7th-8th': 'Dropout',
+        '9th': 'Dropout',
+        '10th': 'Dropout',
+        '11th': 'Dropout',
+        '12th': 'Dropout',
+        'HS-grad': 'High School grad',
+        'Some-college': 'High School grad',
+        'Assoc-acdm': 'Associates',
+        'Assoc-voc': 'Associates',
+        'Bachelors': 'Bachelors grad',
+        'Masters': 'Masters grad',
+        'Prof-school': 'Professional Degree',
+        'Doctorate': 'Doctorate/Prof Level'
     }
 
     # Get the category from the education level
@@ -78,25 +114,45 @@ def map_education_to_int(education_str):
     return category
 
 
-def map_education_levels(df, config):
-    """
-    Updates the provided config dictionary with the education to integer mapping
-    based on the 'Education' column in the given DataFrame.
+def map_education_levels(data, config):
+    # Apply binning to education.num
+    def refined_bin_education_level(x):
+        if x in [1, 2, 3, 4, 5, 6, 7, 8]:
+            return 0  # Dropout
+        elif x in [9, 10]:
+            return 1  # High School grad
+        elif x in [11, 12]:
+            return 2  # Associates
+        elif x == 13:
+            return 3  # Bachelors
+        elif x == 14:
+            return 4  # Masters
+        elif x == 15:
+            return 5  # Professional Degree
+        elif x == 16:
+            return 6  # Doctorate/Prof Level
+        else:
+            return None  # For any value out of the original range
 
-    Parameters:
-    - df: pandas DataFrame containing an 'Education' column with education level strings.
-    - config: Dictionary where the mapping will be stored under "ordinal_mapping" > "Education".
+    data['EducationLevel'] = data['Education.num'].apply(refined_bin_education_level)
+    data.drop(['Education.num'], axis=1, inplace=True)
 
-    Returns:
-    - The updated config dictionary.
-    """
-    # Apply the mapping function to the 'Education' column
-    df['Education'] = df['Education'].apply(map_education_to_int)
+    refined_binned_category_map = {
+        0: 'Primary Education',
+        1: 'Middle School',
+        2: 'High School without Graduation',
+        3: 'High School Graduate',
+        4: 'College without Degree',
+        5: "Associate's Degrees",
+        6: "Bachelor's Degree",
+        7: 'Post-graduate Education'
+    }
 
-    # Ensure "ordinal_mapping" exists in config and update it with the "Education" mapping
-    if "ordinal_mapping" not in config:
-        config["ordinal_mapping"] = {}
-    config["ordinal_mapping"]["Education"] = category_to_int
+    # Reverse the mapping for the config
+    refined_binned_category_map = {v: k for k, v in refined_binned_category_map.items()}
+
+    # Add the mapping to the config
+    config["ordinal_mapping"]["EducationLevel"] = refined_binned_category_map
 
 
 def standardize_column_names(data):
@@ -104,7 +160,7 @@ def standardize_column_names(data):
 
 
 def add_work_life_balance(data):
-    categories = ['Poor', 'Fair', 'Good', 'Excellent']
+    categories = ['Poor', 'Fair', 'Good']
     mean = categories.index('Fair')  # Mean set to index of 'Fair' for Gaussian center
     std_dev = 0.75  # Standard deviation, adjust as needed for spread
 
@@ -128,8 +184,8 @@ def add_work_life_balance(data):
 
 
 def fil_nans_with_mode(data):
-    cols_with_nan_names_list = data.columns[data.isna().any()].tolist()
     data[data == '?'] = np.nan  # Replace '?' with NaN
+    cols_with_nan_names_list = data.columns[data.isna().any()].tolist()
     for col in cols_with_nan_names_list:
         data[col].fillna(data[col].mode()[0], inplace=True)
 
@@ -143,14 +199,14 @@ def fil_nans_with_mode(data):
 
 def map_ordinal_columns(data, config):
     for col, mapping in config["ordinal_mapping"].items():
-        if col in ["WorkLifeBalance"]:
+        if col in ["WorkLifeBalance", "EducationLevel"]:
             continue
         data[col] = data[col].map(mapping)
 
 
 def bin_age_column(data):
-    bins = [17, 25, 40, 60, 100]
-    labels = ["Young (18-25)", "Adult (26-40)", "Middle Aged (41-60)", "Senior (61-100)"]
+    bins = [17, 25, 50, 100]
+    labels = ["Young (18-25)", "Adult (25-50)", "Old (50-100)"]
     data["Age"] = pd.cut(data["Age"], bins=bins, labels=labels)
 
 
@@ -176,35 +232,37 @@ def map_race_col(data):
     # print counts of unique race values
     print(data["Race"].value_counts())
     # Only take "white" as race and remove the rest
-    data = data[data["Race"] == "White"]
+    # data = data[data["Race"] == "White"]
     # Drop the "Race" column
     data.drop(columns=["Race"], inplace=True)
     return data
 
 
+def map_country_col(data):
+    countries = np.array(data['Native.country'].unique())
+    countries = np.delete(countries, 0)
+    data['Native.country'].replace(countries, 'Other', inplace=True)
+    # Delete other countries records
+    # data = data[data['Native.country'] == 'United-States']
+    data.drop(columns=['Native.country'], inplace=True)
+    return data
+
+
 def map_occupation_col(data):
     # Mapping of professions to their respective subgroups
-    profession_to_subgroup = {
-        'Exec-managerial': 'White-Collar Professions',
-        'Prof-specialty': 'White-Collar Professions',
-        'Adm-clerical': 'White-Collar Professions',
-        'Tech-support': 'White-Collar Professions',
-        'Sales': 'White-Collar Professions',
-        'Machine-op-inspct': 'Blue-Collar Professions',
-        'Craft-repair': 'Blue-Collar Professions',
-        'Transport-moving': 'Blue-Collar Professions',
-        'Handlers-cleaners': 'Blue-Collar Professions',
-        'Farming-fishing': 'Blue-Collar Professions',
-        'Other-service': 'Service Industry Professions',
-        'Protective-serv': 'Service Industry Professions',
-        'Priv-house-serv': 'Service Industry Professions',
-        'Armed-Forces': 'Specialized and Miscellaneous',
-        '?': 'Specialized and Miscellaneous'
+    occupation_map = {
+        "Adm-clerical": "Admin", "Armed-Forces": "Military",
+        "Craft-repair": "Blue-Collar", "Exec-managerial": "White-Collar",
+        "Farming-fishing": "Blue-Collar", "Handlers-cleaners":
+            "Blue-Collar", "Machine-op-inspct": "Blue-Collar", "Other-service":
+            "Service", "Priv-house-serv": "Service", "Prof-specialty":
+            "Professional", "Protective-serv": "Other", "Sales":
+            "Sales", "Tech-support": "Other", "Transport-moving":
+            "Blue-Collar",
     }
 
-    # Apply mapping to the profession column
-    data['Occupation'] = data['Occupation'].map(profession_to_subgroup)
-    return data
+    # Apply mapping to the occupation column
+    data['Occupation'] = data['Occupation'].map(occupation_map)
 
 
 def preprocess_marital_status(data):
@@ -222,13 +280,12 @@ def preprocess_data_specific(data, config):
 
     # Following functions assume capitalized col names
     config["ordinal_mapping"]['WorkLifeBalance'] = add_work_life_balance(data)
-    map_education_levels(data, config)
-    map_ordinal_columns(data, config)
     preprocess_marital_status(data)
-    bin_age_column(data)
-    data = bin_workclass_col(data)
-    data = map_occupation_col(data)
-    data = map_race_col(data)
+    map_education_levels(data, config)
+    map_capital_col(data, config)
+    map_occupation_col(data)
+    map_ordinal_columns(data, config)
+
     data = fil_nans_with_mode(data)
 
     # Check which column has "Other" values
@@ -257,9 +314,10 @@ def main():
 
     data = pd.read_csv(config["dataset_path"])
     create_folder_if_not_exists(save_path)
+
     X, y, encoded_classes = preprocess_data_specific(data, config)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
     target_col = config["target_col"]
     # Add labels to X and save train and test data
@@ -279,9 +337,8 @@ def main():
     with open(os.path.join(save_path, f"{DATASET_NAME}_model_config.json"), 'w') as file:
         json.dump(config, file)
 
-    columns_to_encode = config["columns_to_encode"]
     # Change list of column names to be encoded to a list of column indices
-    columns_to_encode = [X_train.columns.get_loc(col) for col in columns_to_encode]
+    columns_to_encode = [X_train.columns.get_loc(col) for col in config["columns_to_encode"]]
     pipeline = construct_pipeline(columns_to_encode, RandomForestClassifier())
 
     model_params = {("model__" + key if not key.startswith("model__") else key): value for key, value in
@@ -290,10 +347,12 @@ def main():
 
     best_model, best_params = train_model(X_train, y_train, pipeline, model_params, search_params)
 
+    best_model.fit(X_train, y_train)
+
     # Print evaluation metrics on train and test
     print("Best Model Score Train:", best_model.score(X_train, y_train))
     print("Best Model Score Test:", best_model.score(X_test, y_test))
-    print("Best Parameters:", best_params)
+    # print("Best Parameters:", best_params)
 
     # Save the best model
     pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
