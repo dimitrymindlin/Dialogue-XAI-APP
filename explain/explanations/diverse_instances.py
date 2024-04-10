@@ -36,36 +36,47 @@ class DiverseInstances:
         self.lime_explainer = lime_explainer
         self.instance_amount = instance_amount
 
-    def filter_instances_by_marital_status(self, data, diverse_instances_pandas_indices, instance_amount):
-        """
-        Filters instances to ensure that "marital status" alternates between instances.
+    def filter_instances_by_marital_status_and_class(self, data, model, diverse_instances_pandas_indices,
+                                                     instance_amount):
+        # Step 1: Predict Classes
+        predicted_classes = model.predict(data.loc[diverse_instances_pandas_indices])
 
-        Parameters:
-        - data (DataFrame): The dataset containing the instances.
-        - diverse_instances_pandas_indices (list): Indices of potential instances to filter from.
-        - instance_amount (int): The desired number of instances to include in the filtered list.
+        # Step 2: Separate Instances by Predicted Class
+        class_0_indices, class_1_indices = [], []
+        for i, pred_class in zip(diverse_instances_pandas_indices, predicted_classes):
+            if pred_class == 0:
+                class_0_indices.append(i)
+            else:
+                class_1_indices.append(i)
 
-        Returns:
-        - List of indices representing filtered instances based on marital status alternation.
-        """
-        filtered_instances = []
-        last_marital_status = -1  # Initialize to a value not in [0, 1].
+        # Helper function to filter instances based on alternating marital status
+        def filter_by_marital_status(indices):
+            filtered = []
+            last_marital_status = -1
+            for i in indices:
+                current_marital_status = data.loc[i, "MaritalStatus"]
+                if current_marital_status != last_marital_status:
+                    filtered.append(i)
+                    last_marital_status = current_marital_status
+            return filtered
 
-        for i in diverse_instances_pandas_indices:
-            current_marital_status = data.loc[i, "MaritalStatus"]
+        # Step 3: Filter each class list by marital status
+        filtered_class_0 = filter_by_marital_status(class_0_indices)
+        filtered_class_1 = filter_by_marital_status(class_1_indices)
 
-            # Ensure alternation of marital status
-            if current_marital_status != last_marital_status:
-                filtered_instances.append(i)
-                last_marital_status = current_marital_status
+        # Step 4: Balance the classes
+        min_length = min(len(filtered_class_0), len(filtered_class_1))
+        balanced_class_0 = np.random.choice(filtered_class_0, min_length, replace=False)
+        balanced_class_1 = np.random.choice(filtered_class_1, min_length, replace=False)
 
-                if len(filtered_instances) >= instance_amount:
-                    break
+        # Combine the lists
+        combined_instances = np.concatenate((balanced_class_0, balanced_class_1))
 
-        # shuffle the instances to ensure randomness
-        filtered_instances = np.random.permutation(filtered_instances).tolist()
+        # Step 5: Shuffle and select the final set of instances
+        np.random.shuffle(combined_instances)
+        final_instances = combined_instances[:instance_amount].tolist()
 
-        return filtered_instances
+        return final_instances
 
     def get_instance_ids_to_show(self,
                                  data: pd.DataFrame,
@@ -101,9 +112,10 @@ class DiverseInstances:
                 diverse_instances_pandas_indices = data.sample(self.instance_amount * 100,
                                                                random_state=dynamic_seed).index.tolist()
 
-                diverse_instances_pandas_indices = self.filter_instances_by_marital_status(data,
-                                                                                           diverse_instances_pandas_indices,
-                                                                                           self.instance_amount)
+                diverse_instances_pandas_indices = self.filter_instances_by_marital_status_and_class(data,
+                                                                                                     model,
+                                                                                                     diverse_instances_pandas_indices,
+                                                                                                     self.instance_amount)
 
             for i in diverse_instances_pandas_indices:
                 if i not in self.diverse_instances:
