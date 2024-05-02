@@ -2,7 +2,7 @@
 import json
 import os
 import pickle
-
+from sklearn.metrics import roc_auc_score
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -349,13 +349,27 @@ def main():
 
     best_model.fit(X_train, y_train)
 
+    # Predict probabilities for the train set
+    y_train_pred = best_model.predict_proba(X_train)[:, 1]
+
+    # Compute ROC AUC score for the train set
+    train_score = roc_auc_score(y_train, y_train_pred)
+    print("Best Model Score Train:", train_score)
+
+    # Predict probabilities for the test set
+    y_test_pred = best_model.predict_proba(X_test)[:, 1]
+
+    # Compute ROC AUC score for the test set
+    test_score = roc_auc_score(y_test, y_test_pred)
+    print("Best Model Score Test:", test_score)
+
     # Print evaluation metrics on train and test
-    print("Best Model Score Train:", best_model.score(X_train, y_train))
-    print("Best Model Score Test:", best_model.score(X_test, y_test))
+    #print("Best Model Score Train:", best_model.score(X_train, y_train, metric="roc_auc"))
+    #print("Best Model Score Test:", best_model.score(X_test, y_test,  metric="roc_auc"))
     # print("Best Parameters:", best_params)
 
     # Save the best model
-    pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
+    #pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
 
 
 if __name__ == "__main__":
