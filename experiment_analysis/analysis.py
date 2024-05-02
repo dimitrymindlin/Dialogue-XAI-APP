@@ -1,27 +1,30 @@
-import json
-
 import psycopg2
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from fuzzywuzzy import fuzz
 
-from experiment_analysis.calculations import calculate_user_score, get_user_feedback_per_data_point
-from experiment_analysis.correlation_analysis import prepare_correlation_df
-from experiment_analysis.feedback_buttons import get_button_feedback
-from experiment_analysis.filter_out_participants import remove_outliers_by_attention_check, remove_outliers_by_time
-from experiment_analysis.plot_overviews import plot_chatbot_feedback, plot_understanding_over_time, \
-    plot_asked_questions_per_user, plot_understanding_with_questions, plot_question_raking
+from experiment_analysis.analyse_explanation_ranking import extract_questionnaires
+from experiment_analysis.analysis_data_holder import AnalysisDataHolder
+from experiment_analysis.calculations import create_predictions_df
+from experiment_analysis.filter_out_participants import filter_by_prolific_users, filter_by_broken_variables
+from experiment_analysis.plot_overviews import plot_understanding_over_time, \
+    plot_asked_questions_per_user, plot_questions_tornado
 from experiment_analysis.process_mining import ProcessMining
+import json
+
+from experiment_analysis.statistical_tests import perform_power_analysis
 
 POSTGRES_USER = "postgres"
 POSTGRES_PASSWORD = "example"
-POSTGRES_DB = "final_study_results"
+POSTGRES_DB = "prolific_study"
 POSTGRES_HOST = "localhost"
 
 analysis_steps = ["filter_completed_users",
                   "filter_by_attention_check",
-                  "filter_by_time"
-                  ]
+                  "filter_by_time",
+                  "print_buttons_feedback",
+                  "plot_question_raking"]
 
 
 def connect_to_db():
@@ -38,147 +41,255 @@ def fetch_data_as_dataframe(query, connection):
     return pd.DataFrame(rows, columns=column_names)
 
 
-def append_user_data_to_df(df, user_id, study_group, data, data_type="time"):
-    if data_type == "time":
-        df = df.append({"user_id": user_id, "study_group": study_group, "total_time": data}, ignore_index=True)
-    else:  # score
-        df = df.append({"user_id": user_id, "study_group": study_group, "score": data}, ignore_index=True)
+def append_user_data_to_df(df, user_id, study_group, data, column_name="time"):
+    if (df['user_id'] == user_id).any():
+        # If the user exists, update the existing row
+        df.loc[df['user_id'] == user_id, column_name] = data
+    else:
+        # If the user does not exist, create a new row
+        new_row = pd.DataFrame([{"user_id": user_id, "study_group": study_group, column_name: data}])
+        df = pd.concat([df, new_row], ignore_index=True)
     return df
 
 
-def plot_data(df, x_label, y_label, title):
-    plt.figure(figsize=(10, 6))
-    sns.boxplot(x=x_label, y=y_label, data=df)
-    sns.stripplot(x=x_label, y=y_label, data=df, color=".25")
-    plt.title(title)
-    plt.xlabel(x_label)
-    plt.ylabel(y_label)
+def plot_pairplot(df, vars, hue, title):
+    sns.pairplot(df, vars=vars, hue=hue, diag_kind="hist", kind="hist")
+    plt.suptitle(title, y=1.02)  # y is a float that adjusts the position of the title vertically
     plt.show()
 
 
-def prepare_time_dataframe(user_df, event_df):
+def plot_heatmap(df, cols, title):
+    df = df[cols]  # Select only the columns in cols
+    corr = df.corr()
+    sns.heatmap(corr, annot=True, fmt=".2f", cmap='coolwarm')
+    plt.title(title)
+    plt.tight_layout()
+    plt.show()
+
+
+def extract_exit_feedback(user_df, user_id):
+    exit_q = None
+    try:
+        questionnaires = user_df[user_df["id"] == user_id]["questionnaires"].values[0]
+        # Remove redundant keys and values
+        if len(questionnaires) > 4:
+            found_exit = False
+            for questionnaire in questionnaires:
+                if isinstance(questionnaire, dict):
+                    continue
+                questionnaire = json.loads(questionnaire)
+                if "exit" in questionnaire.keys():
+                    exit_q = questionnaire['exit']
+                    found_exit = True
+            if not found_exit:
+                print("no exit q.", len(questionnaires), user_id)
+        else:
+            exit_questionnaire = json.loads(questionnaires[3])['exit']
+            exit_q = exit_questionnaire
+    except (KeyError, IndexError):
+        print(f"{user_id} did not complete the exit questionnaire.")
+
+    # Append the user_id and exit_q to the DataFrame
+    new_row = pd.DataFrame([{"user_id": user_id, "exit_q_answers": exit_q['answers']}])
+    return new_row
+
+
+def get_study_group_and_events(user_df, event_df, user_id):
+    study_group = user_df[user_df["id"] == user_id]["study_group"].values[0]
+    user_events = event_df[event_df["user_id"] == user_id]
+    return study_group, user_events
+
+
+def extract_questions(user_events):
     """
-    Prepares a DataFrame with start and end times, and total time spent, for each user.
-
-    :param user_df: DataFrame containing user data, including 'id' and 'created_at' columns.
-    :param event_df: DataFrame containing event data, with 'user_id' and 'created_at' columns.
-    :return: DataFrame with user IDs, start and end times, study group, and total time spent.
+    Process the interactive group by extracting user questions over time.
     """
-    # Apply the provided function to remove outliers based on attention check
-    remaining_users = user_df["id"].unique()
-    print(f"Remaining users after removing by attention check: {len(remaining_users)}")
+    user_questions_over_time = user_events[
+        (user_events["action"] == "question") & (user_events["source"] == "teaching")]
+    # Check how many users have not asked any questions (i.e. all cols contain nan)
+    if user_questions_over_time.empty:
+        return None
 
-    # Prepare initial time_df
-    time_df = pd.DataFrame({
-        "user_id": user_df["id"],
-        "start_time": user_df["created_at"],
-        "study_group": user_df["study_group"]
-    })
-
-    # Get end time for each user from event_df
-    end_time_df = event_df.groupby("user_id")["created_at"].max()
-    time_df["end_time"] = time_df["user_id"].map(end_time_df)
-
-    # Ensure start_time and end_time are in datetime format
-    time_df['start_time'] = pd.to_datetime(time_df['start_time'])
-    time_df['end_time'] = pd.to_datetime(time_df['end_time'])
-
-    # Calculate total_time in minutes
-    time_df["total_time"] = (time_df["end_time"] - time_df["start_time"]).dt.total_seconds() / 60
-
-    return time_df
-
-
-def extract_exit_feedback(user_df, user_id, exit_feedback_answers_dicts):
-    exit_questionnaire = json.loads(user_df[user_df["id"] == user_id]["questionnaires"].values[0][3])['exit']
-    exit_feedback_answers_dicts.append(exit_questionnaire)
+    return user_questions_over_time
 
 
 def main():
     conn = connect_to_db()
-    user_df = fetch_data_as_dataframe("SELECT * FROM users", conn)
-    event_df = fetch_data_as_dataframe("SELECT * FROM events", conn)
-    print("Found users: ", len(user_df))
-    print("Found events: ", len(event_df))
+    analysis = AnalysisDataHolder(user_df=fetch_data_as_dataframe("SELECT * FROM users", conn),
+                                  event_df=fetch_data_as_dataframe("SELECT * FROM events", conn),
+                                  user_completed_df=fetch_data_as_dataframe("SELECT * FROM user_completed", conn))
 
-    if "filter_completed_users" in analysis_steps:
-        user_df = user_df[user_df["completed"] == True]
-        print("Completed users: ", len(user_df))
+    filter_by_prolific_users(analysis)
+    analysis.create_time_columns()
 
-    if "filter_by_attention_check" in analysis_steps:
-        user_df = remove_outliers_by_attention_check(user_df)
+    print("Found users: ", len(analysis.user_df))
+    print("Found events: ", len(analysis.event_df))
 
-    if "filter_by_time" in analysis_steps:
-        time_df = prepare_time_dataframe(user_df, event_df)
-        time_df, user_df, event_df = remove_outliers_by_time(time_df, user_df, event_df)
+    ### Filtering
+    filter_by_broken_variables(analysis)
+    print("Amount of users per study group after broken variables filter:")
+    print(analysis.user_df.groupby("study_group").size())
 
-    if "print_question_feedback" in analysis_steps:
-        # Get All Feedback button feedback per question
-        print(get_button_feedback(event_df))
+    user_questions_over_time_list = []
+    initial_test_preds_list = []
+    learning_test_preds_list = []
+    final_test_preds_list = []
+    final_q_feedback_list = []
+    exclude_user_ids = []
+    wlb_users = []
+    for user_id in analysis.user_df["id"]:
+        study_group, user_events = get_study_group_and_events(analysis.user_df, analysis.event_df, user_id)
+        # Create predictions dfs and if there is a user with missing or broken data, exclude them
+        intro_test_preds, preds_learning, final_test_preds, exclude = create_predictions_df(analysis.user_df,
+                                                                                            user_events)
+        if exclude:
+            exclude_user_ids.append(user_id)
+            continue
+        initial_test_preds_list.append(intro_test_preds)
+        learning_test_preds_list.append(preds_learning)
+        final_test_preds_list.append(final_test_preds)
 
-    score_df = pd.DataFrame(columns=["user_id", "study_group", "score"])
-    final_test_feedback_df = pd.DataFrame(columns=["user_id", "study_group", "feedback"])
+        # Check if the user has indicated work-life balance as an important variable for the prediction
+        feedback = final_test_preds["feedback"].values
+        for f in feedback:
+            # Check if the similarity score is above a certain threshold, e.g., 80
+            if fuzz.partial_ratio("worklifebalance", f.lower()) > 80 or fuzz.partial_ratio("work life balance",
+                                                                                           f.lower()) > 80:
+                wlb_users.append((user_id, f))
 
-    exit_feedback_answers_dicts = []
-    user_predictions_over_time_list_dict = {}
-    user_questions_over_time_list_dict = {}
-    for user_id in user_df["id"]:
-        # Extract Study Group and User Events
-        study_group = user_df[user_df["id"] == user_id]["study_group"].values[0]
-        user_events = event_df[event_df["user_id"] == user_id]
-
-        # Extract user predictions and feedback
-        user_predictions = user_events[
-            (user_events["action"] == "user_prediction") & (user_events["source"] == "final-test")]
-        user_final_test_feedback_per_data_point = get_user_feedback_per_data_point(user_predictions)
-        score = calculate_user_score(user_predictions)
-        user_predictions_over_time = user_events[
-            (user_events["action"] == "user_prediction") & (user_events["source"] == "test")]
         if study_group == "interactive":
-            user_questions_over_time = user_events[
-                (user_events["action"] == "question") & (user_events["source"] == "teaching")]
-            try:
-                user_questions_over_time_list_dict[study_group].append(user_questions_over_time)
-            except KeyError:
-                user_questions_over_time_list_dict[study_group] = [user_questions_over_time]
-        try:
-            user_predictions_over_time_list_dict[study_group].append(user_predictions_over_time)
-        except KeyError:
-            user_predictions_over_time_list_dict[study_group] = [user_predictions_over_time]
-        score_df = append_user_data_to_df(score_df, user_id, study_group, score, "score")
-        if not len(user_final_test_feedback_per_data_point) == 0:
-            final_test_feedback_df = append_user_data_to_df(final_test_feedback_df, user_id, study_group,
-                                                            user_final_test_feedback_per_data_point, "feedback")
-        print(final_test_feedback_df)
+            user_questions_over_time_df = extract_questions(user_events)
+            if user_questions_over_time_df is not None:
+                user_questions_over_time_list.append(user_questions_over_time_df)
+            else:
+                exclude_user_ids.append(user_id)
 
-        # Get User Chatbot Feedback from interactive group
-        if study_group == "interactive":
-            extract_exit_feedback(user_df, user_id, exit_feedback_answers_dicts)
+        # Get User Final Q. Feedback from interactive group
+        exit_q_df = extract_exit_feedback(analysis.user_df, user_id)
+        final_q_feedback_list.append(exit_q_df)
 
-    # plot_chatbot_feedback(exit_feedback_answers_dicts)
-    # Save final_test_feedback_df["score"] as csv
-    final_test_feedback_df['score'].to_csv("final_test_feedback.csv", index=False)
-    plot_data(time_df, "study_group", "total_time", 'Boxplot of Time Spent per Study Group')
-    # plot_data(score_df, "study_group", "score", 'Barplot of User Scores per Study Group')
-    user_end_score_dict = score_df.groupby("user_id")["score"].max().to_dict()
-    # plot_understanding_over_time(user_predictions_over_time_list_dict['static'], "static", user_end_score_dict)
-    understanding_df, understanding_matrix, user_ids_u = plot_understanding_over_time(
-        user_predictions_over_time_list_dict['interactive'],
-        "interactive", user_end_score_dict)
+    # Update analysis dfs and exclude users
+    print(f"Users excluded: {len(exclude_user_ids)}")
+    analysis.update_dfs(exclude_user_ids)
+    analysis.add_self_assessment_value_column()
 
-    questions_matrix, user_ids_q = plot_asked_questions_per_user(user_questions_over_time_list_dict['interactive'],
-                                                                 user_end_score_dict)
+    # Save wlb_users to a csv file for manual analysis
+    wlb_users_df = pd.DataFrame(wlb_users, columns=["user_id", "feedback"])
+    wlb_users_df.to_csv("data/wlb_users.csv", index=False)
+    # get wlb user ids and exclude them
+    wlb_user_ids = wlb_users_df["user_id"].values
+    analysis.update_dfs(wlb_user_ids)
+
+    print("Amount of users per study group after first filters:")
+    print(analysis.user_df.groupby("study_group").size())
+
+    # perform_power_analysis()
+    # filter_by_wanted_count(analysis, 70)
+
+    ### Add Additional Columns to analysis.user_df
+    # Calculate total score improvement and confidence improvement
+    analysis.user_df["score_improvement"] = analysis.user_df["final_score"] - analysis.user_df["intro_score"]
+    analysis.user_df["confidence_avg_improvement"] = analysis.user_df["final_avg_confidence"] - analysis.user_df[
+        "intro_avg_confidence"]
+
+    # Merge final_q_feedback_list to analysis.user_df on user_id
+    analysis.user_df = analysis.user_df.merge(pd.concat(final_q_feedback_list), on="user_id", how="left")
+    initial_test_preds_df = pd.concat(initial_test_preds_list)
+    learning_test_preds_df = pd.concat(learning_test_preds_list)
+    analysis.add_initial_test_preds_df(initial_test_preds_df)
+    analysis.add_learning_test_preds_df(learning_test_preds_df)
+    analysis.add_final_test_preds_df(pd.concat(final_test_preds_list))
+    analysis.add_questions_over_time_df(pd.concat(user_questions_over_time_list))
+
+    # Update all dfs
+    analysis.update_dfs()
+
+    assert len(analysis.user_df) == len(analysis.initial_test_preds_df['user_id'].unique())
+    assert len(analysis.user_df) == len(analysis.learning_test_preds_df['user_id'].unique())
+
+    user_accuracy_over_time_df = plot_understanding_over_time(analysis.learning_test_preds_df, analysis)
+    assert len(analysis.user_df) == len(user_accuracy_over_time_df['user_id'].unique())
+
+    # Extract questionnaires into columns
+    analysis.user_df = extract_questionnaires(analysis.user_df)
+
+    # Save the dfs to csv
+    folder_path = "data/"
+    analysis.user_df.to_csv(folder_path + "user_df.csv", index=False)
+    analysis.event_df.to_csv(folder_path + "event_df.csv", index=False)
+    analysis.user_completed_df.to_csv(folder_path + "user_completed_df.csv", index=False)
+    analysis.initial_test_preds_df.to_csv(folder_path + "initial_test_preds_df.csv", index=False)
+    analysis.learning_test_preds_df.to_csv(folder_path + "learning_test_preds_df.csv", index=False)
+    analysis.final_test_preds_df.to_csv(folder_path + "final_test_preds_df.csv", index=False)
+    analysis.questions_over_time_df.to_csv(folder_path + "questions_over_time_df.csv", index=False)
+    user_accuracy_over_time_df.to_csv(folder_path + "user_accuracy_over_time_df.csv", index=False)
+
+    print("Amount of users per study group after All filters:")
+    print(analysis.user_df.groupby("study_group").size())
+
+    # Get demographics of the users
+    user_prolific_ids = analysis.user_df["prolific_id"].values
+    prolific_df = pd.read_csv("prolific_export.csv")
+    prolific_df = prolific_df[prolific_df["Participant id"].isin(user_prolific_ids)]
+    # Get Age statistics
+    # ignore revoked from analysis for now
+    prolific_df = prolific_df[prolific_df["Age"] != "CONSENT_REVOKED"]
+    # turn age to int
+    prolific_df["Age"] = prolific_df["Age"].astype(int)
+    print(prolific_df["Age"].describe())
+    print()
+    # Get Sex statistics
+    print(prolific_df["Sex"].value_counts())
+    print(prolific_df["Nationality"].value_counts())
+    # Turn mL knowledge to int
+    analysis.user_df["ml_knowledge"] = analysis.user_df["ml_knowledge"].astype(int)
+    print(analysis.user_df["ml_knowledge"].value_counts())
+    print()
+
+    # Get top 10 people based on final score with their prolific id
+    #print(analysis.user_df[["prolific_id", "final_score"]].sort_values("final_score", ascending=False).head(10))
+
+    ### LOOK AT ANALYSIS
+    if "plot_question_raking" in analysis_steps:
+        plot_asked_questions_per_user(analysis.questions_over_time_df, analysis)
+
+    def print_correlation_ranking(target_var, group=None):
+        # Make correlation df for user_df with each column against score_improvement
+        if group is not None:
+            correlation_df = analysis.user_df[analysis.user_df["study_group"] == group]
+        correlation_df = correlation_df.corr()
+        correlation_df = correlation_df[target_var].reset_index()
+        correlation_df.columns = ["column", "correlation"]
+        correlation_df = correlation_df.sort_values("correlation", ascending=False)
+        print(f"Correlation ranking for {group}", target_var)
+        print(correlation_df)
+
+    def get_wort_and_best_users():
+        # Filter best users = score_improvement > 3
+        best_users = analysis.questions_over_time_df[analysis.questions_over_time_df["score_improvement"] >= 3]
+        worst_users = analysis.questions_over_time_df[analysis.questions_over_time_df["score_improvement"] <= 0]
+
+        # Sort wors users by score_improvement (lowest first)
+        worst_users = worst_users.sort_values("score_improvement")
+        # Take same amount of worst users as best users
+        worst_users = worst_users[:len(best_users)]
+        return best_users, worst_users
+
+    #print_correlation_ranking("score_improvement", group="interactive")
+    # print_correlation_ranking("score_improvement", group="static")
+    #print_correlation_ranking("final_score", group="interactive")
+    print_correlation_ranking("final_score", group="static")
+
+    analysis.questions_over_time_df = analysis.questions_over_time_df.merge(
+        analysis.user_df[["id", "score_improvement"]],
+        left_on="user_id", right_on="id")
+    best_users, worst_users = get_wort_and_best_users()
+
+    plot_questions_tornado(best_users, worst_users)
 
     pm = ProcessMining()
-    pm.create_pm_csv(event_df, understanding_df, datapoint_count=5, filter_by_score="best")
-
-    # plot_understanding_with_questions(understanding_matrix, questions_matrix, user_ids_u, user_ids_q)
-
-    # plot_question_raking(questions_matrix)
-
-    ### Create Dataframe with Personal information, questions asked and the final understanding score
-    # TODO:
-    #corr_df = prepare_correlation_df(user_df, event_df, understanding_df)
+    pm.create_pm_csv(analysis, datapoint_count=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                     filter_by_score="best")
 
 
 if __name__ == "__main__":

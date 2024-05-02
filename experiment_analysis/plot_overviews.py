@@ -1,9 +1,19 @@
 import json
 
 import pandas as pd
+import tikzplotlib
 from matplotlib import pyplot as plt
 import seaborn as sns
 import numpy as np
+
+# Replace question IDs with question text
+question_text = {23: "Most Important Features",
+                 27: "Least Important Features",
+                 24: "Feature Attributions",
+                 7: "Counterfactuals",
+                 11: "Anchors",
+                 25: "Ceteris Paribus",
+                 13: "Feature Ranges"}
 
 
 def plot_chatbot_feedback(feedback_dict_list):
@@ -40,92 +50,168 @@ def plot_chatbot_feedback(feedback_dict_list):
     plt.show()
 
 
-def get_user_id_predictions_over_time_matrix(user_predictions_over_time_list):
+def handle_duplicates(predictions):
+    # Create a dictionary to keep track of the count of each datapoint_count
+    count_dict = {}
+    duplicates_count = 0
+
+    # Iterate over the sorted predictions
+    for x in predictions:
+        datapoint_count = x['datapoint_count']
+
+        # If the datapoint_count is already in the dictionary, append the prediction
+        if datapoint_count in count_dict:
+            count_dict[datapoint_count].append(x)
+            duplicates_count += 1
+        else:
+            # If the datapoint_count is not in the dictionary, add it with the current prediction
+            count_dict[datapoint_count] = [x]
+
+    # Iterate over the count_dict
+    for datapoint_count, data in count_dict.items():
+        # If the count is more than 1, check if the next datapoint_count is not the succeeding count
+        if len(data) > 1:
+            next_datapoint_count = datapoint_count + 1
+            prev_datapoint_count = datapoint_count - 1
+            if next_datapoint_count not in count_dict:
+                # Increment the current datapoint_count and print the updated data
+                data[0]['datapoint_count'] += 1
+            elif prev_datapoint_count not in count_dict:
+                # Decrement the current datapoint_count and print the updated data
+                data[0]['datapoint_count'] -= 1
+
+    # Filter out duplicates, keeping the first occurrence
+    seen = set()
+    sorted_predictions = [x for x in predictions if
+                          x['datapoint_count'] not in seen and not seen.add(x['datapoint_count'])]
+    print(f"Found {duplicates_count} duplicates...")
+    return sorted_predictions
+
+
+def get_user_id_predictions_over_time_matrix(user_predictions_over_time_df):
     """
-    Prepare a matrix where each row represents a user and each column represents the correctness of one of the 5 predictions.
+    Create a DataFrame with each row representing a user and columns 'datapoint1' to 'datapoint10'
+    representing the first ten datapoints for each user, based on the 'datapoint_count' within the details.
 
-    :param user_predictions_over_time_list: List of user predictions over time
-    :return: A 2D list with user correctness data, and a list of user_ids in the order they appear in the matrix.
+    :param user_predictions_over_time_df: DataFrame with user predictions, where 'details' contains serialized dictionaries
+    :return: DataFrame with user_id as index and columns for each of the first ten datapoints
     """
-    user_correctness = {}
+    # Create a new column 'accuracy' to reflect Correct/Wrong
+    user_predictions_over_time_df['accuracy'] = user_predictions_over_time_df.apply(
+        lambda row: 'Correct' if row['prediction'] == row['true_label'] else 'Wrong', axis=1)
 
-    for user_predictions_over_time in user_predictions_over_time_list:
-        user_id = user_predictions_over_time["user_id"].unique()[0]
-        details_col = user_predictions_over_time["details"]
-        details_list = details_col.apply(json.loads).tolist()
+    # Now pivot the table with 'accuracy' as the values
+    result_df = user_predictions_over_time_df.pivot_table(
+        index='user_id',
+        columns='datapoint_count',
+        values='accuracy',
+        aggfunc=lambda x: x  # you can choose to list, or keep the first, or count the occurrences of 'Correct'/'Wrong'
+    )
 
-        sorted_predictions = sorted(details_list, key=lambda x: x['datapoint_count'])
+    # Flattening the multi-index in columns
+    result_df.columns = [f'accuracy_{col}' for col in result_df.columns]
+    result_df.reset_index(inplace=True)
 
-        # if there are duplicate predictions, keep the first one
-        seen = set()
-        sorted_predictions = [x for x in sorted_predictions if
-                              x['datapoint_count'] not in seen and not seen.add(x['datapoint_count'])]
+    # Count rows that do not have 'Correct' or 'Wrong' in 'accuracy' or nan
+    def is_single_correct_or_wrong(value):
+        try:
+            return value in ['Correct', 'Wrong']
+        except ValueError:
+            return False
 
-        user_correctness[user_id] = []
-        for prediction in sorted_predictions:
-            is_correct = prediction["true_label"].lower() == prediction["prediction"].lower()
-            user_correctness[user_id].append(is_correct)
+    # Select only columns that start with "accuracy_"
+    accuracy_columns = [col for col in result_df.columns if col.startswith('accuracy_')]
 
-    """# Ensure all users have entries for each of the 5 predictions
-    for user_id in user_correctness:
-        while len(user_correctness[user_id]) < 5:
-            user_correctness[user_id].append(False)  # Assuming missing predictions are incorrect"""
+    # Apply the function to each cell in the selected columns
+    mask = result_df[accuracy_columns].applymap(is_single_correct_or_wrong)
 
-    # Convert to a matrix format suitable for plotting
-    matrix_data = [user_correctness[user_id] for user_id in sorted(user_correctness)]
-    user_ids = sorted(user_correctness.keys())
-
-    return matrix_data, user_ids
+    # Get the user_ids where all values in a row are either 'Correct' or 'Wrong'
+    remove_ids = result_df[~mask.all(axis=1)]['user_id']
+    print(f"Removed {len(remove_ids)} users with missing or invalid data.")
+    remove_ids = remove_ids.tolist()
+    # get df where user_id = 'e1420868-2337-4935-a730-c77f8275c845'
+    dimi_df = result_df[result_df['user_id'].isin(["e1420868-2337-4935-a730-c77f8275c845"])]
+    return result_df, remove_ids
 
 
-def plot_user_predictions(matrix_data, user_ids, study_group_name, users_end_score_dict=None):
+def plot_user_predictions(user_accuracy_over_time_df, study_group_name, user_df):
     """
     Plot a matrix where each row represents a user and each column represents the correctness of one of the 5 predictions.
     Optionally includes an end score for each user as the last column.
-
-    :param matrix_data: A 2D list with user correctness data (expected to be numeric)
-    :param user_ids: List of user IDs corresponding to rows in matrix_data
-    :param study_group_name: Name of the study group for the title
-    :param users_end_score_dict: Optional dictionary mapping user_id to end score (expected to be numeric or None for missing)
     """
-    # Convert boolean 'True'/'False' to 1/0 and handle missing end scores
-    for i, row in enumerate(matrix_data):
-        for j, val in enumerate(row):
-            if isinstance(val, str):  # Convert 'True'/'False' strings to 1/0
-                matrix_data[i][j] = 1 if val == 'True' else 0
+    # Merge "final score" and "initial score" from user_df to the user_accuracy_over_time_df
+    user_accuracy_over_time_df = user_accuracy_over_time_df.merge(
+        user_df[['id', 'final_score', 'intro_score', 'study_group']],
+        left_on='user_id', right_on='id', how='left'
+    )
+    user_accuracy_over_time_df.drop(columns='id', inplace=True)
+    # Filter by study group and remove col
+    user_accuracy_over_time_df = user_accuracy_over_time_df[
+        user_accuracy_over_time_df['study_group'] == study_group_name]
+    user_accuracy_over_time_df.drop(columns='study_group', inplace=True)
 
-        if users_end_score_dict:
-            user_id = user_ids[i]
-            end_score = users_end_score_dict.get(user_id, np.nan)
-            matrix_data[i].append(end_score)
+    # Setup color map and apply to accuracy columns
+    color_map = {'Correct': 'green', 'Wrong': 'red'}
+    accuracy_cols = [col for col in user_accuracy_over_time_df.columns if 'accuracy' in col]
+    for col in accuracy_cols:
+        user_accuracy_over_time_df[col] = user_accuracy_over_time_df[col].map(color_map)
 
-    xticklabels = [str(i) for i in range(1, 6)] + ['objective score'] if users_end_score_dict else [str(i) for i in
-                                                                                                    range(1, 6)]
+    # Plotting
+    fig, axs = plt.subplots(nrows=len(user_accuracy_over_time_df),
+                            figsize=(10, max(2 * len(user_accuracy_over_time_df), 10)), sharex=True)
+    if len(user_accuracy_over_time_df) == 1:
+        axs = [axs]
 
-    fig, ax = plt.subplots(figsize=(10, len(user_ids) / 2 + 1))
-    sns.heatmap(matrix_data, annot=True, fmt=".1f", cmap="YlGn", ax=ax, cbar=False, xticklabels=xticklabels,
-                yticklabels=user_ids)
+    for ax, (_, row) in zip(axs, user_accuracy_over_time_df.iterrows()):
+        ax.bar(accuracy_cols, [1] * len(accuracy_cols), color=row[accuracy_cols])
+        ax.set_title(f"User: {row['user_id']}")
+        ax.set_ylim(0, 1)
+        ax.set_yticks([])
 
-    ax.set_xlabel("Prediction Number")
-    ax.set_ylabel("User ID")
-    ax.set_title(f"{study_group_name} - User Prediction Correctness Matrix")
+        # Plot scores on a secondary y-axis
+        score_cols = ['intro_score', 'final_score']
+        ax2 = ax.twinx()  # Create a secondary y-axis
+        ax2.plot(score_cols, [row[col] for col in score_cols], 'ko-', label='Scores')
+        ax2.legend(loc='upper right')
 
+    plt.xticks(ticks=range(len(user_accuracy_over_time_df.columns[1:])), labels=user_accuracy_over_time_df.columns[1:],
+               rotation=90)
     plt.tight_layout()
     plt.show()
 
 
-def plot_understanding_over_time(user_predictions_over_time_list, study_group_name, users_end_score_dict=None):
+def plot_understanding_over_time(user_predictions_over_time_list, analysis):
     """
     Plot the proportion of correct and incorrect predictions for each prediction order.
     """
-    matrix_data, user_ids = get_user_id_predictions_over_time_matrix(user_predictions_over_time_list)
-    plot_user_predictions(matrix_data, user_ids, study_group_name, users_end_score_dict)
-    # Turn to df for easier analysis
-    df = pd.DataFrame(matrix_data, index=user_ids, columns=[f"Datapoint {i}" for i in range(1, len(matrix_data[0]) + 1)])
-    # rename last column to objective score
-    if users_end_score_dict:
-        df = df.rename(columns={f"Datapoint {len(matrix_data[0])}": "Objective Score"})
-    return df, matrix_data, user_ids
+    user_accuracy_over_time_df, exclude_user_ids = get_user_id_predictions_over_time_matrix(
+        user_predictions_over_time_list)
+    analysis.update_dfs(exclude_user_ids)
+    print("Users after removing missing or invalid data:")
+    print(analysis.user_df.groupby("study_group").size())
+    user_accuracy_over_time_df = user_accuracy_over_time_df[
+        ~user_accuracy_over_time_df['user_id'].isin(exclude_user_ids)]
+
+    # Count 'Correct' predictions and save to 'accuracy_over_time'
+    user_accuracy_over_time_df['accuracy_over_time'] = user_accuracy_over_time_df.filter(like='accuracy').apply(
+        lambda row: sum(row == 'Correct'), axis=1)
+    # CHeck for nan values in accuracy_over_time
+    if user_accuracy_over_time_df['accuracy_over_time'].isna().sum() > 0:
+        print("Nan values in accuracy_over_time:")
+        print(user_accuracy_over_time_df['accuracy_over_time'].isna().sum())
+    # Merge 'accuracy_over_time' with user_df
+    analysis.user_df = analysis.user_df.merge(user_accuracy_over_time_df[['user_id', 'accuracy_over_time']],
+                                              left_on='id', right_on='user_id', how='left')
+
+    # Check nan in analysis.user_df accuracy_over_time
+    if analysis.user_df['accuracy_over_time'].isna().sum() > 0:
+        print("Nan values in accuracy_over_time in user_df:")
+        print(analysis.user_df['accuracy_over_time'].isna().sum())
+
+    """if plot:
+        plot_user_predictions(user_accuracy_over_time_df, study_group_name, analysis.user_df)"""
+
+    return user_accuracy_over_time_df
 
 
 def print_feedback_json(user_df):
@@ -151,36 +237,48 @@ def print_feedback_json(user_df):
             print(",")
 
 
-def get_user_id_questions_over_time_matrix(user_questions_dict_list):
-    user_questions = {}
+def get_user_id_questions_over_time_df(user_questions_df):
+    def count_question_type_occurence(question_ids, col_name=None):
+        question_names = [question_text[question_id] for question_id in question_ids]
+        if col_name is None:
+            col_name = "_".join(question_names)
+        summary_questions_df[col_name] = 0
+        for index, row in summary_questions_df.iterrows():
+            # Iterate over each item in the row
+            for item in row:
+                if isinstance(item, list) and any(question_id in item for question_id in question_ids):
+                    summary_questions_df.loc[index, col_name] += sum(
+                        item.count(question_id) for question_id in question_ids)
 
-    for single_user_questions_df in user_questions_dict_list:
-        user_id = single_user_questions_df["user_id"].unique()[0]
-        details_col = single_user_questions_df["details"]
+    # Create new df with one row per user and datapoint_count as columns and question_ids as values
+    summary_questions_df = user_questions_df.pivot_table(
+        index='user_id',
+        columns='datapoint_count',
+        values='question_id',
+        aggfunc=lambda x: list(x)
+    )
 
-        # Assuming details_col is a Series, convert JSON strings to dictionaries
-        details_list = details_col.apply(json.loads).tolist()
+    # Replace NaN values with empty lists
+    for col in summary_questions_df.columns:
+        summary_questions_df[col] = summary_questions_df[col].apply(
+            lambda x: [] if isinstance(x, float) and pd.isna(x) else x)
 
-        sorted_questions_by_datapoint = sorted(details_list, key=lambda x: x['datapoint_count'])
+    # rename columns to question_1, question_2, ..., question_10
+    summary_questions_df.columns = [f"question_{col}" for col in summary_questions_df.columns]
 
-        if user_id not in user_questions:
-            user_questions[user_id] = {}
+    # Add column called "total_questions" to user_df
+    summary_questions_df["total_questions"] = summary_questions_df.applymap(len).sum(axis=1)
 
-        # Save questions per datapoint in dictionary
-        for question in sorted_questions_by_datapoint:
-            datapoint_count = question['datapoint_count']
+    # Create new column for individual question
+    for q_id, question in question_text.items():
+        count_question_type_occurence([q_id])
 
-            if datapoint_count not in user_questions[user_id]:
-                user_questions[user_id][datapoint_count] = [question['question_id']]
-            else:
-                user_questions[user_id][datapoint_count].append(question['question_id'])
+    # create two more cols for feature_specific and general questions
+    count_question_type_occurence([25, 13], "feature_specific")
+    count_question_type_occurence([23, 27, 24, 7, 11], "general")
 
-    # The conversion to matrix_data below assumes a list of lists for each user, sorted by datapoint_count.
-    matrix_data = [[user_questions[user_id][dp] for dp in sorted(user_questions[user_id])] for user_id in
-                   sorted(user_questions)]
-    user_ids = sorted(user_questions.keys())
-
-    return matrix_data, user_ids
+    # Iterate over each row in the DataFrame
+    return summary_questions_df
 
 
 def plot_user_questions(matrix, user_ids, study_group_name):
@@ -221,13 +319,14 @@ def plot_user_questions(matrix, user_ids, study_group_name):
     plt.show()
 
 
-def plot_asked_questions_per_user(event_df, end_score_dict):
+def plot_asked_questions_per_user(event_df, analysis):
     """
-    Plot the question ids per user per datapoint count.
+    Get the question ids per user per datapoint count.
     """
-    matrix, user_ids = get_user_id_questions_over_time_matrix(event_df)
-    plot_user_questions(matrix, user_ids, end_score_dict)
-    return matrix, user_ids
+    summary_q_over_time_df = get_user_id_questions_over_time_df(event_df)
+    user_df = analysis.user_df.merge(summary_q_over_time_df, left_on='id', right_index=True, how='left')
+    analysis.user_df = user_df
+    plot_question_raking(summary_q_over_time_df)
 
 
 def plot_understanding_with_questions(matrix_understanding, matrix_questions, user_ids_u, user_ids_q):
@@ -265,7 +364,8 @@ def plot_understanding_with_questions(matrix_understanding, matrix_questions, us
             ax.add_patch(rect)
 
             # Annotate the cell with question IDs
-            ax.text(j + 0.5, num_rows - i - 0.5, questions, ha='center', va='center', fontsize=8)  # Adjust text alignment and size as needed
+            ax.text(j + 0.5, num_rows - i - 0.5, questions, ha='center', va='center',
+                    fontsize=8)  # Adjust text alignment and size as needed
 
     # Set up the plot axes
     ax.set_xlim(0, num_cols)
@@ -288,19 +388,116 @@ def plot_understanding_with_questions(matrix_understanding, matrix_questions, us
     plt.tight_layout()  # Adjust layout to fit everything
     plt.show()
 
-def plot_question_raking(question_matrix):
+
+def plot_question_raking(summary_q_df):
     """
     Print a list of questions asked ranked by the number of times they were asked across all users
     """
-    # Flatten the matrix and count the occurrences of each question
-    all_questions = [question for user_questions in question_matrix for questions in user_questions for question in questions]
+    # Take first 10 columns
+    summary_q_df = summary_q_df.iloc[:, :10]
+    # Calculate question counts from the summary dataframe
+    all_questions = [question for questions in summary_q_df.values.flatten() for question in questions]
+
     question_counts = pd.Series(all_questions).value_counts()
+
+    question_counts.index = [question_text[question_id] for question_id in question_counts.index]
 
     # Plot the question counts
     plt.figure(figsize=(10, 6))
-    question_counts.plot(kind='bar')
-    plt.title("Question Ranking")
-    plt.xlabel("Question ID")
-    plt.ylabel("Number of Occurrences")
+    bars = plt.bar(question_counts.index, question_counts.values)
+    plt.title("Question Counts")
+    plt.ylabel("Number of Clicks")
+
+    # Add counts over the bars
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width() / 2, yval + 0.5, yval, ha='center', va='bottom')
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    tikzplotlib.save("analysis_plots/question_counts.tex")
+    # plt.show()
+
+
+def plot_time_boxplots(df):
+    fig, axs = plt.subplots(3, 1, figsize=(10, 18))
+
+    sns.boxplot(x="study_group", y="total_learning_time", data=df, ax=axs[0])
+    sns.stripplot(x="study_group", y="total_learning_time", data=df, color=".25", ax=axs[0])
+    axs[0].set_title('Boxplot of Time Spent in Learning Phase per Study Group')
+    axs[0].set_ylabel('Total Learning Time (minutes)')
+
+    sns.boxplot(x="study_group", y="exp_instruction_time", data=df, ax=axs[1])
+    sns.stripplot(x="study_group", y="exp_instruction_time", data=df, color=".25", ax=axs[1])
+    axs[1].set_title('Boxplot of Time Spent in Instruction per Study Group')
+    axs[1].set_ylabel('Instruction Time (minutes)')
+
+    sns.boxplot(x="study_group", y="total_exp_time", data=df, ax=axs[2])
+    sns.stripplot(x="study_group", y="total_exp_time", data=df, color=".25", ax=axs[2])
+    axs[2].set_title('Boxplot of Total Time Spent in Experiment per Study Group')
+    axs[2].set_ylabel('Total Experiment Time (minutes)')
+
+    plt.tight_layout()
     plt.show()
 
+
+def plot_questions_tornado(best_users, worst_users):
+    colors = {'worst': 'darkred', 'best': 'lightgreen'}
+    # Sort wors users by score_improvement (lowest first)
+    worst_users = worst_users.sort_values("score_improvement")
+    # Take same amount of worst users as best users
+    worst_users = worst_users[:len(best_users)]
+
+    # Plot tornado plot of questions for interactive group between best and worst users
+    question_counts_best = best_users.groupby("question_id").size().reset_index(name="count")
+    question_counts_worst = worst_users.groupby("question_id").size().reset_index(name="count")
+    question_counts_best["group"] = "best"
+    question_counts_worst["group"] = "worst"
+    merged_counts = pd.merge(question_counts_best, question_counts_worst, on='question_id',
+                             suffixes=('_best', '_worst'), how='outer').fillna(0)
+
+    # Create a new column 'total_count' as the sum of 'count_best' and 'count_worst'
+    merged_counts['total_count'] = merged_counts['count_best'] + merged_counts['count_worst']
+
+    # Sort the DataFrame based on the 'total_count' in descending order
+    merged_counts.sort_values('total_count', ascending=True, inplace=True)
+
+    # replace question_id with question_text
+    merged_counts['question_id'] = merged_counts['question_id'].map(question_text)
+
+    # Set up the figure and axis for the plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Define the width of the bars
+    bar_width = 0.2
+
+    # Generate the positions of the bars
+    indices = range(len(merged_counts))
+
+    # Plotting the bars for best and worst counts in opposite directions
+    ax.barh(indices, merged_counts['count_best'], height=bar_width, color=colors['best'], label='Best')
+    ax.barh(indices, -merged_counts['count_worst'], height=bar_width, color=colors['worst'], label='Worst')
+
+    # Set the y-ticks to question_id
+    ax.set_yticks(indices)
+    ax.set_yticklabels(merged_counts['question_id'])
+
+    # Adding labels and title
+    ax.set_xlabel('Count of Question Selections')
+    ax.set_ylabel('Question Type')
+    ax.set_title('Tornado Plot of Question Selections')
+
+    for index, value in enumerate(merged_counts['count_best']):
+        difference = value - merged_counts['count_worst'].iloc[index]
+        if difference >= 0:
+            plt.text(value, index - bar_width / 2, f"+{difference}", va='center')
+        else:
+            plt.text(value, index - bar_width / 2, f"{difference}", va='center')
+
+    # Draw a vertical line at x=0 to separate the two sides of the plot
+    plt.axvline(x=0, color='black', linewidth=0.8)
+
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig("analysis_plots/tornado_plot.pdf")
+    # plt.show()
