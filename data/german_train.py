@@ -3,6 +3,8 @@ import json
 import os
 import pickle
 
+import shap
+from sklearn.metrics import roc_auc_score
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -22,7 +24,10 @@ def standardize_column_names(data):
 def clean_data(data, cols_with_nan_list):
     data[data == '?'] = np.nan
     for col in cols_with_nan_list:
-        data[col].fillna(data[col].mode()[0], inplace=True)
+        if col in ['Saving accounts', 'Checking account']:  # Fill missing account values with 0
+            data[col].fillna('little', inplace=True)
+        else:
+            data[col].fillna(data[col].mode()[0], inplace=True)
     return data
 
 
@@ -70,6 +75,13 @@ def map_duration_col(config, data):
     - data: pandas.DataFrame with a new column 'CreditDurationCategory' indicating the categorized credit duration.
     """
     # Define bins and labels for the duration categories
+    """ Add this to model_config ordinal_mapping if this function is used.
+    "CreditDuration": {
+      "Short-term (3-12 months)": 0,
+      "Medium-term (13-36 months)": 1,
+      "Long-term (37-72 months)": 2
+    },
+    """
     col_name = "CreditDuration"
     bins = [3, 12, 36, 72]  # Bin edges
     labels = list(config['ordinal_mapping'][col_name].keys())  # Category labels
@@ -96,10 +108,9 @@ def preprocess_data_specific(data, config):
         data = data.rename(columns=config["rename_columns"])
 
     map_job_col(config, data)
-    map_duration_col(config, data)
+    # map_duration_col(config, data)
     bin_age_column(data)
     map_ordinal_columns(data, config)
-
     target_col = config["target_col"]
     X = data.drop(columns=[target_col])
     y = data[target_col]
@@ -111,7 +122,6 @@ def preprocess_data_specific(data, config):
         X, encoded_classes = label_encode_and_save_classes(X, config)
     else:
         encoded_classes = {}
-
     return X, y, encoded_classes
 
 
@@ -136,15 +146,16 @@ def main():
 
     # Check if there are nan values in the data and raise an error if there are
     if X_train.isna().sum().sum() > 0:
+        # print the nan columns
+        print(X_train.columns[X_train.isna().any()].tolist())
         raise ValueError("There are NaN values in the training data.")
 
     # Copy the config file to the save path
     with open(os.path.join(save_path, f"{DATASET_NAME}_model_config.json"), 'w') as file:
         json.dump(config, file)
 
-    columns_to_encode = config["columns_to_encode"]
     # Change list of column names to be encoded to a list of column indices
-    columns_to_encode = [X_train.columns.get_loc(col) for col in columns_to_encode]
+    columns_to_encode = [X_train.columns.get_loc(col) for col in config["columns_to_encode"]]
     pipeline = construct_pipeline(columns_to_encode, RandomForestClassifier())
 
     model_params = {("model__" + key if not key.startswith("model__") else key): value for key, value in
@@ -153,13 +164,36 @@ def main():
 
     best_model, best_params = train_model(X_train, y_train, pipeline, model_params, search_params)
 
+    best_model.fit(X_train, y_train)
+
+    # Predict probabilities for the train set
+    y_train_pred = best_model.predict_proba(X_train)[:, 1]
+
+    # Compute ROC AUC score for the train set
+    train_score = roc_auc_score(y_train, y_train_pred)
+    print("Best Model Score Train:", train_score)
+
+    # Predict probabilities for the test set
+    y_test_pred = best_model.predict_proba(X_test)[:, 1]
+
+    # Compute ROC AUC score for the test set
+    test_score = roc_auc_score(y_test, y_test_pred)
+    print("Best Model Score Test:", test_score)
+
+    # Get global shapley feature importance
+    # Transform the data to a numpy array with preprocessor from the pipeline
+    explainer = shap.Explainer(best_model.predict, X)
+    shap_values = explainer(X)
+    shap.plots.bar(shap_values)
+
+
     # Print evaluation metrics on train and test
-    print("Best Model Score Train:", best_model.score(X_train, y_train))
-    print("Best Model Score Test:", best_model.score(X_test, y_test))
-    print("Best Parameters:", best_params)
+    # print("Best Model Score Train:", best_model.score(X_train, y_train))
+    # print("Best Model Score Test:", best_model.score(X_test, y_test))
+    # print("Best Parameters:", best_params)
 
     # Save the best model
-    pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
+    # pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
 
 
 if __name__ == "__main__":

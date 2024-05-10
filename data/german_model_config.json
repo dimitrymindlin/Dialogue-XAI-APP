@@ -11,11 +11,7 @@
       "good": 1,
       "bad": 0
     },
-    "CreditDuration": {
-      "Short-term (3-12 months)": 0,
-      "Medium-term (13-36 months)": 1,
-      "Long-term (37-72 months)": 2
-    },
+
     "JobLevel": {
       "unskilled and non-resident": 0,
       "unskilled and resident": 1,
