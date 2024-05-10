@@ -245,7 +245,26 @@ def get_bot_response():
             data = json.loads(request.data)
             question_id = data["question"]
             feature_id = data["feature"]
-            response = bot_dict[user_id].update_state_dy_id(question_id, feature_id)
+            response = bot_dict[user_id].update_state_new(question_id=question_id, feature_id=feature_id)
+        except Exception as ext:
+            app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
+            app.logger.info(f"Exception getting bot response: {ext}")
+            response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
+        return response
+
+
+@bp.route("/get_nl_response", methods=['POST'])
+def get_bot_response_from_nl():
+    """Load the box response."""
+    user_id = request.args.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
+    if request.method == "POST":
+        app.logger.info("generating the bot response for nl input")
+        try:
+            data = json.loads(request.data)
+            print(data["message"])
+            response = bot_dict[user_id].update_state_new(user_input=data["message"])
         except Exception as ext:
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
