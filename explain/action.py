@@ -76,12 +76,12 @@ def run_action(conversation: Conversation,
     return return_statement
 
 
-def run_action_by_id(conversation: Conversation,
-                     question_id: int,
-                     instance_id: int,
-                     feature_id: int = None,
-                     build_temp_dataset: bool = True,
-                     instance_type_naming: str = "instance") -> str:
+def run_action_new(conversation: Conversation,
+                   question_id: int,
+                   instance_id: int,
+                   feature_id: int = None,
+                   build_temp_dataset: bool = True,
+                   instance_type_naming: str = "instance") -> str:
     """
     Runs the action selected by an ID instead of text parsing and updates the conversation object.
 
@@ -111,13 +111,11 @@ def run_action_by_id(conversation: Conversation,
     # get_explanation_report(conversation, instance_id)
 
     if question_id == 0:
-        # Which attributes does the model use to make predictions?
+        # TODO: Implement using last explanation
         return f"The model uses the following attributes to make predictions: {', '.join(list(data.columns))}."
     if question_id == 1:
-        # Does the model include [feature X] when making the prediction?
-        explanation = get_feature_importance_by_feature_id(conversation, data, regen, feature_id)
-        answer = "Yes it does. "
-        return answer + explanation[0]
+        return "To understand why the model made the prediction, I can tell you about the <b>most important attributes</b>, or " \
+               "in which case a <b>different prediction would have made</b>. What would you like to know?"
     if question_id == 2:
         # How important is each attribute to the model's predictions?
         # Create full feature explanations
@@ -218,7 +216,7 @@ def run_action_by_id(conversation: Conversation,
                                                           current_prediction_id)
         return explanation
     if question_id == 25:
-        print(measure_interaction_effects(conversation, parse_text=parse_op))
+        # print(measure_interaction_effects(conversation, parse_text=parse_op))
         # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
         explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming, opposite_class,
                                               as_text=True)
@@ -232,6 +230,14 @@ def run_action_by_id(conversation: Conversation,
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
                                                         template_manager=template_manager)
         return answer + explanation[0]
+    if question_id == 99: # greeting
+        return "Hello, I am an assistant to help you understand the prediction of the Machine Learning model. You can " \
+               "ask about the most or least important attributes, how certain changes in attributes influence the " \
+               "prediction or what alternative attributes would lead to a different prediction."
+    if question_id == 100: # not xai method
+        return "I'm sorry, I cannot answer that. I can help you to understand the prediction of the Machine Learning " \
+               "model by showing you the most or least important attributes and their influence or how certain changes " \
+               "in attributes influence the prediction or what alternative attributes would lead to a different prediction."
     else:
         return f"This is a mocked answer to your question with id {question_id}."
     """if question_id == 12:
