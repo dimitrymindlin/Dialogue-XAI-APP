@@ -21,7 +21,7 @@ ExplainBot.numerical_features = ['Age', 'WeeklyWorkingHours']
 ExplainBot.remove_underscores = True
 ExplainBot.actionable_features = ["InvestmentOutcome", "EducationLevel", "Occupation"]
 ExplainBot.feature_ordering = ['Age', 'EducationLevel', 'MaritalStatus', 'Occupation', 'WeeklyWorkingHours', 'WorkLifeBalance', 'InvestmentOutcome']
-
+ExplainBot.use_intent_recognition = True
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
