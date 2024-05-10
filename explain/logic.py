@@ -21,7 +21,7 @@ import gin
 from create_experiment_data.experiment_helper import ExperimentHelper
 from data.response_templates.template_manager import TemplateManager
 from create_experiment_data.test_instances import TestInstances
-from explain.action import run_action, run_action_by_id, compute_explanation_report
+from explain.action import run_action, run_action_new, compute_explanation_report
 from explain.actions.explanation import explain_cfe_by_given_features
 from explain.conversation import Conversation
 from explain.explanation import MegaExplainer
@@ -33,6 +33,8 @@ from explain.explanations.feature_statistics_explainer import FeatureStatisticsE
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
 from explain.write_to_log import log_dialogue_input
+from parsing.llm_intent_recognition.descriptive_prompt_classification import LLMClassificationModel
+from parsing.llm_intent_recognition.feature_recognizer import FeatureRecognizer
 
 app = Flask(__name__)
 
@@ -76,7 +78,8 @@ class ExplainBot:
                  feature_units_mapping=None,
                  encoded_col_mapping_path: dict = None,
                  feature_ordering: List[str] = None,
-                 use_selection: bool = False):
+                 use_selection: bool = False,
+                 use_intent_recognition: bool = False):
         """The init routine.
 
         Arguments:
@@ -139,11 +142,16 @@ class ExplainBot:
         self.encoded_col_mapping_path = encoded_col_mapping_path
         self.feature_ordering = feature_ordering
         self.use_selection = use_selection
+        self.use_intent_recognition = use_intent_recognition
+        self.feature_recognizer = FeatureRecognizer()
 
         # A variable used to help file uploads
         self.manual_var_filename = None
 
         self.decoding_model_name = parsing_model_name
+
+        if self.use_intent_recognition:
+            self.intent_recognition_model = LLMClassificationModel()
 
         # Initialize completion + parsing modules
         """
@@ -697,7 +705,7 @@ class ExplainBot:
                 user_session_conversation, parse_tree, parsed_text)
         else:
             instance_id = self.current_instance[0]
-            returned_item = run_action_by_id(user_session_conversation, int(text), instance_id)
+            returned_item = run_action_new(user_session_conversation, int(text), instance_id)
 
         # username = user_session_conversation.username
 
