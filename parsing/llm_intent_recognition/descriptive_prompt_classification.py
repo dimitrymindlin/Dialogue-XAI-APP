@@ -9,9 +9,12 @@ from difflib import SequenceMatcher
 from langchain.memory import ConversationBufferMemory
 import os
 
+import os
+from dotenv import load_dotenv
+load_dotenv()
+os.environ['LANGCHAIN_API_KEY'] = os.getenv('LANGSMITH_API_KEY')
 os.environ['LANGCHAIN_TRACING_V2'] = 'true'
 os.environ['LANGCHAIN_ENDPOINT'] = 'https://api.smith.langchain.com'
-os.environ['LANGCHAIN_API_KEY'] = "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"
 
 LLM_MODEL = "llama3"
 
