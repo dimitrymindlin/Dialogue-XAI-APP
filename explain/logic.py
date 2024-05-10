@@ -724,9 +724,10 @@ class ExplainBot:
 
         return final_result
 
-    def update_state_dy_id(self,
-                           question_id: int,
-                           feature_id: int = None):
+    def update_state_new(self,
+                         user_input: str = None,
+                         question_id: int = None,
+                         feature_id: int = None):
         """The main experiment driver.
 
                 The function controls state updates of the conversation. It accepts the
@@ -739,7 +740,14 @@ class ExplainBot:
                     output: The response to the user input.
                 """
 
-        if any([question_id is None]):
+        if user_input is not None:
+            question_id, feature_name = self.intent_recognition_model.predict(user_input.strip())
+            # If feature specific, get feature
+            if feature_name is not None:
+                feature_list = list(self.conversation.stored_vars['dataset'].contents['X'].columns)
+                feature_id = feature_list.index(feature_name)
+
+        if question_id is None:
             return ''
 
         app.logger.info(f'USER INPUT: q_id:{question_id}, f_id:{feature_id}')
@@ -747,21 +755,12 @@ class ExplainBot:
         # Convert feature_id to int if not None
         if feature_id is not None:
             feature_id = int(feature_id)
-        returned_item = run_action_by_id(self.conversation,
-                                         int(question_id),
-                                         instance_id,
-                                         feature_id,
-                                         instance_type_naming=self.instance_type_naming)
+        returned_item = run_action_new(self.conversation,
+                                       int(question_id),
+                                       instance_id,
+                                       feature_id,
+                                       instance_type_naming=self.instance_type_naming)
 
-        # username = user_session_conversation.username  # TODO: Check if needed?!
-
-        # response_id = self.gen_almost_surely_unique_id()
-        """logging_info = self.build_logging_info(self.bot_name,
-                                               username,
-                                               response_id,
-                                               text,
-                                               parsed_text,
-                                               returned_item)"""  # TODO: Enable when logging works
         # self.log(logging_info) # Logging dict currently off.
         # Concatenate final response, parse, and conversation representation
         # This is done so that we can split both the parse and final
