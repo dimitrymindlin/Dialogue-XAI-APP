@@ -1,25 +1,19 @@
-##########################################
-# The san francisco crime dataset conversation config
-##########################################
-
 # User provided prediction model file path
 ExplainBot.model_file_path = "./data/adult/adult_model_rf.pkl"
 ExplainBot.encoded_col_mapping_path = "./data/adult/encoded_col_mapping.json"
 ExplainBot.categorical_mapping_path = "./data/adult/categorical_mapping.json"
+ExplainBot.background_dataset_file_path = "./data/adult/adult_train.csv"
+ExplainBot.dataset_file_path = "./data/adult/adult_test.csv"
+
+ExplainBot.name = "adult census dataset"
 
 # Seed
 ExplainBot.seed = 0
 
-# The dataset to run the conversation on
-ExplainBot.dataset_file_path = "./data/adult/adult_test.csv"
-
-# The background dataset for the conversation
-ExplainBot.background_dataset_file_path = "./data/adult/adult_train.csv"
-ExplainBot.name = "adult census dataset"
-ExplainBot.instance_type_naming = "Person"
 
 # Dataset feature information
 ExplainBot.dataset_index_column = 0
+ExplainBot.instance_type_naming = "Person"
 ExplainBot.target_variable_name = "Income"
 ExplainBot.categorical_features = ['MaritalStatus', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
 ExplainBot.ordinary_features = ['InvestmentOutcome','EducationLevel', 'WorkLifeBalance']
@@ -43,6 +37,7 @@ TabularDice.final_cfe_amount = 3
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"
 DiverseInstances.instance_amount = 11
+DiverseInstances.dataset_name = "adult"
 
 # Test Instances
 TestInstances.cache_location = "./cache/adult-test-instances.pkl"
@@ -65,7 +60,7 @@ DatasetDescription.model_description = "random forest model"
 
 # Feature Tooltip
 ExplainBot.feature_tooltip_mapping = {
-    "age": "The individual's age, represented in years.",
+    "age": "The individual's age, in years.",
     "education level": "Highest level of education attained by the individual, categorized as: Dropout, High School grad, Associates, Bachelors grad, Masters grad, Professional Degree or Doctorate/Prof Level.",
     "weekly working hours": "The total number of hours the individual works in a typical week.",
     "marital status": "The individual's marital status, indicating whether they are Married or Single. This simplification may encompass a broader range of legal statuses.",

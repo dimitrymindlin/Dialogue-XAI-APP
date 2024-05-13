@@ -203,8 +203,11 @@ class ExperimentHelper:
 
             # Get random change value for this feature
             if self.categorical_features is not None and feature_name in self.categorical_features:
-                max_feature_value = len(
-                    self.categorical_mapping[original_instance.columns.get_loc(feature_name)])
+                try:
+                    max_feature_value = len(
+                        self.categorical_mapping[original_instance.columns.get_loc(feature_name)])
+                except KeyError:
+                    raise KeyError(f"Feature {feature_name} is not in the categorical mapping.")
                 random_change = np.random.randint(1, max_feature_value)
                 tmp_instance.at[tmp_instance.index[0], feature_name] += random_change
                 tmp_instance.at[tmp_instance.index[0], feature_name] %= max_feature_value

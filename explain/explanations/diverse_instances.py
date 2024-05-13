@@ -23,6 +23,7 @@ class DiverseInstances:
 
     def __init__(self,
                  cache_location: str = "./cache/diverse-instances.pkl",
+                 dataset_name: str = "german",
                  instance_amount: int = 5,
                  lime_explainer=None):
         """
@@ -35,9 +36,10 @@ class DiverseInstances:
         self.cache_location = cache_location
         self.lime_explainer = lime_explainer
         self.instance_amount = instance_amount
+        self.dataset_name = dataset_name
 
-    def filter_instances_by_marital_status_and_class(self, data, model, diverse_instances_pandas_indices,
-                                                     instance_amount):
+    def filter_instances_by_class(self, data, model, diverse_instances_pandas_indices,
+                                  instance_amount, filter_by_additional_feature=False):
         # Step 1: Predict Classes
         predicted_classes = model.predict(data.loc[diverse_instances_pandas_indices])
 
@@ -61,13 +63,14 @@ class DiverseInstances:
             return filtered
 
         # Step 3: Filter each class list by marital status
-        filtered_class_0 = filter_by_marital_status(class_0_indices)
-        filtered_class_1 = filter_by_marital_status(class_1_indices)
+        if filter_by_additional_feature:
+            class_0_indices = filter_by_marital_status(class_0_indices)
+            class_1_indices = filter_by_marital_status(class_1_indices)
 
         # Step 4: Balance the classes
-        min_length = min(len(filtered_class_0), len(filtered_class_1))
-        balanced_class_0 = np.random.choice(filtered_class_0, min_length, replace=False)
-        balanced_class_1 = np.random.choice(filtered_class_1, min_length, replace=False)
+        min_length = min(len(class_0_indices), len(class_1_indices))
+        balanced_class_0 = np.random.choice(class_0_indices, min_length, replace=False)
+        balanced_class_1 = np.random.choice(class_1_indices, min_length, replace=False)
 
         # Combine the lists
         combined_instances = np.concatenate((balanced_class_0, balanced_class_1))
@@ -108,14 +111,23 @@ class DiverseInstances:
             else:
                 # Get random instances
                 dynamic_seed = int(time.time()) % 10000
-                # Get 100 times more instances to filter and ensure diversity
-                diverse_instances_pandas_indices = data.sample(self.instance_amount * 100,
+                # Get 10 times more instances to filter and ensure diversity
+                diverse_instances_pandas_indices = data.sample(self.instance_amount * 10,
                                                                random_state=dynamic_seed).index.tolist()
 
-                diverse_instances_pandas_indices = self.filter_instances_by_marital_status_and_class(data,
-                                                                                                     model,
-                                                                                                     diverse_instances_pandas_indices,
-                                                                                                     self.instance_amount)
+                # If adult dataset, filter by marital status and class
+                if self.dataset_name == "adult":
+                    diverse_instances_pandas_indices = self.filter_instances_by_class(data,
+                                                                                      model,
+                                                                                      diverse_instances_pandas_indices,
+                                                                                      self.instance_amount,
+                                                                                      filter_by_additional_feature=True)
+                elif self.dataset_name == "german":
+                    diverse_instances_pandas_indices = self.filter_instances_by_class(data,
+                                                                                      model,
+                                                                                      diverse_instances_pandas_indices,
+                                                                                      self.instance_amount,
+                                                                                      filter_by_additional_feature=False)
 
             for i in diverse_instances_pandas_indices:
                 if i not in self.diverse_instances:

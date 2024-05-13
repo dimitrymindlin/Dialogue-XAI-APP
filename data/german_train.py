@@ -2,7 +2,7 @@
 import json
 import os
 import pickle
-
+from sklearn import __version__ as sklearn_version
 import shap
 from sklearn.metrics import roc_auc_score
 import numpy as np
@@ -24,22 +24,26 @@ def standardize_column_names(data):
 def clean_data(data, cols_with_nan_list):
     data[data == '?'] = np.nan
     for col in cols_with_nan_list:
-        if col in ['Saving accounts', 'Checking account']:  # Fill missing account values with 0
-            data[col].fillna('little', inplace=True)
-        else:
-            data[col].fillna(data[col].mode()[0], inplace=True)
+        # Replace NaN with "Not Disclosed / Missing" for categorical columns
+        if data[col].dtype == 'object':
+            data[col].fillna("Not Disclosed / Missing", inplace=True)
     return data
 
 
 def bin_age_column(data):
+    """
+    Add "AgeGroup" to columns_to_encode in model_config if using this.
+    """
     column_name = "AgeGroup"
     bins = [18, 25, 40, 60, 90]
-    labels = ["Young (18-25 years)", "Adult (26-40 years)", "Middle Aged (41-60 years)", "Senior (61-90 years)"]
+    labels = ["Young (18-24 years)", "Adult (25-40 years)", "Middle Aged (41-60 years)", "Senior (61-90 years)"]
     data[column_name] = pd.cut(data[column_name], bins=bins, labels=labels)
 
 
 def map_ordinal_columns(data, config):
     for col, mapping in config["ordinal_mapping"].items():
+        if col in ["WorkLifeBalance"]:
+            continue
         data[col] = data[col].map(mapping)
 
 
@@ -62,6 +66,30 @@ def map_job_col(config, data):
         data[col_name] = data[col_name].map(job_level_mapping)
     else:
         print(f"Warning: '{col_name}' column not found in the provided DataFrame.")
+
+
+def add_work_life_balance(data):
+    categories = ['Poor', 'Fair', 'Good']
+    mean = categories.index('Fair')  # Mean set to index of 'Fair' for Gaussian center
+    std_dev = 0.75  # Standard deviation, adjust as needed for spread
+
+    # Generate indices from a Gaussian distribution
+    gaussian_indices = np.random.normal(loc=mean, scale=std_dev, size=len(data))
+
+    # Clip the indices to lie within the range of categories to avoid out-of-bounds indices
+    gaussian_indices_clipped = np.clip(gaussian_indices, 0, len(categories) - 1)
+
+    # Round indices to nearest integer to use as valid category indices
+    category_indices = np.round(gaussian_indices_clipped).astype(int)
+
+    # Assign categories based on Gaussian-distributed indices
+    data['WorkLifeBalance'] = [categories[i] for i in category_indices]
+
+    # Create a mapping from string values to integers
+    mapping = {category: i for i, category in enumerate(categories)}
+    # Apply the mapping to the 'WorkLifeBalance' column
+    data['WorkLifeBalance'] = data['WorkLifeBalance'].map(mapping)
+    return mapping
 
 
 def map_duration_col(config, data):
@@ -96,6 +124,8 @@ def map_duration_col(config, data):
 
 def preprocess_data_specific(data, config):
     standardize_column_names(data)
+    config["ordinal_mapping"]['WorkLifeBalance'] = add_work_life_balance(data)
+
     # Following functions assume capitalized col names
     columns_with_nan = data.columns[data.isna().any()].tolist()
     data = clean_data(data, columns_with_nan)
@@ -109,7 +139,7 @@ def preprocess_data_specific(data, config):
 
     map_job_col(config, data)
     # map_duration_col(config, data)
-    bin_age_column(data)
+    #bin_age_column(data)
     map_ordinal_columns(data, config)
     target_col = config["target_col"]
     X = data.drop(columns=[target_col])
@@ -133,7 +163,7 @@ def main():
     create_folder_if_not_exists(save_path)
     X, y, encoded_classes = preprocess_data_specific(data, config)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
     target_col = config["target_col"]
     # Add labels to X and save train and test data
@@ -149,10 +179,6 @@ def main():
         # print the nan columns
         print(X_train.columns[X_train.isna().any()].tolist())
         raise ValueError("There are NaN values in the training data.")
-
-    # Copy the config file to the save path
-    with open(os.path.join(save_path, f"{DATASET_NAME}_model_config.json"), 'w') as file:
-        json.dump(config, file)
 
     # Change list of column names to be encoded to a list of column indices
     columns_to_encode = [X_train.columns.get_loc(col) for col in config["columns_to_encode"]]
@@ -178,22 +204,31 @@ def main():
 
     # Compute ROC AUC score for the test set
     test_score = roc_auc_score(y_test, y_test_pred)
-    print("Best Model Score Test:", test_score)
+    print("Best Model Score AUC ROC Test:", test_score)
+
+    # Print best parameters
+    print("Best Parameters:", best_params)
 
     # Get global shapley feature importance
     # Transform the data to a numpy array with preprocessor from the pipeline
-    explainer = shap.Explainer(best_model.predict, X)
-    shap_values = explainer(X)
+    explainer = shap.Explainer(best_model.predict, X_train)
+    shap_values = explainer(X_train)
     shap.plots.bar(shap_values)
 
-
-    # Print evaluation metrics on train and test
-    # print("Best Model Score Train:", best_model.score(X_train, y_train))
-    # print("Best Model Score Test:", best_model.score(X_test, y_test))
-    # print("Best Parameters:", best_params)
-
     # Save the best model
-    # pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
+    pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
+
+    # Store evaluation metrics in model_config.json under "evaluation_metrics"
+    config["evaluation_metrics"] = {
+        "train_score_auc_roc": train_score,
+        "test_score_auc_roc": test_score
+    }
+    # Store sklearn version in model_config.json under "sklearn_version"
+    config["sklearn_version"] = sklearn_version
+
+    # Copy the config file to the save path
+    with open(os.path.join(save_path, f"{DATASET_NAME}_model_config.json"), 'w') as file:
+        json.dump(config, file)
 
 
 if __name__ == "__main__":

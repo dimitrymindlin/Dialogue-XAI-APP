@@ -1,10 +1,4 @@
 # ExplainBot Params
-# Name of the parsing model: {ucinlp/german-t5-small, ucinlp/german-t5-large}
-ExplainBot.parsing_model_name = "nearest-neighbor"
-
-
-ExplainBot.t5_config = "./parsing/t5/gin_configs/t5-large.gin"
-ExplainBot.seed = 0
 
 ExplainBot.model_file_path = "./data/german/german_model_rf.pkl"
 ExplainBot.encoded_col_mapping_path = "./data/german/encoded_col_mapping.json"
@@ -14,16 +8,19 @@ ExplainBot.dataset_file_path = "./data/german/german_test.csv"
 
 ExplainBot.name = "german"
 
+
+# Dataset feature information
 ExplainBot.dataset_index_column = 0
+ExplainBot.instance_type_naming = "Applicant"
 ExplainBot.target_variable_name = "Risk"
-# ExplainBot.categorical_features = ["gender", "foreignworker", "single", "hastelephone", "checkingaccountbalancegreaterorequalto0", "checkingaccountbalancegreaterorequalthan200", "savingsaccountbalancegreaterorequalthan200", "savingsaccountbalancegreaterorequalthan500", "missedpayments", "nocurrentloan", "criticalaccountorloanselsewhere", "otherloansatbank", "otherloansatstore", "hascoapplicant", "hasguarantor", "ownshouse", "rentshouse", "unemployed", "yearsatcurrentjoblessthan1", "yearsatcurrentjobgreaterorequalthan4", "jobclassisskilled"]
+# ExplainBot.categorical_features = [foreignworker", "single", "hastelephone", "checkingaccountbalancegreaterorequalto0", "checkingaccountbalancegreaterorequalthan200", "savingsaccountbalancegreaterorequalthan200", "savingsaccountbalancegreaterorequalthan500", "missedpayments", "nocurrentloan", "criticalaccountorloanselsewhere", "otherloansatbank", "otherloansatstore", "hascoapplicant", "hasguarantor", "ownshouse", "rentshouse", "unemployed", "yearsatcurrentjoblessthan1", "yearsatcurrentjobgreaterorequalthan4", "jobclassisskilled"]
 # ExplainBot.numerical_features = ["age", "loanduration", "loanamount", "yearsatcurrenthome", "loanrateaspercentofincome", "numberofotherloansatbank", "numberofliableindividuals", 'loanpurposebusiness', 'loanpurposeeducation', 'loanpurposeelectronics', 'loanpurposefurniture', 'loanpurposehomeappliances', 'loanpurposenewcar', 'loanpurposeother', 'loanpurposerepairs', 'loanpurposeretraining', 'loanpurposeusedcar']
-ExplainBot.categorical_features = ['AgeGroup','Gender', 'JobLevel', 'HousingType', 'SavingAccounts', 'CreditPurpose', 'CreditDuration']
-ExplainBot.ordinary_features = ['AgeGroup', 'JobLevel']
-ExplainBot.numerical_features = ['CreditAmount']
+ExplainBot.categorical_features = ['JobLevel', 'HousingType', 'SavingAccounts', 'CreditPurpose', 'CheckingAccount']
+ExplainBot.ordinary_features = ['JobLevel', 'WorkLifeBalance']
+ExplainBot.numerical_features = ['Age', 'CreditAmount', 'CreditDuration']
 ExplainBot.remove_underscores = True
-ExplainBot.actionable_features = ['AgeGroup', 'JobLevel', 'HousingType', 'SavingAccounts', 'CreditPurpose', 'CreditAmount', 'CreditDuration']
-ExplainBot.feature_ordering = ['AgeGroup', 'Gender', 'JobLevel', 'HousingType', 'SavingAccounts', 'CreditPurpose', 'CreditAmount', 'CreditDuration']
+ExplainBot.actionable_features = ['Age', 'JobLevel', 'HousingType', 'SavingAccounts', 'CreditPurpose', 'CreditAmount', 'CreditDuration']
+ExplainBot.feature_ordering = ['Age', 'HousingType', 'JobLevel', 'WorkLifeBalance', 'CheckingAccount', 'SavingAccounts', 'CreditPurpose', 'CreditAmount', 'CreditDuration']
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
@@ -42,6 +39,7 @@ TabularAnchor.cache_location = "./cache/german-anchor-tabular.pkl"
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/german-diverse-instances.pkl"
 DiverseInstances.instance_amount = 10
+DiverseInstances.dataset_name = "german"
 
 # Test Instances
 TestInstances.cache_location = "./cache/german-test-instances.pkl"
@@ -51,33 +49,34 @@ TestInstances.max_features_to_vary = 2
 CeterisParibus.cache_location = "./cache/german-ceteris-paribus.pkl"
 
 # Conversation params
-Conversation.class_names = {0: "bad credit risk", 1: "good credit risk"}
+Conversation.class_names = {0: "high risk", 1: "low risk"}
 Conversation.question_bank_path =  "./data/question_bank.csv"
 
 # Dataset description
-DatasetDescription.dataset_objective = "predict whether someone is a low or high credit risk customer"
-DatasetDescription.dataset_description = "credit risk"
-DatasetDescription.model_description = "gradient boosted tree"
+DatasetDescription.dataset_objective = "predict whether someone is a low or high credit risk applicant"
+DatasetDescription.dataset_description = "german credit risk"
+DatasetDescription.model_description = "random forest"
 
 # Tool tips
 ExplainBot.feature_tooltip_mapping = {
-'age group': "The age range to which the applicant belongs.",
-'gender': "The gender of the applicant. (Male / Female)",
-'job level': "The skill level of the applicant's job, measured in 4 categories, with the lowest being unskilled and non-resident and the highest being highly skilled.",
+'age': "The individual's age in years.",
+'job level': "The skill level of the applicant's job, measured in 4 ordered categories, being: unskilled and non-resident, unskilled and resident, skilled, highly skilled.",
 'housing type': "The type of housing the applicant resides in, indicating whether they own, rent or life for free.",
-'saving accounts': "The balance in the applicant's savings account, indicating whether they have a balance and, if so, the amount.",
-'credit amount': "The requested amount of credit by the applicant.",
-'credit duration': "The requested duration of the credit by the applicant in categories from Short-term, Mid-term to Long-term."
+'saving accounts': "The balance in the applicant's savings account, indicating whether they have a balance and, if so, whether it is little, moderate, quite rich, rich.",
+'checking account': "The balance in the applicant's checking account, indicating whether they have a balance and, if so, whether it is little, moderate, rich.",
+'credit amount': "The requested amount of credit by the applicant in dollar.",
+'credit duration': "The requested duration of the credit by the applicant in months.",
+'credit purpose': "The purpose of the credit requested by the applicant, indicating whether it is for a business, car, domestic appliances, education, furniture/equipment, radio/TV, repairs, vacation/others.",
+'work life balance': "The work-life balance of the applicant, measured in 3 ordered categories, being: poor, fair, good."
 }
 
 # Feature Units
 ExplainBot.feature_units_mapping = {
-'age group': "",
-'gender': "",
+'age': "",
 'job level': "",
 'housing type': "",
 'saving accounts': "",
 'credit amount': "$",
-'credit duration': "",
+'credit duration': "months",
 'credit purpose': "",
 }
