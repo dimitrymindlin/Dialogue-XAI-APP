@@ -8,7 +8,7 @@ from sklearn.pipeline import Pipeline
 
 np.random.seed(3)
 
-X_values = pd.read_csv("./data/diabetes.csv")
+X_values = pd.read_csv("diabetesSmall.csv")
 y_values = X_values.pop("y")
 
 # Create Pipeline
@@ -55,7 +55,7 @@ print(f"Sorted feature importances for {model_name}:")
 for i in sorted_indices:
     print(f"    {X_values.columns[i]}: {importances[i]}")
 
-with open("./data/diabetes_model_logistic_regression.pkl", "wb") as f:
-    pkl.dump(lr_pipeline, f)
+#with open("./data/diabetes_model_logistic_regression.pkl", "wb") as f:
+#    pkl.dump(lr_pipeline, f)
 
 print("Saved model!")
