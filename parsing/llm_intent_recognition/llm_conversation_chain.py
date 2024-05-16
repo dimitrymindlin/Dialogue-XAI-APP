@@ -13,13 +13,13 @@ os.environ['LANGCHAIN_API_KEY'] = os.getenv('LANGSMITH_API_KEY')
 os.environ['LANGCHAIN_TRACING_V2'] = 'true'
 os.environ['LANGCHAIN_ENDPOINT'] = 'https://api.smith.langchain.com'
 
-from parsing.llm_intent_recognition.descriptive_prompt_classification import get_template_with_descriptions
+from parsing.llm_intent_recognition.prompts import get_template_with_full_descriptions
 
 LLM_MODEL = "llama3"
 
 llm = ChatOllama(model=LLM_MODEL, temperature=0)
 
-PROMPT = get_template_with_descriptions()
+PROMPT = get_template_with_full_descriptions()
 
 conversation = ConversationChain(
     prompt=PROMPT,

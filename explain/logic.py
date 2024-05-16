@@ -33,7 +33,7 @@ from explain.explanations.feature_statistics_explainer import FeatureStatisticsE
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
 from explain.write_to_log import log_dialogue_input
-from parsing.llm_intent_recognition.descriptive_prompt_classification import LLMClassificationModel
+from parsing.llm_intent_recognition.descriptive_prompt_classification import LLMSinglePrompt
 from parsing.llm_intent_recognition.feature_recognizer import FeatureRecognizer
 
 app = Flask(__name__)
@@ -151,7 +151,7 @@ class ExplainBot:
         self.decoding_model_name = parsing_model_name
 
         if self.use_intent_recognition:
-            self.intent_recognition_model = LLMClassificationModel()
+            self.intent_recognition_model = LLMSinglePrompt()
 
         # Initialize completion + parsing modules
         """

@@ -1,21 +1,221 @@
-question;xai method
-"What elements must stay the same to keep the prediction at [class A]?";"anchor"
-"Which aspects need to remain unchanged for the prediction to stay at [class B]?";"anchor"
-"Can you identify the critical factors that ensure the prediction remains at [status]?";"anchor"
-"What specific variables should not change to keep the prediction at [class C]?";"anchor"
-"Which features must be constant to maintain the prediction of [outcome]?";"anchor"
-"What conditions need to be maintained to keep the prediction at [specific level]?";"anchor"
-"Which set of attributes is crucial to ensure that the prediction remains at [specific category]?";"anchor"
-"What are the essential factors that need to stay fixed to keep the prediction at [risk level]?";"anchor"
-"Can you specify the factors that must not change to keep the prediction at [specific level]?";"anchor"
-"What minimal configuration of features is necessary to ensure the prediction stays at [outcome]?";"anchor"
-"What factors guarantee the prediction for [class A] stays the same?";"anchor"
-"What must remain unchanged for the salary prediction to stay above [specific amount]?";"anchor"
-"Can you tell me which conditions lock the prediction for [current class]?";"anchor"
-"What features are essential to maintain the current prediction of [class B]?";"anchor"
-"What are the anchors if I need to ensure the prediction doesn’t shift from [class C]?";"anchor"
-"Which variables, if fixed, would keep the disease prediction at [status]?";"anchor"
-"What minimal set of feature values ensures the class stays the same?";"anchor"
-"What conditions guarantee no change in the current prediction?";"anchor"
-"Which factors should remain constant to maintain the prediction for [class]?";"anchor"
-"What are the anchors that keep the prediction at [current class]?";"anchor"
+question;xai method;feature
+What elements must stay the same to keep the prediction at the same class?;anchor;
+Which aspects need to remain unchanged for the prediction to stay at the same class?;anchor;
+Can you identify the critical factors that ensure the prediction remains at the same class?;anchor;
+What specific variables should not change to keep the prediction at the same class?;anchor;
+Which features must be constant to maintain the prediction of the same class?;anchor;
+What conditions need to be maintained to keep the prediction at the same class?;anchor;
+Which set of attributes is crucial to ensure that the prediction remains at the same class?;anchor;
+What are the essential factors that need to stay fixed to keep the prediction at the same class?;anchor;
+Can you specify the factors that must not change to keep the prediction at the same class?;anchor;
+What minimal configuration of features is necessary to ensure the prediction stays at the same class?;anchor;
+What factors guarantee the prediction for the same class stays the same?;anchor;
+What must remain unchanged for the prediction to stay at the same class?;anchor;
+Can you tell me which conditions lock the prediction for the same class?;anchor;
+What features are essential to maintain the current prediction of the same class?;anchor;
+Which variables, if fixed, would keep the prediction at the same class?;anchor;
+What minimal set of feature values ensures the prediction stays at the same class?;anchor;
+What conditions guarantee no change in the current prediction?;anchor;
+Which factors should remain constant to maintain the prediction for the same class?;anchor;
+What key elements need to stay unchanged to keep the prediction at the same class?;anchor;
+Which main factors must stay the same to ensure the prediction remains at the same class?;anchor;
+What changes would make the prediction different?;counterfactualAnyChange;
+What needs to be different for the prediction to change?;counterfactualAnyChange;
+How can the prediction be changed to another class?;counterfactualAnyChange;
+What adjustments would lead to a different prediction?;counterfactualAnyChange;
+Which factors, if altered, would change the prediction?;counterfactualAnyChange;
+What needs to be modified to get a different prediction?;counterfactualAnyChange;
+How can I change the prediction to a different outcome?;counterfactualAnyChange;
+What needs to be different to change the prediction?;counterfactualAnyChange;
+What alterations would result in a different prediction?;counterfactualAnyChange;
+Which variables must change to alter the prediction?;counterfactualAnyChange;
+What changes would lead to a new prediction?;counterfactualAnyChange;
+What needs to be done to shift the prediction to another class?;counterfactualAnyChange;
+How can the current prediction be changed?;counterfactualAnyChange;
+What should be different to change the prediction outcome?;counterfactualAnyChange;
+What factors must be altered to get a new prediction?;counterfactualAnyChange;
+What adjustments can change the prediction to another class?;counterfactualAnyChange;
+Which changes would result in a different prediction outcome?;counterfactualAnyChange;
+How can the outcome of the prediction be changed?;counterfactualAnyChange;
+What changes are needed for the prediction to be different?;counterfactualAnyChange;
+What must be altered to shift the prediction to a different class?;counterfactualAnyChange;
+What are the top 3 factors influencing the prediction?;top3Features;
+Which 3 features most affect the prediction?;top3Features;
+What are the main 3 elements driving the prediction?;top3Features;
+Which top 3 aspects impact the prediction the most?;top3Features;
+What are the three key factors in this prediction?;top3Features;
+What are the top 3 reasons for this prediction?;top3Features;
+What are the three main features influencing the prediction?;top3Features;
+Which 3 variables have the greatest impact on the prediction?;top3Features;
+What are the top 3 reasons behind the prediction?;top3Features;
+Which three factors are most important for the prediction?;top3Features;
+What are the 3 key features that affect the prediction?;top3Features;
+Which 3 elements are the most significant in the prediction?;top3Features;
+What are the top three features that determine the prediction?;top3Features;
+Which top three aspects are influencing the prediction?;top3Features;
+What are the top 3 attributes driving the prediction?;top3Features;
+Which three features most contribute to the prediction?;top3Features;
+What are the three most important factors for the prediction?;top3Features;
+Which 3 factors play the biggest role in the prediction?;top3Features;
+What are the top three reasons for this prediction?;top3Features;
+Which three variables are key to the prediction?;top3Features;
+What are the 3 least important factors influencing the prediction?;least3Features;
+Which 3 features have the least impact on the prediction?;least3Features;
+What are the three minor elements driving the prediction?;least3Features;
+Which 3 aspects impact the prediction the least?;least3Features;
+What are the three least significant factors in this prediction?;least3Features;
+What are the bottom 3 reasons for this prediction?;least3Features;
+What are the three least influential features in the prediction?;least3Features;
+Which 3 variables have the smallest impact on the prediction?;least3Features;
+What are the 3 least important reasons behind the prediction?;least3Features;
+Which three factors are the least important for the prediction?;least3Features;
+What are the 3 minor features that affect the prediction?;least3Features;
+Which 3 elements are the least significant in the prediction?;least3Features;
+What are the three least influential features determining the prediction?;least3Features;
+Which three aspects are influencing the prediction the least?;least3Features;
+What are the bottom three attributes driving the prediction?;least3Features;
+Which three features contribute the least to the prediction?;least3Features;
+What are the three least important factors for the prediction?;least3Features;
+Which 3 factors play the smallest role in the prediction?;least3Features;
+What are the bottom three reasons for this prediction?;least3Features;
+Which three variables are the least influential to the prediction?;least3Features;
+How does each feature contribute to the prediction?;shapAllFeatures;
+Can you explain the impact of each feature on the prediction?;shapAllFeatures;
+What role does each feature play in the prediction?;shapAllFeatures;
+What is the contribution of each feature to the prediction?;shapAllFeatures;
+How does every feature affect the prediction?;shapAllFeatures;
+Can you show the influence of each feature on the prediction?;shapAllFeatures;
+How much does each feature impact the prediction?;shapAllFeatures;
+What is the effect of each feature on the prediction?;shapAllFeatures;
+How does each feature influence the prediction?;shapAllFeatures;
+Can you explain how each feature contributes to the prediction?;shapAllFeatures;
+What is the importance of each feature in the prediction?;shapAllFeatures;
+How does each feature play a part in the prediction?;shapAllFeatures;
+What is the role of every feature in the prediction?;shapAllFeatures;
+Can you describe the contribution of each feature to the prediction?;shapAllFeatures;
+How does each feature weigh in on the prediction?;shapAllFeatures;
+What is the significance of each feature for the prediction?;shapAllFeatures;
+How does each individual feature affect the prediction?;shapAllFeatures;
+What influence does each feature have on the prediction?;shapAllFeatures;
+Can you detail the impact of each feature on the prediction?;shapAllFeatures;
+What part does each feature play in the prediction?;shapAllFeatures;
+"What happens to the prediction if glucose changes?";"ceterisParibus";"glucose"
+"How does altering age affect the prediction?";"ceterisParibus";"age"
+"What is the impact on the prediction if BMI is different?";"ceterisParibus";"BMI"
+"How does a change in insulin influence the prediction?";"ceterisParibus";"insulin"
+"What effect does modifying blood pressure have on the prediction?";"ceterisParibus";"blood pressure"
+"What happens to the prediction when skin thickness changes?";"ceterisParibus";"skin thickness"
+"How is the prediction affected by a change in pregnancies?";"ceterisParibus";"pregnancies"
+"What is the result of altering diabetes pedigree function on the prediction?";"ceterisParibus";"diabetes pedigree function"
+"How does the prediction shift if triceps skin fold thickness is modified?";"ceterisParibus";"triceps skin fold thickness"
+"What difference does a change in serum insulin make to the prediction?";"ceterisParibus";"serum insulin"
+"How does adjusting blood pressure alter the prediction?";"ceterisParibus";"blood pressure"
+"What happens to the prediction with a different BMI?";"ceterisParibus";"BMI"
+"How is the prediction influenced by changing age?";"ceterisParibus";"age"
+"What effect does a different glucose level have on the prediction?";"ceterisParibus";"glucose level"
+"How does the prediction change when serum insulin is altered?";"ceterisParibus";"serum insulin"
+"What is the impact on the prediction with a change in pregnancies?";"ceterisParibus";"pregnancies"
+"How does modifying skin thickness affect the prediction outcome?";"ceterisParibus";"skin thickness"
+"What happens to the prediction if there is a change in diabetes pedigree function?";"ceterisParibus";"diabetes pedigree function"
+"How does a different blood pressure influence the prediction?";"ceterisParibus";"blood pressure"
+"What effect does changing insulin levels have on the prediction?";"ceterisParibus";"insulin levels"
+"What is the distribution of age?";"featureStatistics";"age"
+"What are the highest and lowest values of glucose?";"featureStatistics";"glucose"
+"Can you show the average value of BMI?";"featureStatistics";"BMI"
+"What are the typical values for insulin?";"featureStatistics";"insulin"
+"What is the range of blood pressure?";"featureStatistics";"blood pressure"
+"What is the mean value of skin thickness?";"featureStatistics";"skin thickness"
+"How does pregnancies vary across the data?";"featureStatistics";"pregnancies"
+"What is the median value of diabetes pedigree function?";"featureStatistics";"diabetes pedigree function"
+"What are the most common values of triceps skin fold thickness?";"featureStatistics";"triceps skin fold thickness"
+"Can you show the spread of serum insulin values?";"featureStatistics";"serum insulin"
+"What is the standard deviation of blood pressure?";"featureStatistics";"blood pressure"
+"What are the key statistics for BMI?";"featureStatistics";"BMI"
+"What is the variance of age?";"featureStatistics";"age"
+"Can you show the frequency distribution of glucose?";"featureStatistics";"glucose"
+"What is the typical range for insulin?";"featureStatistics";"insulin"
+"What are the minimum and maximum values of blood pressure?";"featureStatistics";"blood pressure"
+"What is the average range of skin thickness?";"featureStatistics";"skin thickness"
+"What is the typical value of pregnancies?";"featureStatistics";"pregnancies"
+"How is diabetes pedigree function distributed across the dataset?";"featureStatistics";"diabetes pedigree function"
+"What is the summary of triceps skin fold thickness values?";"featureStatistics";"triceps skin fold thickness"
+"And what about credit amount?";"followUp";"credit amount"
+"How does age look?";"followUp";"age"
+"What about duration?";"followUp";"duration"
+"And for housing?";"followUp";"housing"
+"Can you show me job?";"followUp";"job"
+"What does personal status show?";"followUp";"personal status"
+"Tell me about checking account status";"followUp";"checking account status"
+"What if we look at savings account?";"followUp";"savings account"
+"And credit history?";"followUp";"credit history"
+"What do we see for purpose?";"followUp";"purpose"
+"And how does employment duration compare?";"followUp";"employment duration"
+"Can you explain other debtors as well?";"followUp";"other debtors"
+"What is the data for installment rate?";"followUp";"installment rate"
+"And what does property indicate?";"followUp";"property"
+"Can we check other installment plans?";"followUp";"other installment plans"
+"Show me existing credits";"followUp";"existing credits"
+"What about the details of residence duration?";"followUp";"residence duration"
+"And the analysis for number of dependents?";"followUp";"number of dependents"
+"What does foreign worker status say?";"followUp";"foreign worker status"
+"Can you provide information on telephone?";"followUp";"telephone"
+Why was this prediction made?;whyExplanation;
+Why did the model predict this outcome?;whyExplanation;
+Why is this the result?;whyExplanation;
+Why did the system come up with this prediction?;whyExplanation;
+Why is the prediction what it is?;whyExplanation;
+Why did the algorithm predict this?;whyExplanation;
+Why was this outcome determined?;whyExplanation;
+Why was this the prediction given?;whyExplanation;
+Why did the system decide on this prediction?;whyExplanation;
+Why was this result predicted?;whyExplanation;
+Why did the model come to this conclusion?;whyExplanation;
+Why is this the predicted outcome?;whyExplanation;
+Why did the system choose this prediction?;whyExplanation;
+Why did we get this prediction?;whyExplanation;
+Why is this the predicted result?;whyExplanation;
+Why did the prediction turn out this way?;whyExplanation;
+Why did the system make this prediction?;whyExplanation;
+Why was this particular prediction made?;whyExplanation;
+Why did the algorithm determine this result?;whyExplanation;
+Why is this the system's prediction?;whyExplanation;
+Hello, how are you?;greeting;
+Hi there!;greeting;
+Hey, what's up?;greeting;
+Good day!;greeting;
+Hi, how's it going?;greeting;
+Hello, how are things?;greeting;
+Hi, how are you doing?;greeting;
+Hey, how are you?;greeting;
+Hi!;greeting;
+Hello!;greeting;
+Hi, how's everything?;greeting;
+Hey, how's life?;greeting;
+Hello, what's new?;greeting;
+Hi, how have you been?;greeting;
+Hey, how's your day going?;greeting;
+Hello, how's your day?;greeting;
+Hi, what's going on?;greeting;
+Hey there!;greeting;
+Hi, what's up?;greeting;
+Hello, how are you feeling?;greeting;
+What does this mean?;notXaiMethod;
+Can you explain this further?;notXaiMethod;
+What does this result indicate?;notXaiMethod;
+Can you clarify this for me?;notXaiMethod;
+What is the significance of this result?;notXaiMethod;
+What does this term mean?;notXaiMethod;
+Can you provide more details on this?;notXaiMethod;
+What does this explanation mean?;notXaiMethod;
+Can you help me understand this?;notXaiMethod;
+What does this concept refer to?;notXaiMethod;
+What does this part mean?;notXaiMethod;
+Can you break this down for me?;notXaiMethod;
+What does this imply?;notXaiMethod;
+Can you give me more information on this?;notXaiMethod;
+What does this phrase mean?;notXaiMethod;
+Can you explain what this means?;notXaiMethod;
+What does this section refer to?;notXaiMethod;
+Can you elaborate on this?;notXaiMethod;
+What is meant by this?;notXaiMethod;
+Can you clarify what this means?;notXaiMethod;
