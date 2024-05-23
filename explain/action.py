@@ -110,9 +110,20 @@ def run_action_new(conversation: Conversation,
 
     # get_explanation_report(conversation, instance_id)
 
+    # First, check if follow-up question (id 0)
     if question_id == 0:
-        # TODO: Implement using last explanation
-        return f"The model uses the following attributes to make predictions: {', '.join(list(data.columns))}."
+        # Get last parse to determine the last question
+        last_question = conversation.get_last_question()
+        q_id = last_question[0]
+        f_id = last_question[1]
+        if q_id is not None:
+            question_id = q_id
+            feature_id = f_id
+        else:  # if follow up but no last method, set to 1
+            question_id = 1
+
+    # store the question ID and handle the question
+    conversation.store_last_parse(question_id)
     if question_id == 1:
         return "To understand why the model made the prediction, I can tell you about the <b>most important attributes</b>, or " \
                "in which case a <b>different prediction would have made</b>. What would you like to know?"
@@ -230,11 +241,11 @@ def run_action_new(conversation: Conversation,
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
                                                         template_manager=template_manager)
         return answer + explanation[0]
-    if question_id == 99: # greeting
+    if question_id == 99:  # greeting
         return "Hello, I am an assistant to help you understand the prediction of the Machine Learning model. You can " \
                "ask about the most or least important attributes, how certain changes in attributes influence the " \
                "prediction or what alternative attributes would lead to a different prediction."
-    if question_id == 100: # not xai method
+    if question_id == 100:  # not xai method
         return "I'm sorry, I cannot answer that. I can help you to understand the prediction of the Machine Learning " \
                "model by showing you the most or least important attributes and their influence or how certain changes " \
                "in attributes influence the prediction or what alternative attributes would lead to a different prediction."

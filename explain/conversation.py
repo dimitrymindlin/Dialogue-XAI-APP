@@ -84,6 +84,8 @@ class Conversation:
         self.parse_operation = []
         # Unique per session
         self.last_parse_string = []
+        self.last_q_id = None
+        self.last_feature_id = None
 
         self.username = "unknown"
 
@@ -149,7 +151,6 @@ class Conversation:
             self._store_var(var)
             return question_bank
 
-
     def add_dataset(self,
                     data: pd.DataFrame,
                     y_value: Series,
@@ -196,6 +197,15 @@ class Conversation:
         if len(self.last_parse_string) == 0:
             return ""
         return self.last_parse_string
+
+    def store_last_question(self, q_id: int, f_id: int = None):
+        """Stores the last question id."""
+        self.last_q_id = q_id
+        self.last_feature_id = f_id
+
+    def get_last_question(self) -> tuple[int, Union[int, None]]:
+        """Gets the last question id."""
+        return self.last_q_id, self.last_feature_id
 
     def store_followup_desc(self, string):
         """Store the last printout."""
