@@ -8,6 +8,7 @@ from flask import Flask, render_template
 from flask import request, Blueprint
 from flask_cors import CORS
 import gin
+from flask import jsonify
 
 from explain.logic import ExplainBot
 
@@ -264,12 +265,14 @@ def get_bot_response_from_nl():
         try:
             data = json.loads(request.data)
             print(data["message"])
-            response = bot_dict[user_id].update_state_new(user_input=data["message"])
+            response, question_id, feature_id = bot_dict[user_id].update_state_new(user_input=data["message"])
         except Exception as ext:
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
-        return response
+            question_id = None
+            feature_id = None
+        return jsonify({"response": response, "question_id": question_id, "feature_id": feature_id})
 
 
 app = Flask(__name__)
