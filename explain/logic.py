@@ -8,7 +8,7 @@ import json
 import pickle
 from random import seed as py_random_seed
 import secrets
-from typing import List
+from typing import List, Tuple, Union, Optional
 import re
 
 from jinja2 import Environment, FileSystemLoader
@@ -33,8 +33,10 @@ from explain.explanations.feature_statistics_explainer import FeatureStatisticsE
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
 from explain.write_to_log import log_dialogue_input
-from parsing.llm_intent_recognition.descriptive_prompt_classification import LLMSinglePrompt
-from parsing.llm_intent_recognition.feature_recognizer import FeatureRecognizer
+from parsing.llm_intent_recognition.llm_pipeline_setup.ollama.ollama_pipeline import LLMSinglePrompt
+
+from parsing.llm_intent_recognition.llm_pipeline_setup.openai.openai_pipeline import \
+    LLMSinglePromptWithMemoryAndSystemMessage
 
 app = Flask(__name__)
 
@@ -143,23 +145,25 @@ class ExplainBot:
         self.feature_ordering = feature_ordering
         self.use_selection = use_selection
         self.use_intent_recognition = use_intent_recognition
-        self.feature_recognizer = FeatureRecognizer()
 
         # A variable used to help file uploads
         self.manual_var_filename = None
 
         self.decoding_model_name = parsing_model_name
 
-        if self.use_intent_recognition:
-            self.intent_recognition_model = LLMSinglePrompt()
-
         # Initialize completion + parsing modules
-        """
-        app.logger.info(f"Loading parsing model {parsing_model_name}...")
-        self.decoder = Decoder(parsing_model_name,
-                               t5_config,
-                               use_guided_decoding=self.use_guided_decoding,
-                               dataset_name=name)"""
+
+        if self.use_intent_recognition == "openAI":
+            self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
+        elif self.use_intent_recognition == "ollama":
+            self.intent_recognition_model = LLMSinglePrompt(self.feature_ordering)
+        elif self.use_intent_recognition == "t5":
+            pass
+            """app.logger.info(f"Loading parsing model {parsing_model_name}...")
+            self.decoder = Decoder(parsing_model_name,
+                                   t5_config,
+                                   use_guided_decoding=self.use_guided_decoding,
+                                   dataset_name=name)"""
         self.decoder = None
 
         self.data_instances = []
@@ -727,7 +731,7 @@ class ExplainBot:
     def update_state_new(self,
                          user_input: str = None,
                          question_id: int = None,
-                         feature_id: int = None):
+                         feature_id: int = None) -> tuple[str, int, Optional[int]]:
         """The main experiment driver.
 
                 The function controls state updates of the conversation. It accepts the
@@ -742,13 +746,14 @@ class ExplainBot:
 
         if user_input is not None:
             question_id, feature_name = self.intent_recognition_model.predict(user_input.strip())
+            feature_name = feature_name.lower() if feature_name is not None else None
             # If feature specific, get feature
             if feature_name is not None:
-                feature_list = list(self.conversation.stored_vars['dataset'].contents['X'].columns)
+                feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
                 feature_id = feature_list.index(feature_name)
 
         if question_id is None:
-            return ''
+            return '', None, None
 
         app.logger.info(f'USER INPUT: q_id:{question_id}, f_id:{feature_id}')
         instance_id = self.current_instance[0]
@@ -767,7 +772,7 @@ class ExplainBot:
         # response, then present all the data
         # final_result = returned_item + f"<>{response_id}"
         final_result = returned_item
-        return final_result
+        return final_result, question_id, feature_id
 
     def get_explanation_report(self):
         """Returns the explanation report."""
