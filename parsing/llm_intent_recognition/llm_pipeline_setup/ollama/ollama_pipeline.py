@@ -8,10 +8,7 @@ from langchain.chains.router import MultiPromptChain
 from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
 from langchain.output_parsers import ResponseSchema, StructuredOutputParser
 from langchain_core.messages import AIMessage
-from langchain.chains import ConversationChain
-
 from langchain_community.llms import Ollama
-from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
 from difflib import SequenceMatcher
 import tqdm
@@ -20,12 +17,9 @@ import matplotlib.pyplot as plt
 import os
 from dotenv import load_dotenv
 
-from parsing.llm_intent_recognition.prompts import get_template_with_full_descriptions, \
-    get_xai_template_with_descriptions, \
-    possible_categories, question_to_id_mapping, format_instructions, output_parser, \
-    get_template_with_full_descr_step_by_step, get_template_wich_checklist, get_template_with_decision_tree, \
-    get_tempalte_wich_checklist_and_memory, get_template_with_checklist_condensed, get_system_template_with_checklist, \
-    simple_user_question_prompt, get_system_prompt_condensed
+from parsing.llm_intent_recognition.prompts import get_xai_template_with_descriptions, \
+    possible_categories, question_to_id_mapping, get_template_wich_checklist, \
+    get_tempalte_wich_checklist_and_memory, simple_user_question_prompt, get_system_prompt_condensed
 from parsing.llm_intent_recognition.router_chain import generate_destination_chains, generate_router_chain
 
 load_dotenv()
@@ -34,10 +28,6 @@ load_dotenv()
 """os.environ['LANGCHAIN_API_KEY'] = os.getenv('LANGSMITH_API_KEY')
 os.environ['LANGCHAIN_TRACING_V2'] = 'true'
 os.environ['LANGCHAIN_ENDPOINT'] = 'https://api.smith.langchain.com'"""
-
-### OpenAI
-os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
-os.environ["OPENAI_ORGANIZATION"] = os.getenv('OPENAI_ORGANIZATION_ID')
 
 LLM_MODEL = "llama3"
 llm = Ollama(model=LLM_MODEL, temperature=0, format='json')
