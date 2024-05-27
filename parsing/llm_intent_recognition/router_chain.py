@@ -8,8 +8,7 @@ from langchain.chains.router.multi_prompt_prompt import MULTI_PROMPT_ROUTER_TEMP
 
 from prompt_toolkit import HTML, prompt
 
-from parsing.llm_intent_recognition.prompts import get_xai_template_with_descriptions, output_parser, \
-    format_instructions, ROUTING_TASK_PROMPT
+from parsing.llm_intent_recognition.prompts import get_xai_template_with_descriptions, ROUTING_TASK_PROMPT
 
 
 class Config():
