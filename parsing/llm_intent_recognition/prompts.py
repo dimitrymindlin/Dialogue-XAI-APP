@@ -1,75 +1,490 @@
 from langchain.output_parsers import ResponseSchema, StructuredOutputParser
 
+whyExplanation_template = """
+whyExplanation: Explains possible explanations when the user asks a general why question.
+    Best for questions like: "Why this prediction?", "What led to this result?", "Can you explain why the model chose this class?"
+    Answer example: "To understand the prediction, I can tell you about the most important attributes, or 
+    which changes would have led to a different prediction."
+"""
 
-def get_template_with_full_descriptions():
+greeting_template = """
+greeting: Greets the user when they do not ask a specific question. Inform them about the types of questions you can answer.
+    Best for questions like: "Hey, how are you?", "Hello!", "Good morning."
+    Answer example: "Hello, I am here to help you understand the prediction of the Machine Learning model.
+    You can ask about the most or least important attributes..."
+"""
+
+not_xai_method_template = """
+notXaiMethod: Used for questions that cannot be answered with the previous methods, such as clarifications or 
+    domain-related questions.
+    Best for questions like: "What does it mean?", "Can you clarify this term?", "What is meant by 'X' in this context?"
+    Answer example: "[Description of the questioned thing]".
+"""
+
+followUp_template = """
+followUp: Used when the user mentions a feature without specifying their interest in feature change or feature statistics.
+    Best for questions like: "And what about age?", "How does income affect it?", "What if we consider education level?"
+    Answer Example: "Here is the same explanation method for the new feature."
+"""
+
+anchor_template = """
+anchor: Identifies the minimal set of conditions and feature values that ensure a specific prediction remains unchanged.
+    Best for questions like: "What factors guarantee this prediction remains the same?", "Which features must stay the same for this result?", "How can we be sure this prediction won't change?"
+    Answer Example: "If 'age' remains constant, the model's prediction will remain unchanged."
+"""
+
+shapeAllFeatures_template = """
+shapAllFeatures: Identifies each feature's individual contribution to the overall prediction.
+      Best for questions like: "What is the strength of each feature?", "How much does each feature contribute?", "Can you show the impact of all features?"
+      Answer Example: "Here is the contribution of each feature..."
+"""
+
+top3Features_template = """
+top3Features: Identifies the top three features that have the highest impact on the model's prediction.
+      Best for questions like: "Which features had the greatest impact on this prediction?", "What are the top factors influencing this result?", "Most important features?"
+      Answer Example: "The top 3 features are 'occupation', and 'hours per week' and 'age'."
+"""
+
+least3Features_template = """
+least3Features: Identifies three features with the least impact on the model’s prediction.
+    Best for questions like: "Which features had the least impact on this prediction?", "What are the least important factors?", "Can you show the features that matter the least?"
+    Answer Example: "The least influential features were 'marital status', 'race', and 'sex'."
+"""
+
+counterfactualAnyChange_template = """
+counterfactualAnyChange: Identifies close instances where the model's prediction changes, exploring feature alterations that lead to different predictions.
+      Best for questions like: "Why is it not class [other class]?", "In which case would it be another class?", "What changes would lead to a different prediction?"
+      Answer Example: "The prediction would switch from class A to class B if 'hours per week' increased by more than 10 hours."
+"""
+
+featureStatistics_template = """
+featureStatistics: Identifies statistical summary of the features in a dataset, like minimum, maximum, mean, and standard deviation.
+      Best for questions like: "What are the typical values and distributions of 'age' in my dataset?", "Can you show the statistics for this feature?", "What is the average value of this attribute?"
+      Answer Example: "The mean age is 40 years with a standard deviation of 12.5."
+"""
+
+ceterisParibus_template = """
+ceterisParibus: Examines the impact of changing one single feature to explore if the model's prediction changes.
+      Best for questions like: "What would happen if marital status was different?", "What if hours per week increased?", "How would the prediction change if this feature value was altered?"
+      Answer Example: "Changing 'marital status' from 'single' to 'married' would result in a prediction change."
+"""
+
+
+def get_template_with_full_descriptions(feature_names):
     return f"""The user was presented an instance with different features.
         The machine learning model predicted a class. Given the user question about the model prediction, 
         decide which method fits best to answer it. There are standalone methods that work without requiring a feature 
-        specification: {general_questions} and some that are specific to a feature: {feature_specific_q}.""" + """
+        specification: {general_questions} and some that are specific to a feature: {feature_specific_q}.
+        Here are possible feature names that the user might ask about: {feature_names}.
         
     Here are definitions for the available methods:
-    - whyExplanation: Explains which explanations are possible when the user asks a general why question.
-    Best for questions like: "Why this prediction"?
-    Answer example: "To understand the prediction, I can tell you about the most important attributes, or 
-    which changes would have led to a different prediction."
-    - greeting: Greets the user when he does not ask a specific question. If the user just says hi or how are you,
-    tell him what questions you can answer.
-    Best for questions like: "Hey, how are you?"
-    Answer example: "Hello, I am an assistant to help you understand the prediction of the Machine Learning model.
-    You can ask about the most or least important attributes, how certain changes in attributes influence the prediction
-    or what alternative attributes would lead to a different prediction."
-    - notXaiMethod: Used to answer questions that are not possible to answer with the previous methods. Could
-    be that the user asks for a clarification on an explanation or questions related to the domain.
-    Best for questions like: "What does it mean?"
-    Answer example: "[Description of the questioned thing]".
-    - followUp: This method is used when the user mentions a feature feature without specifying if
-    he is interested in the feature change or feature statistics.
-    Best for questions like: "And what about age?", "And income?", or "Okay, and what about education level?"
-    Answer example: "Here is the same explanation method for the new feature."
-    - anchor: Anchor explanations identify the minimal set of conditions and feature values that, when held constant, 
-    ensure a specific prediction result does not change, irrespective of alterations to other features. 
-    Best for questions like "What factors guarantee this prediction remains the same?"
-    Answer example: "If 'age' and 'occupation' remain constant, the model's prediction of the income being above 
-    50k will remain unchanged. These features are the anchors in this scenario."
-    - shapAllFeatures: uses SHAP values to measure and visualize all feature's individual contribution to the 
-    overall prediction, considering the marginal effect of each feature across all possible combinations. 
-    This comprehensive approach provides a complete overview by showing the impact of all features of the instance.
-    Best for questions like: "What is the strength of each feature?"
-    Answer example: "Here is a visualization, showing the contribution of each feature..."
-    - top3Features: This method focuses on identifying and visualizing the contributions of the top three 
-    features that have the highest impact on the model's prediction, according to SHAP values. It simplifies the 
-    explanation by concentrating on the most influential variables.
-    Best for questions like: "Which features had the greatest impact on this prediction?"
-    Answer example: "The top influences on the prediction were 'education level', 'occupation', and 'hours per week'."
-    - least3Features: This method concentrates on the three features with the least impact on the model’s
-    prediction, according to SHAP values. It provides insights into the features that have minimal influence on
-    the outcome, which can be critical for understanding the robustness of the model or for identifying potential
-    areas of model simplification.
-    Best for questions like: "Which features had the least impact on this prediction?"
-    Answer example: "The least influential features were 'marital status', 'race', and 'sex', each contributing minimally to the overall prediction according to their SHAP values."
-    - counterfactualAnyChange: Provide possible feature alterations 
-    to understand scenarios under which the model's prediction is changed. This method is suited for 
-    exploring changes in the features of the current instance that would lead to a different prediction, 
-    thereby clarifying why the current instance didn't classify as another category.
-    Best for questions like: "Why is it not class [other class]?", or "In which case would be other class?"
-    Answer example: "The prediction would switch from class A to class B if 'hours per week' increased by more than 10 hours,
-     or 'age' was above 45 or ..."
-    - featureStatistics: Provides a statistical summary or visual representation of the features in a dataset.
-    It calculates the mean and standard deviation for numerical features, offering a clear quantitative 
-    overview of data spread and central tendency.
-    Best for questions like: "What are the typical values and distributions of 'age' in my dataset?"
-    Answer example: "The mean age is 40 years with a standard deviation of 12.5.
-    - ceterisParibus: This method examines the impact of changing one specific feature. The user explicitely
-    asks for the change of a feature. It is designed to explore hypothetical scenarios, analyzing what would occur if a 
-    single feature's value were different (e.g., higher or lower). 
-    Best for questions like: "What would happen if marital status was different?" or "What if hours per week increased?"
-     Answer example: "Changing 'marital status' from 'single' to 'married' would result in the income prediction 
-     changing from below 50k to above 50k."
-
+    - {whyExplanation_template}
+    - {greeting_template}
+    - {not_xai_method_template}
+    - {followUp_template}
+    - {anchor_template}
+    - {shapeAllFeatures_template}
+    - {top3Features_template}
+    - {least3Features_template}
+    - {counterfactualAnyChange_template}
+    - {featureStatistics_template}
+    - {ceterisParibus_template}
+""" + """
 Decide which methods fits best and if its a feature specific one, also reply with the feature.
 Immediately answer with the method and feature if applicable, without justification.
-\n{format_instructions}\n{input}
+
+<<User Question>>
+\n{input}
+
+Respond with a python tuple containing the method and feature if applicable. feature can be None.
 """
+
+
+def get_template_with_full_descr_step_by_step():
+    return f"""
+    The user was presented with an instance containing various features. The machine learning model predicted a class. 
+    Given the user's question about the model's prediction, select the most suitable method to answer it. There are 
+    standalone methods that work without requiring a specific feature: {general_questions}, and methods that are 
+    specific to a feature: {feature_specific_q}.
+
+    Here are definitions for the available methods:
+    - {whyExplanation_template}
+    - {greeting_template}
+    - {not_xai_method_template}
+    - {followUp_template}
+    - {anchor_template}
+    - {shapeAllFeatures_template}
+    - {top3Features_template}
+    - {least3Features_template}
+    - {counterfactualAnyChange_template}
+    - {featureStatistics_template}
+    - {ceterisParibus_template}
+""" + """
+    Decide which method fits best and, if it’s a feature-specific one, also reply with the feature. First, describe your 
+    thougth process and finally answer with the method and feature in a json format.
+    
+    << User question >>
+    \n{input}
+    
+    << Answer >>
+    Let's think about the right method step by step. First, let's consider if it's a follow up question or a 
+    question that can be mapped to a specific method. Then, if its a general or feature-specific question.
+    If its a feature-specific question, we need to identify the feature. Finally, respond with a python tuple containing the method and feature if applicable. 
+    feature can be None.
+    """
+
+
+def get_template_wich_checklist(feature_names=None):
+    return f"""The user was presented with an instance containing various features. The machine learning model predicted 
+        a class. Given the user's question about the model's prediction, follow the checklist to determine the most suitable 
+        method to answer it. Return ONLY a json containing the keys method and feature where feature can be None. Do not
+         justify the choice of the method or feature, just provide the json.
+
+    1. First, check if it is a greeting:
+        - Example questions: "Hey, how are you?", "Hello!", "Good morning."
+        - JSON response: method_name: "greeting", feature: None
+
+    2. If it is not a greeting, check if it is a very short question about a feature without specifying a change or value question (high or low, average...):
+        - Example questions: "And what about age?", "income?", "Education level as well?", "And income?."
+        - JSON response: method_name: "followUp", feature: "age" (or the relevant feature mentioned)
+
+    3. If it is not a followUp question, check if it is a unspecific 'why did this happen' question. The user is interested
+        in understanding the prediction but does not ask for a specific explanation:
+        - Example questions: "Why this prediction?", "What led to this result?", "Can you explain why the model chose this class?"
+        - JSON response: method_name: "whyExplanation", feature: None
+
+    4. If it is not a a greeting, followUp or general whyExplanations, check if the question is a feature-specific or general xai question:
+        - If feature-specific:
+            - If asking for the impact of changing a specific feature:
+                - Example questions: "What would happen if marital status was different?", "What if hours per week increased?", "How would the prediction change if this feature value was altered?"
+                - JSON response: method_name: "ceterisParibus", feature: "marital status" (or the relevant feature mentioned)
+            - If asking for feature statistics:
+                - Example questions: "What are the typical values and distributions of 'age' in my dataset?", "Can you show the statistics for this feature?", "What is the average value of this attribute?"
+                - JSON response: method_name: "featureStatistics", feature: "age" (or the relevant feature mentioned)
+            - If asking for the anchor features:
+                - Example questions: "What factors guarantee this prediction remains the same?", "Which features must stay the same for this result?", "How can we be sure this prediction won't change?"
+                - JSON response: method_name: "anchor", feature: None
+        - If general:
+            - If asking for the impact of all features:
+                - Example questions: "What is the strength of each feature?", "How much does each feature contribute?", "Can you show the impact of all features?"
+                - JSON response: method_name: "shapAllFeatures", feature: None
+            - If asking for the top three features:
+                - Example questions: "Which features had the greatest impact on this prediction?", "What are the top factors influencing this result?", "Can you show the most important features?"
+                - JSON response: method_name: "top3Features", feature: None
+            - If asking for the least three features:
+                - Example questions: "Which features had the least impact on this prediction?", "What are the least important factors?", "Can you show the features that matter the least?"
+                - JSON response: method_name: "least3Features", feature: None
+             If asking for class changes, without specifying a feature:
+                - Example questions: "Why is it not class [other class]?", "In which case would it be another class?", "What changes would lead to a different prediction?"
+                - JSON response: method_name: "counterfactualAnyChange", feature: "hours per week" (or the relevant feature mentioned)
+                
+    5. If it's not specific XAI question of the above, check if the question is not related to the model prediction but is a
+        clarification question or dataset related question, i.e. it is not directed to the model prediction:
+        - If it is not related to XAI, use `notXaiMethod`.
+            - Example questions: "What does it mean?", "Can you clarify this term?", "What is meant by 'X' in this context?", "How was the data collected?", "What is the accuracy of the model?", "What are the ethical implications of this model?"
+            - JSON response: method_name: "notXaiMethod", feature: None
+
+    Decide which method fits best. Return a single json containing the keys method and feature where feature can be None.
+    Do not justify the choice of the method or feature, just provide the json.
+    
+    <<User Question>>
+    \n{{input}}
+    """
+
+
+def get_system_template_with_checklist():
+    return f"""The user was presented with an instance containing various features. The machine learning model predicted 
+        a class. Given the user's question about the model's prediction, follow the checklist to determine the most suitable 
+        method to answer it. Return ONLY a json containing the keys method and feature where feature can be None. Do not
+         justify the choice of the method or feature, just provide the json.
+
+    1. First, check if it is a greeting:
+        - Example questions: "Hey, how are you?", "Hello!", "Good morning."
+        - JSON response: method_name: "greeting", feature: None
+
+    2. If it is not a greeting, check if it is a very short question about a feature without specifying a change or asking for the value:
+        - Example questions: "And what about age?", "income?", "Education level as well?", "And income?."
+        - JSON response: method_name: "followUp", feature: "age" (or the relevant feature mentioned)
+
+    3. If it is not a followUp question, check if it is a unspecific 'why did this happen' question. The user is interested
+        in understanding the prediction but does not ask for a specific explanation:
+        - Example questions: "Why this prediction?", "What led to this result?", "Can you explain why the model chose this class?"
+        - JSON response: method_name: "whyExplanation", feature: None
+
+    4. If it is not a a greeting, followUp or general whyExplanations, check if the question is a feature-specific or general xai question:
+        - If feature-specific:
+            - If asking for the impact of changing a specific feature:
+                - Example questions: "What would happen if marital status was different?", "What if hours per week increased?", "How would the prediction change if this feature value was altered?"
+                - JSON response: method_name: "ceterisParibus", feature: "marital status" (or the relevant feature mentioned)
+            - If asking for feature statistics:
+                - Example questions: "What are the typical values and distributions of 'age' in my dataset?", "Can you show the statistics for this feature?", "What is the average value of this attribute?"
+                - JSON response: method_name: "featureStatistics", feature: "age" (or the relevant feature mentioned)
+            - If asking for the anchor features:
+                - Example questions: "What factors guarantee this prediction remains the same?", "Which features must stay the same for this result?", "How can we be sure this prediction won't change?"
+                - JSON response: method_name: "anchor", feature: None
+        - If general:
+            - If asking for the impact of all features:
+                - Example questions: "What is the strength of each feature?", "How much does each feature contribute?", "Can you show the impact of all features?"
+                - JSON response: method_name: "shapAllFeatures", feature: None
+            - If asking for the top three features:
+                - Example questions: "Which features had the greatest impact on this prediction?", "What are the top factors influencing this result?", "Can you show the most important features?"
+                - JSON response: method_name: "top3Features", feature: None
+            - If asking for the least three features:
+                - Example questions: "Which features had the least impact on this prediction?", "What are the least important factors?", "Can you show the features that matter the least?"
+                - JSON response: method_name: "least3Features", feature: None
+             If asking for class changes, without specifying a feature:
+                - Example questions: "Why is it not class [other class]?", "In which case would it be another class?", "What changes would lead to a different prediction?"
+                - JSON response: method_name: "counterfactualAnyChange", feature: "hours per week" (or the relevant feature mentioned)
+
+    5. If it's not specific XAI question of the above, check if the question is not related to the model prediction but is a
+        clarification question or dataset related question, i.e. it is not directed to the model prediction:
+        - If it is not related to XAI, use `notXaiMethod`.
+            - Example questions: "What does it mean?", "Can you clarify this term?", "What is meant by 'X' in this context?", "How was the data collected?", "What is the accuracy of the model?", "What are the ethical implications of this model?"
+            - JSON response: method_name: "notXaiMethod", feature: None
+
+    Decide which method fits best. Return a single json containing the keys method and feature where feature can be None.
+    Do not justify the choice of the method or feature, just provide the json.
+    """
+
+
+def get_system_prompt_condensed(feature_names=[]):
+    return f"""The user was presented with an instance with various features. The model predicted a class. Based on the 
+        user's question about the prediction, follow the checklist to determine the best method. Return ONLY a JSON with 
+        'method' and 'feature'. 'feature' can be None. Do not justify the choice. Possible feature names are: {feature_names}
+
+        1. Greeting:
+            - Examples: "Hey, how are you?", "Hello!", "Good morning."
+            - JSON: method: "greeting", feature: None
+        2. Not stand alone, Short feature question without asking for a change, value, or distribution:
+            - Examples: "And what about age?", "income?", "Education level as well?"
+            - JSON: method: "followUp", feature: "age" (or relevant feature)
+        3. Unspecific 'why' question:
+            - Examples: "Why this prediction?", "What led to this result?"
+            - JSON: method: "whyExplanation", feature: None
+        4. Not Xai Method and is rather a general or clarification question not related to model prediction?
+            - Examples: "What does it mean?", "Can you clarify this term?", "How was the data collected?", "What is the accuracy of the model?", "What are the ethical implications of this model?"
+            - JSON: method: "notXaiMethod", feature: None
+        5. Feature-specific or general XAI question:
+            - Feature-specific:
+                - Impact of changing a feature:
+                    - Examples: "What if marital status was different?", "What if hours per week increased?"
+                    - JSON: method: "ceterisParibus", feature: "marital status" (or relevant feature)
+                - Feature statistics:
+                    - Examples: "What are the typical values of 'age'?", "Can you show the statistics for this feature?"
+                    - JSON: method: "featureStatistics", feature: "age" (or relevant feature)
+                - Anchoring conditions:
+                    - Examples: "What factors guarantee this prediction?", "Which features must stay the same?"
+                    - JSON: method: "anchor", feature: None
+            - General:
+                - Impact of all features:
+                    - Examples: "What is the strength of each feature?", "How much does each feature contribute?"
+                    - JSON: method: "shapAllFeatures", feature: None
+                - Top three features:
+                    - Examples: "Which features had the greatest impact?", "What are the top factors influencing this result?"
+                    - JSON: method: "top3Features", feature: None
+                - Least three features:
+                    - Examples: "Which features had the least impact?", "What are the least important factors?"
+                    - JSON: method: "least3Features", feature: None
+                - Class changes without specifying a feature:
+                    - Examples: "Why is it not class [other class]?", "What changes would lead to a different prediction?"
+                    - JSON: method: "counterfactualAnyChange", feature: "hours per week" (or relevant feature)
+                    
+        Task: Decide which method fits best. Return a single JSON.
+        
+        {{format_instructions}}
+        """
+
+
+def get_system_prompt_condensed_with_history(feature_names=""):
+    return f"""The user was presented with an instance with various features. The model predicted a class. Based on the 
+        user's question about the prediction, follow the checklist to determine the best method. Return ONLY a JSON with 
+        'method' and 'feature'. 'feature' can be None. Do not justify the choice. The possible feature names are: {feature_names}
+
+        1. Greeting:
+            - Examples: "Hey, how are you?", "Hello!", "Good morning."
+            - JSON: method: "greeting", feature: None
+        2. Not stand alone, Short feature question without asking for a change, value, or distribution:
+            - Examples: "And what about age?", "income?", "Education level as well?"
+            - JSON: method: "followUp", feature: "age" (or relevant feature)
+        3. Unspecific 'why' question:
+            - Examples: "Why this prediction?", "What led to this result?"
+            - JSON: method: "whyExplanation", feature: None
+        4. Not Xai Method and is rather a general or clarification question not related to model prediction?
+            - Examples: "What does it mean?", "Can you clarify this term?", "How was the data collected?", "What is the accuracy of the model?", "What are the ethical implications of this model?"
+            - JSON: method: "notXaiMethod", feature: None
+        5. Feature-specific or general XAI question:
+            - Feature-specific:
+                - Impact of changing a feature:
+                    - Examples: "What if marital status was different?", "What if hours per week increased?"
+                    - JSON: method: "ceterisParibus", feature: "marital status" (or relevant feature)
+                - Feature statistics:
+                    - Examples: "What are the typical values of 'age'?", "Can you show the statistics for this feature?"
+                    - JSON: method: "featureStatistics", feature: "age" (or relevant feature)
+                - Anchoring conditions:
+                    - Examples: "What factors guarantee this prediction?", "Which features must stay the same?"
+                    - JSON: method: "anchor", feature: None
+            - General:
+                - Impact of all features:
+                    - Examples: "What is the strength of each feature?", "How much does each feature contribute?"
+                    - JSON: method: "shapAllFeatures", feature: None
+                - Top three features:
+                    - Examples: "Which features had the greatest impact?", "What are the top factors influencing this result?"
+                    - JSON: method: "top3Features", feature: None
+                - Least three features:
+                    - Examples: "Which features had the least impact?", "What are the least important factors?"
+                    - JSON: method: "least3Features", feature: None
+                - Class changes without specifying a feature:
+                    - Examples: "Why is it not class [other class]?", "What changes would lead to a different prediction?"
+                    - JSON: method: "counterfactualAnyChange", feature: "hours per week" (or relevant feature)
+
+        Task: Decide which method fits best. Return a single JSON.
+        
+        <<Previous user questions and mapped methods>>
+        \n{{chat_history}}
+        
+        <<Format Instructions>>
+        \n{{format_instructions}}
+        """
+
+
+def simple_user_question_prompt():
+    return f"""
+    <<User Question>>
+    \n{{input}}
+    \n
+    <<Method Json Response>>
+    """
+
+
+def openai_system_prompt(feature_names):
+    return "system", get_system_prompt_condensed_with_history(feature_names)
+
+
+def openai_user_prompt():
+    return "user", simple_user_question_prompt()
+
+
+def get_template_with_checklist_condensed(feature_names):
+    return f"""
+    You are given a user's question about a model's prediction. Use the checklist to determine the suitable method.
+
+    1. Check if it's a greeting:
+        - Examples: "Hey, how are you?", "Hello!", "Good morning."
+        - Response: method_name: "greeting", feature: None
+
+    2. If not a greeting, check if it's a short feature question:
+        - Examples: "And what about age?", "Income?", "Education level?"
+        - Response: method_name: "followUp", feature: "age" (or relevant feature)
+
+    3. If not a followUp, check if it's a general 'why' question:
+        - Examples: "Why this prediction?", "What led to this result?"
+        - Response: method_name: "whyExplanation", feature: None
+
+    4. If not above, check if it's a specific or general XAI question:
+        - Specific feature:
+            - Changing feature impact:
+                - Examples: "What if marital status was different?", "How would hours per week change prediction?"
+                - Response: method_name: "ceterisParibus", feature: "marital status" (or relevant feature)
+            - Feature statistics:
+                - Examples: "Typical values of 'age'?", "Show feature statistics?"
+                - Response: method_name: "featureStatistics", feature: "age" (or relevant feature)
+            - Anchor features:
+                - Examples: "What guarantees this prediction?", "Which features ensure this result?"
+                - Response: method_name: "anchor", feature: "age" (or relevant feature)
+        - General:
+            - Impact of all features:
+                - Examples: "Feature strength?", "Show impact of all features?"
+                - Response: method_name: "shapAllFeatures", feature: None
+            - Top three features:
+                - Examples: "Top impacting features?", "Most important factors?"
+                - Response: method_name: "top3Features", feature: None
+            - Least three features:
+                - Examples: "Least impacting features?", "Least important factors?"
+                - Response: method_name: "least3Features", feature: None
+            - Class changes without specifying feature:
+                - Examples: "Why not class [other class]?", "What changes lead to different prediction?"
+                - Response: method_name: "counterfactualAnyChange", feature: None
+
+    5. If not related to model prediction but a clarification or dataset question:
+        - Examples: "What does it mean?", "Clarify term?", "Data collection method?", "Model accuracy?", "Ethical implications?"
+        - Response: method_name: "notXaiMethod", feature: None
+
+    Possible features: {feature_names}
+
+    user
+    <<User Question>>
+    \n{{input}}
+
+    assistant
+    Respond with a python tuple (method, feature). Feature can be None.
+
+    <<Answer>>
+        """
+
+
+def get_tempalte_wich_checklist_and_memory(feature_names):
+    return f"""The following is an intent recognition sequence in a conversation between an AI and a human user and 
+    about machine learning model decisions. The AI is helpful and understands what the users intent is, given his question.
+     The user was presented with an instance containing various features. The machine learning model predicted a class. 
+     Given the user's question, the AI follows the checklist to determine the most suitable method to answer it. 
+
+    1. First, check if it is a greeting:
+        - Example questions: "Hey, how are you?", "Hello!", "Good morning."
+        - JSON response: method_name: "greeting", feature: None
+
+    2. If it is not a greeting, check if it is a very short question about a feature without specifying a change or statistics:
+        - Example questions: "And what about feature1?", "feature2?", "feature1 as well?", "And feature3?."
+        - JSON response: method_name: "followUp", feature: "feature1" (or the relevant feature mentioned)
+
+    3. If it is not a followUp question, check if it is a unspecific 'why did this happen' question. The user is interested
+        in understanding the prediction but does not ask for a specific explanation:
+        - Example questions: "Why this prediction?", "What led to this result?", "Can you explain why the model chose this class?"
+        - JSON response: method_name: "whyExplanation", feature: None
+
+    4. If it is not a a greeting, followUp or general whyExplanations, check if the question is a feature-specific or general xai question:
+        - If feature-specific:
+            - If asking for the impact of changing a specific feature:
+                - Example questions: "What would happen if marital status was different?", "What if hours per week increased?", "How would the prediction change if this feature value was altered?"
+                - JSON response: method_name: "ceterisParibus", feature: "marital status" (or the relevant feature mentioned)
+            - If asking for feature statistics:
+                - Example questions: "What are the typical values and distributions of 'feature1' in my dataset?", "Can you show the statistics for this feature?", "What is the average value of this attribute?"
+                - JSON response: method_name: "featureStatistics", feature: "feature1" (or the relevant feature mentioned)
+            - If asking for the anchor features:
+                - Example questions: "What factors guarantee this prediction remains the same?", "Which features must stay the same for this result?", "How can we be sure this prediction won't change?"
+                - JSON response: method_name: "anchor", feature: None
+        - If general:
+            - If asking for the impact of all features:
+                - Example questions: "What is the strength of each feature?", "How much does each feature contribute?", "Can you show the impact of all features?"
+                - JSON response: method_name: "shapAllFeatures", feature: None
+            - If asking for the top three features:
+                - Example questions: "Which features had the greatest impact on this prediction?", "What are the top factors influencing this result?", "Can you show the most important features?"
+                - JSON response: method_name: "top3Features", feature: None
+            - If asking for the least three features:
+                - Example questions: "Which features had the least impact on this prediction?", "What are the least important factors?", "Can you show the features that matter the least?"
+                - JSON response: method_name: "least3Features", feature: None
+             If asking for class changes, without specifying a feature:
+                - Example questions: "Why is it not class [other class]?", "In which case would it be another class?", "What changes would lead to a different prediction?"
+                - JSON response: method_name: "counterfactualAnyChange", feature: "hours per week" (or the relevant feature mentioned)
+
+    5. If it's not specific XAI question of the above, check if the question is not related to the model prediction but is a
+        clarification question or dataset related question, i.e. it is not directed to the model prediction:
+        - If it is not related to XAI, use `notXaiMethod`.
+            - Example questions: "What does it mean?", "Can you clarify this term?", "What is meant by 'X' in this context?", "How was the data collected?", "What is the accuracy of the model?", "What are the ethical implications of this model?"
+            - JSON response: method_name: "notXaiMethod", feature: None
+
+    The AI decide which method fits best. It immediately answer with the method and feature if applicable, without justification.
+    Possible feature that the user might ask about: {feature_names}.
+
+    <<Previous user questions and mapped methods>>:
+    \n{{chat_history}}
+
+    <<Current User Question>>
+    \n{{question}}
+
+    The AI responds with a python tuple containing the method and feature if applicable. feature can be None.
+    
+    <<AI Response>>
+    """
 
 
 def get_xai_template_with_descriptions():
@@ -78,8 +493,8 @@ def get_xai_template_with_descriptions():
         decide which method fits best to answer it. There are standalone methods that work without requiring a feature 
         specification: {general_questions} and some that are specific to a feature: {feature_specific_q}.""" + """
     
-    REMEMBER: "method" MUST be one of the candidate method names specified below OR it can be null if the input is not well suited for any of the candidate prompts.
-    REMEMBER: "feature_name" can be null if the question is not related to a specific feature.
+    REMEMBER: "method" MUST be one of the candidate method names specified below OR it can be None if the input is not well suited for any of the candidate prompts.
+    REMEMBER: "feature_name" can be None if the question is not related to a specific feature.
     
     << CANDIDATE METHODS >>
     - anchor: Anchor explanations identify the minimal set of conditions and feature values that, when held constant, 
@@ -168,14 +583,16 @@ question_to_id_mapping = {
     "whyExplanation": 1,
     "notXaiMethod": 100,
     "greeting": 99,
-    "null": -1,
+    "None": -1,
 }
-response_schemas = [
+
+"""response_schemas = [
     ResponseSchema(name="method_name", description="name of the method to answer the user question."),
-    ResponseSchema(name="feature", description="Feature that the user mentioned, can be null."),
+    ResponseSchema(name="feature", description="Feature that the user mentioned, can be None."),
 ]
+
 output_parser = StructuredOutputParser.from_response_schemas(response_schemas)
-format_instructions = output_parser.get_format_instructions()
+format_instructions = output_parser.get_format_instructions()"""
 
 ROUTING_TASK_PROMPT = """\
 Given a raw text input to a language model select the model prompt best suited for \
