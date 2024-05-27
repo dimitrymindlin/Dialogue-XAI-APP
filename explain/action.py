@@ -123,7 +123,36 @@ def run_action_new(conversation: Conversation,
             question_id = 1
 
     # store the question ID and handle the question
-    conversation.store_last_parse(question_id)
+    conversation.store_last_question(question_id, feature_id)
+
+    if question_id == 100:  # Not XAI Method
+        # First, check if first message
+        if conversation.get_last_question()[0] is None:
+            question_id = 99  # switch to greeting
+        else:
+            return "I'm sorry, I cannot answer that. I can help you to understand the prediction of the Machine Learning " \
+                   "model by showing you <br> " \
+                   "<ul>" \
+                   "<li>the most or least important attributes,</li>, " \
+                   "<li>the strength and influence of each attribute,</li>" \
+                   "<li>which changes would switch the prediction of the model,</li>" \
+                   "<li>which attributes guarantee this prediction,</li>" \
+                   "<li>the distribution of a single feature,</li>" \
+                   "<li>or if the prediction changes by altering a specific feature.</li>" \
+                   "</ul>"
+
+    if question_id == 99:  # greeting
+        return "Hello, I am an assistant to help you understand the prediction of the Machine Learning model. You can " \
+               "ask about <br>" \
+                "<ul>" \
+                "<li>the most or least important attributes,</li>, " \
+                "<li>the strength and influence of each attribute,</li>" \
+                "<li>which changes would switch the prediction of the model,</li>" \
+                "<li>which attributes guarantee this prediction,</li>" \
+                "<li>the distribution of a single feature,</li>" \
+                "<li>or if the prediction changes by altering a specific feature.</li>" \
+                "</ul>"
+
     if question_id == 1:
         return "To understand why the model made the prediction, I can tell you about the <b>most important attributes</b>, or " \
                "in which case a <b>different prediction would have made</b>. What would you like to know?"
@@ -241,14 +270,6 @@ def run_action_new(conversation: Conversation,
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
                                                         template_manager=template_manager)
         return answer + explanation[0]
-    if question_id == 99:  # greeting
-        return "Hello, I am an assistant to help you understand the prediction of the Machine Learning model. You can " \
-               "ask about the most or least important attributes, how certain changes in attributes influence the " \
-               "prediction or what alternative attributes would lead to a different prediction."
-    if question_id == 100:  # not xai method
-        return "I'm sorry, I cannot answer that. I can help you to understand the prediction of the Machine Learning " \
-               "model by showing you the most or least important attributes and their influence or how certain changes " \
-               "in attributes influence the prediction or what alternative attributes would lead to a different prediction."
     else:
         return f"This is a mocked answer to your question with id {question_id}."
     """if question_id == 12:
