@@ -73,12 +73,14 @@ def init():
     questions = bot_dict[user_id].get_questions_attributes_featureNames()
     ordered_feature_names = bot_dict[user_id].get_feature_names()
     user_experiment_prediction_choices = bot_dict[user_id].conversation.class_names
+    task_definition = bot_dict[user_id].conversation.describe.get_user_study_objective()
     result = {
         "feature_tooltips": feature_tooltip,
         "feature_units": feature_units,
         'questions': questions,
         'feature_names': ordered_feature_names,
         'prediction_choices': user_experiment_prediction_choices,
+        'dataset_task_description': task_definition
     }
     return result
 
