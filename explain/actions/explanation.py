@@ -372,3 +372,19 @@ def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name
                   f' not be able to change the probability enough.</span>'
 
     return html_string, 1
+
+
+def explain_remaining_explanations(conversation, data, feature_name, instance_type_name, opposite_class, as_text=False):
+    # TODO: Implement only showing the remaining explanations that have not been explained yet.
+
+    explanations_string = "Hello, I am an assistant to help you understand the prediction of the Machine Learning model. You can " \
+                          "ask about <br>" \
+                          "<ul>" \
+                          "<li>the most or least important attributes,</li>, " \
+                          "<li>the strength and influence of each attribute,</li>" \
+                          "<li>which changes would switch the prediction of the model,</li>" \
+                          "<li>which attributes guarantee this prediction,</li>" \
+                          "<li>the distribution of a single feature,</li>" \
+                          "<li>or if the prediction changes by altering a specific feature.</li>" \
+                          "</ul>"
+    # TODO: ...
