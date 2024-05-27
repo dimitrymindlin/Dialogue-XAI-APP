@@ -8,7 +8,6 @@ ExplainBot.dataset_file_path = "./data/german/german_test.csv"
 
 ExplainBot.name = "german"
 
-
 # Dataset feature information
 ExplainBot.dataset_index_column = 0
 ExplainBot.instance_type_naming = "Applicant"
@@ -21,6 +20,7 @@ ExplainBot.numerical_features = ['Age', 'CreditAmount', 'CreditDuration']
 ExplainBot.remove_underscores = True
 ExplainBot.actionable_features = ['Age', 'JobLevel', 'HousingType', 'SavingAccounts', 'CreditPurpose', 'CreditAmount', 'CreditDuration']
 ExplainBot.feature_ordering = ['Age', 'HousingType', 'JobLevel', 'WorkLifeBalance', 'CheckingAccount', 'SavingAccounts', 'CreditPurpose', 'CreditAmount', 'CreditDuration']
+ExplainBot.use_intent_recognition = True
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
@@ -54,8 +54,10 @@ Conversation.question_bank_path =  "./data/question_bank.csv"
 
 # Dataset description
 DatasetDescription.dataset_objective = "predict whether someone is a low or high credit risk applicant"
+DatasetDescription.user_study_objective = "whether an individual is a low or high credit risk applicant"
 DatasetDescription.dataset_description = "german credit risk"
 DatasetDescription.model_description = "random forest"
+
 
 # Tool tips
 ExplainBot.feature_tooltip_mapping = {

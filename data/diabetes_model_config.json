@@ -28,7 +28,9 @@
     ]
   },
   "rename_columns": {
-    "BMI": "BodyMassIndex"
+    "Bmi": "BodyMassIndex",
+    "Diabetespedigreefunction": "DiabetesPedigreeFunction",
+    "Bloodpressure": "BloodPressure"
   },
   "random_search_params": {
     "n_iter": 100,
