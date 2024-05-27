@@ -152,7 +152,7 @@ What part does each feature play in the prediction?;shapAllFeatures;
 "And how does employment duration compare?";"followUp";"employment duration"
 "Can you explain other debtors as well?";"followUp";"other debtors"
 "What is the data for installment rate?";"followUp";"installment rate"
-"And what does property indicate?";"followUp";"property"
+And what about property?;"followUp";"property"
 "Can we check other installment plans?";"followUp";"other installment plans"
 "Show me existing credits";"followUp";"existing credits"
 "What about the details of residence duration?";"followUp";"residence duration"
