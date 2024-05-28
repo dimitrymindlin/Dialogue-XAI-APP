@@ -134,11 +134,11 @@ def get_template_with_full_descr_step_by_step():
     """
 
 
-def get_template_wich_checklist(feature_names=None):
+def get_template_wich_checklist(feature_names="are defined by the user."):
     return f"""The user was presented with an instance containing various features. The machine learning model predicted 
         a class. Given the user's question about the model's prediction, follow the checklist to determine the most suitable 
         method to answer it. Return ONLY a json containing the keys method and feature where feature can be None. Do not
-         justify the choice of the method or feature, just provide the json.
+         justify the choice of the method or feature, just provide the json. Possible feature names: {feature_names}
 
     1. First, check if it is a greeting:
         - Example questions: "Hey, how are you?", "Hello!", "Good morning."
