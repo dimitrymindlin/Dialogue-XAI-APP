@@ -745,7 +745,10 @@ class ExplainBot:
                 """
 
         if user_input is not None:
-            question_id, feature_name = self.intent_recognition_model.predict(user_input.strip())
+            try:
+                question_id, feature_name = self.intent_recognition_model.predict(user_input.strip())
+            except Exception as e:
+                print(f"Error in intent recognition: {e}... Did you load the model? Check config if LLM intent recognition is defined.")
             feature_name = feature_name.lower() if feature_name is not None else None
             # If feature specific, get feature
             if feature_name is not None:
