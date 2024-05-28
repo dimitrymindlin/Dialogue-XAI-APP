@@ -145,17 +145,25 @@ def run_action_new(conversation: Conversation,
         return "Hello, I am an assistant to help you understand the prediction of the Machine Learning model. You can " \
                "ask about <br>" \
                 "<ul>" \
-                "<li>the most or least important attributes,</li>, " \
-                "<li>the strength and influence of each attribute,</li>" \
-                "<li>which changes would switch the prediction of the model,</li>" \
-                "<li>which attributes guarantee this prediction,</li>" \
-                "<li>the distribution of a single feature,</li>" \
-                "<li>or if the prediction changes by altering a specific feature.</li>" \
+                "<li>the <b>most</b> or <b>least</b> important attributes,</li>, " \
+                "<li>the <b>strength and influence</b> of each attribute,</li>" \
+                "<li>which attribute changes would <b>switch the prediction</b> of the model,</li>" \
+                "<li>which attributes </b>guarantee this prediction</b>,</li>" \
+                "<li>the <b>distribution</b> of a single feature,</li>" \
+                "<li>or if the prediction changes by </b>altering a specific feature</b>.</li>" \
                 "</ul>"
 
     if question_id == 1:
-        return "To understand why the model made the prediction, I can tell you about the <b>most important attributes</b>, or " \
-               "in which case a <b>different prediction would have made</b>. What would you like to know?"
+        return "To understand why the model made the prediction, I can tell you about the <br> <b>most important attributes</b>" \
+               "<ul>" \
+                "<li>the <b>most</b> or <b>least</b> important attributes,</li>, " \
+                "<li>the <b>strength and influence</b> of each attribute,</li>" \
+                "<li>which attribute changes would <b>switch the prediction</b> of the model,</li>" \
+                "<li>which attributes </b>guarantee this prediction</b>,</li>" \
+                "<li>the <b>distribution</b> of a single feature,</li>" \
+                "<li>or if the prediction changes by </b>altering a specific feature</b>.</li>" \
+                "</ul> <br> What would you like to know?"
+
     if question_id == 2:
         # How important is each attribute to the model's predictions?
         # Create full feature explanations
