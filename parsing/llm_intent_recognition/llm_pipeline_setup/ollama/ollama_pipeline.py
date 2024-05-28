@@ -108,10 +108,10 @@ def extract_tuple_from_response(response) -> tuple:
 
 
 class LLMSinglePrompt:
-    def __init__(self):
+    def __init__(self, feature_names):
         self.chain = (
                 PromptTemplate.from_template(
-                    template=get_template_wich_checklist(),
+                    template=get_template_wich_checklist(feature_names),
                     partial_variables={"input": "{question}"}) | Ollama(model=LLM_MODEL,
                                                                         temperature=0,
                                                                         format='json') | extract_json_from_response
