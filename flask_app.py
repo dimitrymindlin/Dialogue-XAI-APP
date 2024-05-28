@@ -122,25 +122,28 @@ def get_train_datapoint():
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
+    user_study_group = bot_dict[user_id].get_study_group()
     if user_id is None:
         user_id = "TEST"
 
     current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple("train",
-                                                                                               return_probability=True)
-    (instance_id, instance_dict, prediction_proba, true_label) = current_instance_with_units
+                                                                                               return_probability=False)
+    (instance_id, instance_dict, ml_prediction, true_label) = current_instance_with_units
     instance_dict["id"] = str(instance_id)
     instance_dict["true_label"] = true_label
+    instance_dict["ml_prediction"] = ml_prediction
 
-    instance_dict["prediction_probability"] = json.dumps(prediction_proba.tolist())
-
-    # Get initial prompt
-    current_prediction = bot_dict[user_id].get_current_prediction()
-    prompt = f"""
-        The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{current_prediction}</b>. <br>
-        If you have questions about the prediction, select questions from the right and I will answer them.
-        """
+    if user_study_group == "interactive":
+        prompt = f"""
+            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{ml_prediction}</b>. <br>
+            If you have questions about the prediction, select questions from the right and I will answer them.
+            """
+    else: # chat
+        prompt = f"""
+            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{ml_prediction}</b>. <br>
+            If you have questions about the prediction, type them in the chat and I will answer them.
+            """
     instance_dict["initial_prompt"] = prompt
-    user_study_group = bot_dict[user_id].get_study_group()
 
     if user_study_group == "static":
         # Get the explanation report
@@ -253,7 +256,7 @@ def get_bot_response():
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
-        return response
+        return response[0]
 
 
 @bp.route("/get_nl_response", methods=['POST'])
