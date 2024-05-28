@@ -18,7 +18,7 @@ ExplainBot.remove_underscores = True
 ExplainBot.ordinary_features = None
 ExplainBot.actionable_features = ['Glucose', 'BloodPressure', 'Insulin', 'BodyMassIndex', 'DiabetesPedigreeFunction']
 ExplainBot.feature_ordering = ['Age', 'BloodGroup', 'Pregnancies', 'Glucose', 'BloodPressure', 'Insulin', 'BodyMassIndex', 'DiabetesPedigreeFunction']
-ExplainBot.use_intent_recognition = openAI
+ExplainBot.use_intent_recognition = "openAI"
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
