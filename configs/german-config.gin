@@ -20,7 +20,7 @@ ExplainBot.numerical_features = ['Age', 'CreditAmount', 'CreditDuration']
 ExplainBot.remove_underscores = True
 ExplainBot.actionable_features = ['Age', 'JobLevel', 'HousingType', 'SavingAccounts', 'CreditPurpose', 'CreditAmount', 'CreditDuration']
 ExplainBot.feature_ordering = ['Age', 'HousingType', 'JobLevel', 'WorkLifeBalance', 'CheckingAccount', 'SavingAccounts', 'CreditPurpose', 'CreditAmount', 'CreditDuration']
-ExplainBot.use_intent_recognition = True
+ExplainBot.use_intent_recognition = "ollama"
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
