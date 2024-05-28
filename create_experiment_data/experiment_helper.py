@@ -50,7 +50,7 @@ class ExperimentHelper:
                     value = int(value)
                 instance[key] = str(value)
 
-    def _make_displayable_instance(self, instance):
+    def _make_displayable_instance(self, instance, return_probabilities=False):
         # Round instance features
         instance = copy.deepcopy(instance)
         self._round_instance_features(instance[1])
@@ -67,7 +67,13 @@ class ExperimentHelper:
         self._convert_values_to_string(instance[1])
         # Make display feature names for the instance keys
         new_instance = self.template_manager.replace_feature_names_by_display_names(instance[1])
-        instance = (instance[0], new_instance, instance[2], instance[3])
+        # If not return probability and probabilities are not none, turn to class label
+        if not return_probabilities and instance[2] is not None:
+            ml_prediction = np.argmax(instance[2])
+            display_ml_prediction = self.conversation.class_names[ml_prediction]
+            instance = (instance[0], new_instance, display_ml_prediction, instance[3])
+        else:
+            instance = (instance[0], new_instance, instance[2], instance[3])
         return instance
 
     def get_next_instance(self, instance_type, return_probability=False):
@@ -121,9 +127,7 @@ class ExperimentHelper:
         self.current_instance = self.instances[instance_type][self.instance_counters[instance_type]]
         # Increment the counter for the next call.
         self.instance_counters[instance_type] += 1
-        if return_probability:
-            return self.current_instance, self.instance_counters[instance_type], self.current_instance[2]
-        return self.current_instance, self.instance_counters[instance_type]
+        return self.current_instance, self.instance_counters[instance_type], self.current_instance[2]
 
     def _get_test_instance(self, train_instance_id, instance_type="test"):
         if not self.instances[instance_type]:
