@@ -336,7 +336,7 @@ def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name
         current_feature_value = data[feature_name].iloc[0]
         # get the difference
         difference = current_feature_value - x_flip_value
-        sign = "decreased" if difference > 0 else "increased"
+        sign = "decreasing" if difference > 0 else "increasing"
         return sign, x_flip_value
 
     ceteris_paribus_exp = conversation.get_var('ceteris_paribus').contents
