@@ -33,9 +33,9 @@ from explain.explanations.feature_statistics_explainer import FeatureStatisticsE
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
 from explain.write_to_log import log_dialogue_input
-from parsing.llm_intent_recognition.llm_pipeline_setup.ollama.ollama_pipeline import LLMSinglePrompt
+# from parsing.llm_intent_recognition.llm_pipeline_setup.ollama_pipeline.ollama_pipeline import LLMSinglePrompt REMOVED FOR PRODUCTION
 
-from parsing.llm_intent_recognition.llm_pipeline_setup.openai.openai_pipeline import \
+from parsing.llm_intent_recognition.llm_pipeline_setup.openai_pipeline.openai_pipeline import \
     LLMSinglePromptWithMemoryAndSystemMessage
 
 app = Flask(__name__)
@@ -155,8 +155,6 @@ class ExplainBot:
 
         if self.use_intent_recognition == "openAI":
             self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
-        elif self.use_intent_recognition == "ollama":
-            self.intent_recognition_model = LLMSinglePrompt(self.feature_ordering)
         elif self.use_intent_recognition == "t5":
             pass
             """app.logger.info(f"Loading parsing model {parsing_model_name}...")
@@ -164,6 +162,8 @@ class ExplainBot:
                                    t5_config,
                                    use_guided_decoding=self.use_guided_decoding,
                                    dataset_name=name)"""
+        """elif self.use_intent_recognition == "ollama_pipeline":
+            self.intent_recognition_model = LLMSinglePrompt(self.feature_ordering)"""
         self.decoder = None
 
         self.data_instances = []
@@ -748,7 +748,8 @@ class ExplainBot:
             try:
                 question_id, feature_name = self.intent_recognition_model.predict(user_input.strip())
             except Exception as e:
-                print(f"Error in intent recognition: {e}... Did you load the model? Check config if LLM intent recognition is defined.")
+                print(
+                    f"Error in intent recognition: {e}... Did you load the model? Check config if LLM intent recognition is defined.")
             feature_name = feature_name.lower() if feature_name is not None else None
             # If feature specific, get feature
             if feature_name is not None:
