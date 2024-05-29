@@ -72,7 +72,7 @@ def read_and_format_data(filepath,
 """def setup_gpt3():
     with open('openai_key.txt', 'r') as f:
         key = f.readline().strip()
-        openai.api_key = key"""
+        openai_pipeline.api_key = key"""
 
 
 def strip_ws(tok):
