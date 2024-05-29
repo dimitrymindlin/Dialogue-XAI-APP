@@ -130,27 +130,27 @@ def run_action_new(conversation: Conversation,
         if conversation.get_last_question()[0] is None:
             question_id = 99  # switch to greeting
         else:
-            return "I'm sorry, I cannot answer that. I can help you to understand the prediction of the Machine Learning " \
+            return "I'm here to help you to understand the prediction of the Machine Learning " \
                    "model by showing you <br> " \
                    "<ul>" \
-                   "<li>the most or least important attributes,</li>, " \
-                   "<li>the strength and influence of each attribute,</li>" \
-                   "<li>which changes would switch the prediction of the model,</li>" \
-                   "<li>which attributes guarantee this prediction,</li>" \
-                   "<li>the distribution of a single feature,</li>" \
-                   "<li>or if the prediction changes by altering a specific feature.</li>" \
+                   "<li>the <b>most</b> or <b>least</b> important attributes,</li>" \
+                   "<li>the <b>strength and influence</b> of each attribute,</li>" \
+                   "<li>which attribute changes would <b>switch the prediction</b> of the model,</li>" \
+                   "<li>which attributes <b>guarantee this prediction</b>,</li>" \
+                   "<li>the <b>distribution</b> of a single feature,</li>" \
+                   "<li>or if the prediction changes by <b>altering a specific feature</b>.</li>" \
                    "</ul>"
 
     if question_id == 99:  # greeting
         return "Hello, I am an assistant to help you understand the prediction of the Machine Learning model. You can " \
-               "ask about <br>" \
+               "ask me about <br>" \
                 "<ul>" \
-                "<li>the <b>most</b> or <b>least</b> important attributes,</li>, " \
+                "<li>the <b>most</b> or <b>least</b> important attributes,</li>" \
                 "<li>the <b>strength and influence</b> of each attribute,</li>" \
                 "<li>which attribute changes would <b>switch the prediction</b> of the model,</li>" \
-                "<li>which attributes </b>guarantee this prediction</b>,</li>" \
+                "<li>which attributes <b>guarantee this prediction</b>,</li>" \
                 "<li>the <b>distribution</b> of a single feature,</li>" \
-                "<li>or if the prediction changes by </b>altering a specific feature</b>.</li>" \
+                "<li>or if the prediction changes by <b>altering a specific feature</b>.</li>" \
                 "</ul>"
 
     if question_id == 1:
