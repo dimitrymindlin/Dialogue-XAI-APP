@@ -1,13 +1,15 @@
 import json
 
 import pandas as pd
+
 from langchain.memory import ConversationBufferMemory
 from langchain.output_parsers import ResponseSchema, StructuredOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_community.adapters import openai as lc_openai
 
 from openai import OpenAI
 from openai.types.chat.completion_create_params import ResponseFormat
 
-from langchain_core.prompts import ChatPromptTemplate
 import tqdm
 import matplotlib.pyplot as plt
 
@@ -15,7 +17,6 @@ import os
 from dotenv import load_dotenv
 
 from parsing.llm_intent_recognition.prompts import question_to_id_mapping, openai_system_prompt, openai_user_prompt
-from langchain_community.adapters import openai as lc_openai
 
 load_dotenv()
 
