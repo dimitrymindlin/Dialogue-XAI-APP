@@ -115,11 +115,11 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
         # test_questions_df = test_questions_df.groupby("xai method").head(10)
 
         # only keep certain methods
-        test_questions_df = test_questions_df[test_questions_df["xai method"].isin(["followUp"])]
+        # test_questions_df = test_questions_df[test_questions_df["xai method"].isin(["followUp"])]
 
         # load llm model
-        llm_model = LLMSinglePromptWithMemoryAndSystemMessage(
-            feature_names=["feature1", "feature2", "feature3", "feature4"])
+        # llm_model = LLMSinglePromptWithMemoryAndSystemMessage(
+        # feature_names=["feature1", "feature2", "feature3", "feature4"])
 
         # predict for each question
         correct = 0
@@ -129,6 +129,9 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
         wrong_features = {}
         parsing_errors = {}
         for index, row in tqdm.tqdm(test_questions_df.iterrows(), total=len(test_questions_df), desc="Testing"):
+            # Create a new model for each question to avoid memory issues
+            llm_model = LLMSinglePromptWithMemoryAndSystemMessage(
+                feature_names=["feature1", "feature2", "feature3", "feature4"])
             correct_q_id = question_to_id_mapping[row["xai method"]]
             correct_feature = row["feature"]
             question = row["question"]
@@ -180,10 +183,10 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
             with open(filepath, 'w') as f:
                 json.dump(results, f)
 
-        save_results("llm_classification_results.json", wrong_predictions, wrong_features, total_predictions,
+        save_results("openai_classification_results.json", wrong_predictions, wrong_features, total_predictions,
                      question_to_id_mapping, id_to_question_mapping)
     else:
-        with open("llm_classification_results.json", 'r') as f:
+        with open("openai_classification_results.json", 'r') as f:
             results = json.load(f)
 
         wrong_predictions = results["correct_predictions"]
@@ -240,7 +243,7 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
 
 
 if __name__ == "__main__":
-    current_approach_performance(question_to_id_mapping, load_previous_results=False)
+    current_approach_performance(question_to_id_mapping, load_previous_results=True)
     """feature_names = ["feature1", "feature2", "feature3", "feature4", "feature5"]
     llm_model = LLMSinglePromptWithMemory(feature_names)
 
