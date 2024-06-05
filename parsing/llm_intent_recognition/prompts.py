@@ -20,7 +20,7 @@ notXaiMethod: Used for questions that cannot be answered with the previous metho
 """
 
 followUp_template = """
-followUp: Used when the user mentions a feature without specifying their interest in feature change or feature statistics.
+followUp: Used when the user mentions a feature without specifying their interest in feature change (what if higher, different, older...) or feature statistics.
     Best for questions like: "And what about age?", "How does income affect it?", "What if we consider education level?"
     Answer Example: "Here is the same explanation method for the new feature."
 """
