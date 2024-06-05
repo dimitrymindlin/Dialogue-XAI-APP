@@ -20,7 +20,7 @@ notXaiMethod: Used for questions that cannot be answered with the previous metho
 """
 
 followUp_template = """
-followUp: Used when the user mentions a feature without specifying their interest in feature change (what if higher, different, older...) or feature statistics.
+followUp: Not stand alone, Short feature question without asking for a change, value, or distribution.
     Best for questions like: "And what about age?", "How does income affect it?", "What if we consider education level?"
     Answer Example: "Here is the same explanation method for the new feature."
 """
@@ -301,7 +301,7 @@ def get_system_prompt_condensed_with_history(feature_names=""):
         1. Greeting:
             - Examples: "Hey, how are you?", "Hello!", "Good morning."
             - JSON: method: "greeting", feature: None
-        2. Not stand alone, Short feature question without asking for a change, value, or distribution:
+        2. Not stand alone, Short feature question without asking for a feature value change, feature value, or distribution:
             - Examples: "And what about age?", "income?", "Education level as well?"
             - JSON: method: "followUp", feature: "age" (or relevant feature)
         3. Unspecific 'why' question:
@@ -313,14 +313,11 @@ def get_system_prompt_condensed_with_history(feature_names=""):
         5. Feature-specific or general XAI question:
             - Feature-specific:
                 - Impact of changing a feature:
-                    - Examples: "What if marital status was different?", "What if hours per week increased?"
+                    - Examples: "What if marital status was different?", "What if hours per week increased?", "What if older?"
                     - JSON: method: "ceterisParibus", feature: "marital status" (or relevant feature)
                 - Feature statistics:
                     - Examples: "What are the typical values of 'age'?", "Can you show the statistics for this feature?"
                     - JSON: method: "featureStatistics", feature: "age" (or relevant feature)
-                - Anchoring conditions:
-                    - Examples: "What factors guarantee this prediction?", "Which features must stay the same?"
-                    - JSON: method: "anchor", feature: None
             - General:
                 - Impact of all features:
                     - Examples: "What is the strength of each feature?", "How much does each feature contribute?"
@@ -334,6 +331,9 @@ def get_system_prompt_condensed_with_history(feature_names=""):
                 - Class changes without specifying a feature:
                     - Examples: "Why is it not class [other class]?", "What changes would lead to a different prediction?"
                     - JSON: method: "counterfactualAnyChange", feature: "hours per week" (or relevant feature)
+                - Anchoring conditions:
+                    - Examples: "What factors guarantee this prediction?", "Which features must stay the same?"
+                    - JSON: method: "anchor", feature: None
 
         Task: Decide which method fits best. Return a single JSON.
         
