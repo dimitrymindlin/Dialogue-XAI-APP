@@ -103,16 +103,20 @@ def finish():
     return "200 OK"
 
 
-def get_datapoint(user_id, datapoint_type):
+def get_datapoint(user_id, datapoint_type, return_probability=False):
     """
     Get a datapoint from the dataset based on the datapoint type.
     """
     if user_id is None:
         user_id = "TEST"
-    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple(datapoint_type)
-    (instance_id, instance_dict, prediction_proba, true_label) = current_instance_with_units
+    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple(datapoint_type,
+                                                                                               return_probability=return_probability)
+    (instance_id, instance_dict, probas, ml_label) = current_instance_with_units
     instance_dict["id"] = str(instance_id)
-    instance_dict["true_label"] = true_label
+    if return_probability:
+        instance_dict["probabilities"] = probas
+    instance_dict["ml_prediction"] = ml_label
+    print(instance_dict)
     return instance_dict
 
 
@@ -123,24 +127,16 @@ def get_train_datapoint():
     """
     user_id = request.args.get("user_id")
     user_study_group = bot_dict[user_id].get_study_group()
-    if user_id is None:
-        user_id = "TEST"
-
-    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple("train",
-                                                                                               return_probability=False)
-    (instance_id, instance_dict, ml_prediction, true_label) = current_instance_with_units
-    instance_dict["id"] = str(instance_id)
-    instance_dict["true_label"] = true_label
-    instance_dict["ml_prediction"] = ml_prediction
+    instance_dict = get_datapoint(user_id, "train")
 
     if user_study_group == "interactive":
         prompt = f"""
-            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{ml_prediction}</b>. <br>
+            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{instance_dict["ml_prediction"]}</b>. <br>
             If you have questions about the prediction, select questions from the right and I will answer them.
             """
-    else: # chat
+    else:  # chat
         prompt = f"""
-            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{ml_prediction}</b>. <br>
+            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{instance_dict["ml_prediction"]}</b>. <br>
             If you have questions about the prediction, type them in the chat and I will answer them.
             """
     instance_dict["initial_prompt"] = prompt

@@ -94,9 +94,9 @@ class ExperimentHelper:
             old_instance = self.current_instance
             predicted_label_index = np.argmax(
                 self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance, index=[0])))
-            true_label_name = self.conversation.class_names[predicted_label_index]
+            model_predicted_label = self.conversation.class_names[predicted_label_index]
             probability = None
-            instance = (instance_id, instance, probability, true_label_name)
+            instance = (instance_id, instance, probability, model_predicted_label)
         else:  # "train"
             instance, counter, probability = get_instance_methods[instance_type]()
 
