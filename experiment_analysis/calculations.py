@@ -72,13 +72,13 @@ def update_user_df(user_df, user_id, score_intro, score_final, confidence_intro,
     user_df.loc[conditions, "learning_score"] = score_learning
 
 
-def create_predictions_df(user_df, user_events):
+def create_predictions_df(user_df, user_events, exclude_incomplete=False):
     exclude = False
     # Filter predictions by source and action
-    predicates = (user_events["action"] == "user_prediction")
-    predictions_final_test = user_events[predicates & (user_events["source"] == "final-test")].copy()
-    predictions_intro_test = user_events[predicates & (user_events["source"] == "intro-test")].copy()
-    predictions_learning_test = user_events[predicates & (user_events["source"] == "test")].copy()
+    predictions = (user_events["action"] == "user_prediction")
+    predictions_final_test = user_events[predictions & (user_events["source"] == "final-test")].copy()
+    predictions_intro_test = user_events[predictions & (user_events["source"] == "intro-test")].copy()
+    predictions_learning_test = user_events[predictions & (user_events["source"] == "test")].copy()
 
     # Normalize 'details' dictionary
     predictions_final_test = normalize_details(predictions_final_test)
@@ -92,8 +92,9 @@ def create_predictions_df(user_df, user_events):
     predictions_learning_test = process_and_remove_duplicates(predictions_learning_test,
                                                               ["datapoint_count", "accuracy"])
 
-    if len(predictions_final_test) != 10 or len(predictions_intro_test) != 10 or len(predictions_learning_test) != 10:
-        return None, None, None, True
+    if exclude_incomplete:
+        if len(predictions_final_test) != 10 or len(predictions_intro_test) != 10 or len(predictions_learning_test) != 10:
+            return None, None, None, True
 
     # Calculate scores and confidence
     score_intro, confidence_intro = calculate_score_and_confidence(predictions_intro_test)

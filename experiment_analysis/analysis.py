@@ -14,13 +14,15 @@ from experiment_analysis.process_mining import ProcessMining
 import json
 
 from experiment_analysis.statistical_tests import perform_power_analysis
+from parsing.llm_intent_recognition.prompts import question_to_id_mapping
 
 POSTGRES_USER = "postgres"
 POSTGRES_PASSWORD = "example"
-POSTGRES_DB = "prolific_study"
+POSTGRES_DB = "prolific_tmp"
 POSTGRES_HOST = "localhost"
 
-analysis_steps = ["filter_completed_users",
+analysis_steps = ["filter_by_prolific_users",
+                  "filter_completed_users",
                   "filter_by_attention_check",
                   "filter_by_time",
                   "print_buttons_feedback",
@@ -113,20 +115,39 @@ def extract_questions(user_events):
     return user_questions_over_time
 
 
+def analyse_user_questions(questions_df):
+    id_to_question_mapping = {v: k for k, v in question_to_id_mapping.items()}
+    # For each user_id, get the rows and inspect the details column
+    for user_id in questions_df["user_id"].unique():
+        print(user_id)
+        user_questions = questions_df[questions_df["user_id"] == user_id]
+        print(f"User: {user_id}")
+        datapoint = 0
+        for index, row in user_questions.iterrows():
+            details_dict = json.loads(row["details"])
+            current_datapoint = details_dict["datapoint_count"]
+            if datapoint != current_datapoint:
+                print(f"Datapoint: {current_datapoint}")
+                datapoint = current_datapoint
+            print(f"Question: {details_dict['question']}")
+            print(f"Answer: {id_to_question_mapping[int(details_dict['question_id'].split(',')[0])]}")
+    print()
+
+
 def main():
     conn = connect_to_db()
     analysis = AnalysisDataHolder(user_df=fetch_data_as_dataframe("SELECT * FROM users", conn),
                                   event_df=fetch_data_as_dataframe("SELECT * FROM events", conn),
                                   user_completed_df=fetch_data_as_dataframe("SELECT * FROM user_completed", conn))
-
-    filter_by_prolific_users(analysis)
-    analysis.create_time_columns()
+    if "filter_by_prolific_users" in analysis_steps:  # TODO: Change
+        filter_by_prolific_users(analysis)
+        analysis.create_time_columns()
 
     print("Found users: ", len(analysis.user_df))
     print("Found events: ", len(analysis.event_df))
 
     ### Filtering
-    filter_by_broken_variables(analysis)
+    # filter_by_broken_variables(analysis)
     print("Amount of users per study group after broken variables filter:")
     print(analysis.user_df.groupby("study_group").size())
 
@@ -140,8 +161,26 @@ def main():
     for user_id in analysis.user_df["id"]:
         study_group, user_events = get_study_group_and_events(analysis.user_df, analysis.event_df, user_id)
         # Create predictions dfs and if there is a user with missing or broken data, exclude them
+        # check if user_events is empty
+        if user_events.empty:
+            exclude_user_ids.append(user_id)
+            continue
+
+        # check if source teaching handle next is 10 times
+        if len(user_events[user_events["source"] == "teaching"]) < 10:
+            exclude_user_ids.append(user_id)
+            continue
+
+        if study_group == "interactive" or "chat":
+            user_questions_over_time_df = extract_questions(user_events)
+            if user_questions_over_time_df is not None:
+                user_questions_over_time_list.append(user_questions_over_time_df)
+            else:
+                exclude_user_ids.append(user_id)
+
         intro_test_preds, preds_learning, final_test_preds, exclude = create_predictions_df(analysis.user_df,
-                                                                                            user_events)
+                                                                                            user_events,
+                                                                                            exclude_incomplete=True)
         if exclude:
             exclude_user_ids.append(user_id)
             continue
@@ -156,13 +195,6 @@ def main():
             if fuzz.partial_ratio("worklifebalance", f.lower()) > 80 or fuzz.partial_ratio("work life balance",
                                                                                            f.lower()) > 80:
                 wlb_users.append((user_id, f))
-
-        if study_group == "interactive":
-            user_questions_over_time_df = extract_questions(user_events)
-            if user_questions_over_time_df is not None:
-                user_questions_over_time_list.append(user_questions_over_time_df)
-            else:
-                exclude_user_ids.append(user_id)
 
         # Get User Final Q. Feedback from interactive group
         exit_q_df = extract_exit_feedback(analysis.user_df, user_id)
@@ -193,7 +225,9 @@ def main():
         "intro_avg_confidence"]
 
     # Merge final_q_feedback_list to analysis.user_df on user_id
-    analysis.user_df = analysis.user_df.merge(pd.concat(final_q_feedback_list), on="user_id", how="left")
+    analysis.user_df = analysis.user_df.merge(pd.concat(final_q_feedback_list), left_on="id", right_on="user_id",
+                                              how="left")
+
     initial_test_preds_df = pd.concat(initial_test_preds_list)
     learning_test_preds_df = pd.concat(learning_test_preds_list)
     analysis.add_initial_test_preds_df(initial_test_preds_df)
@@ -247,7 +281,7 @@ def main():
     print()
 
     # Get top 10 people based on final score with their prolific id
-    #print(analysis.user_df[["prolific_id", "final_score"]].sort_values("final_score", ascending=False).head(10))
+    # print(analysis.user_df[["prolific_id", "final_score"]].sort_values("final_score", ascending=False).head(10))
 
     ### LOOK AT ANALYSIS
     if "plot_question_raking" in analysis_steps:
@@ -275,9 +309,9 @@ def main():
         worst_users = worst_users[:len(best_users)]
         return best_users, worst_users
 
-    #print_correlation_ranking("score_improvement", group="interactive")
+    # print_correlation_ranking("score_improvement", group="interactive")
     # print_correlation_ranking("score_improvement", group="static")
-    #print_correlation_ranking("final_score", group="interactive")
+    # print_correlation_ranking("final_score", group="interactive")
     print_correlation_ranking("final_score", group="static")
 
     analysis.questions_over_time_df = analysis.questions_over_time_df.merge(
