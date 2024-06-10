@@ -11,6 +11,7 @@ from explain.actions.explanation import explain_local_feature_importances, expla
     explain_anchor_changeable_attributes_without_effect, explain_feature_statistic, explain_feature_importances_as_plot, \
     explain_global_feature_importances, explain_ceteris_paribus
 from explain.actions.filter import filter_operation
+from explain.actions.important import important_operation
 from explain.actions.interaction_effects import measure_interaction_effects
 from explain.actions.prediction_likelihood import predict_likelihood
 from explain.conversation import Conversation
@@ -77,7 +78,7 @@ def run_action(conversation: Conversation,
 
 
 def run_action_new(conversation: Conversation,
-                   question_id: int,
+                   question_id: str,
                    instance_id: int,
                    feature_id: int = None,
                    build_temp_dataset: bool = True,
@@ -110,8 +111,10 @@ def run_action_new(conversation: Conversation,
 
     # get_explanation_report(conversation, instance_id)
 
+    # important_operation(conversation, parse_text, 0)
+
     # First, check if follow-up question (id 0)
-    if question_id == 0:
+    if question_id == "followUp":
         # Get last parse to determine the last question
         last_question = conversation.get_last_question()
         q_id = last_question[0]
@@ -125,10 +128,10 @@ def run_action_new(conversation: Conversation,
     # store the question ID and handle the question
     conversation.store_last_question(question_id, feature_id)
 
-    if question_id == 100:  # Not XAI Method
+    if question_id == "notXaiMethod":  # Not XAI Method
         # First, check if first message
         if conversation.get_last_question()[0] is None:
-            question_id = 99  # switch to greeting
+            question_id = "greeting"  # switch to greeting
         else:
             return "I'm here to help you to understand the prediction of the Machine Learning " \
                    "model by showing you <br> " \
@@ -141,88 +144,42 @@ def run_action_new(conversation: Conversation,
                    "<li>or if the prediction changes by <b>altering a specific feature</b>.</li>" \
                    "</ul>"
 
-    if question_id == 99:  # greeting
+    if question_id == "greeting":
         return "Hello, I am an assistant to help you understand the prediction of the Machine Learning model. You can " \
                "ask me about <br>" \
-                "<ul>" \
-                "<li>the <b>most</b> or <b>least</b> important attributes,</li>" \
-                "<li>the <b>strength and influence</b> of each attribute,</li>" \
-                "<li>which attribute changes would <b>switch the prediction</b> of the model,</li>" \
-                "<li>which attributes <b>guarantee this prediction</b>,</li>" \
-                "<li>the <b>distribution</b> of a single feature,</li>" \
-                "<li>or if the prediction changes by <b>altering a specific feature</b>.</li>" \
-                "</ul>"
+               "<ul>" \
+               "<li>the <b>most</b> or <b>least</b> important attributes,</li>" \
+               "<li>the <b>strength and influence</b> of each attribute,</li>" \
+               "<li>which attribute changes would <b>switch the prediction</b> of the model,</li>" \
+               "<li>which attributes <b>guarantee this prediction</b>,</li>" \
+               "<li>the <b>distribution</b> of a single feature,</li>" \
+               "<li>or if the prediction changes by <b>altering a specific feature</b>.</li>" \
+               "</ul>"
 
-    if question_id == 1:
+    if question_id == "whyExplanation":
         return "To understand why the model made the prediction, I can tell you about the <br> <b>most important attributes</b>" \
                "<ul>" \
-                "<li>the <b>most</b> or <b>least</b> important attributes,</li>, " \
-                "<li>the <b>strength and influence</b> of each attribute,</li>" \
-                "<li>which attribute changes would <b>switch the prediction</b> of the model,</li>" \
-                "<li>which attributes </b>guarantee this prediction</b>,</li>" \
-                "<li>the <b>distribution</b> of a single feature,</li>" \
-                "<li>or if the prediction changes by </b>altering a specific feature</b>.</li>" \
-                "</ul> <br> What would you like to know?"
+               "<li>the <b>most</b> or <b>least</b> important attributes,</li>, " \
+               "<li>the <b>strength and influence</b> of each attribute,</li>" \
+               "<li>which attribute changes would <b>switch the prediction</b> of the model,</li>" \
+               "<li>which attributes </b>guarantee this prediction</b>,</li>" \
+               "<li>the <b>distribution</b> of a single feature,</li>" \
+               "<li>or if the prediction changes by </b>altering a specific feature</b>.</li>" \
+               "</ul> <br> What would you like to know?"
 
-    if question_id == 2:
-        # How important is each attribute to the model's predictions?
-        # Create full feature explanations
-        # explanation = explain_feature_importances(conversation, data, parse_op, regen)
-        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction_str,
-                                                          current_prediction_id)
-        return explanation[0]
-    if question_id == 3:
-        # How strong does [feature X] affect the prediction?
-        explanation = get_feature_importance_by_feature_id(conversation, data, regen, feature_id)
-        return explanation[0]
-    if question_id == 4:
-        # What are the top 3 important attributes for this prediction?
-        parse_op = "top 3"
-        explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True)
-        answer = "Here are the 3 most important attributes for this prediction: <br><br>"
-        # follow_up = get_fi_follow_up(conversation, data, parse_op, regen, template_manager)
-        return answer + explanation[0]
-    """if question_id == 5:
-        # Why did the model give this particular prediction for this person?
-        explanation = explain_feature_importances(conversation, data, parse_op, regen,
-                                                  return_full_summary=False)
-        answer = "The prediction can be explained by looking at the most important attributes. <br>"
-        answer += "Here are the top most important ones: <br>"
-        return answer + explanation[0]"""
-    if question_id == 5:
-        # What attributes of this instance led the model to make this prediction?
-        explanation = explain_local_feature_importances(conversation, data, parse_op, regen)
-        answer = "The following attributes were most important for the prediction. "
-        return answer + explanation[0]
-    """if question_id == 6:
-        # What would happen to the prediction if we changed [feature] for this instance?
-        explanation = explain_cfe_by_given_features(conversation, data, [feature_name])
-        if explanation[1] == 0:
-            answer = explanation[0] + feature_name + "."
-        else:
-            answer = explanation[0]
-        return answer"""
-    if question_id == 7:
+    if question_id == "counterfactualAnyChange":
         # How should this instance change to get a different prediction?
         explanation, desired_class = explain_cfe(conversation, data, parse_op, regen)
         desired_class_str = conversation.get_class_name_from_label(desired_class)
         explanation = f"Here are possible scenarios that would change the prediction to <b>{desired_class_str}</b>:<br> <br>" + \
                       explanation + "<br>There might be other possible changes. These are examples."
         return explanation
-    if question_id == 8:
+    if question_id == "counterfactualSpecificFeatureChange":
         # How should this attribute change to get a different prediction?
         top_features_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
         explanation = explain_cfe_by_given_features(conversation, data, [feature_name], top_features_dict)
         return explanation
-    if question_id == 9:
-        # Which changes to this instance would still get the same prediction?
-        explanation = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
-                                                                          template_manager)
-        return explanation[0]
-    if question_id == 10:
-        # Which maximum changes would not influence the class prediction?
-        pass
-    if question_id == 11:
+    if question_id == "anchor":
         # What attributes must be present or absent to guarantee this prediction?
         explanation, success = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
                                                                                    template_manager)
@@ -232,25 +189,10 @@ def run_action_new(conversation: Conversation,
             return result_text
         else:
             return "I'm sorry, I couldn't find a group of attributes that guarantees the current prediction."
-
-    if question_id == 12:
-        # How does the prediction change when this attribute changes? Ceteris Paribus
-        # explanation = explain_ceteris_paribus(conversation, data, parse_op, regen)
-        return f"This is a mocked answer to your question with id {question_id}."
-    if question_id == 13:
-        # 13;How common is the current values for this attribute?
+    if question_id == "featureStatistics":
         explanation = explain_feature_statistic(conversation, template_manager, feature_name, as_plot=True)
         return explanation
-    if question_id == 20:
-        # 20;Why is this instance predicted as [current prediction]?
-        pass
-    if question_id == 22:
-        # 22;How is the model using the attributes in general to give an answer?
-        explanation = explain_global_feature_importances(conversation)
-        explanation_intro = "The model uses the attributes to inform its predictions by assigning each a level of importance. " \
-                            f"The chart with bars indicates the general trend of importances across all f{instance_type_naming}s: longer bars correspond to attributes with a greater general influence on the model's decisions.<br>"
-        return explanation_intro + explanation[0]
-    if question_id == 23:
+    if question_id == "top3Features":
         # 23;Which are the most important attributes for the outcome of the instance?
         parse_op = "top 3"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
@@ -258,20 +200,26 @@ def run_action_new(conversation: Conversation,
         answer = f"Here are the 3 <b>most</b> important attributes for predicting <b>{current_prediction_str}</b>: <br><br>"
         return answer + explanation[0]
 
-    if question_id == 24:
-        # 24;What are the attributes and their impact for the current prediction of [curent prediction]?
+    if question_id == "mostImportantFeature":
+        # 23;Which are the most important attributes for the outcome of the instance?
+        parse_op = "top 3"
+        explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False,
+                                                        template_manager=template_manager)
+        # Get first item in explanation dict
+        most_important_feature_name = list(explanation[0].items())[0][0]
+        return most_important_feature_name
+
+    if question_id == "shapAllFeatures":
         explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction_str,
                                                           current_prediction_id)
         return explanation
-    if question_id == 25:
-        # print(measure_interaction_effects(conversation, parse_text=parse_op))
-        # 25;What if I changed the value of a feature?; What if I changed the value of [feature selection]?;Ceteris Paribus
+    if question_id == "ceterisParibus":
         explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming, opposite_class,
                                               as_text=True)
         if opposite_class not in explanation and not explanation.startswith("No"):
             explanation = explanation + opposite_class + "."
         return explanation
-    if question_id == 27:
+    if question_id == "least3Features":
         # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the instance?
         parse_op = "least 3"
         answer = f"Here are the <b>least</b> important attributes for predicting <b>{current_prediction_str}</b>: <br><br>"
@@ -280,9 +228,6 @@ def run_action_new(conversation: Conversation,
         return answer + explanation[0]
     else:
         return f"This is a mocked answer to your question with id {question_id}."
-    """if question_id == 12:
-        # How does the prediction change when this attribute changes? Ceteris Paribus
-        explanation = explain_ceteris_paribus(conversation, data, parse_op, regen)"""
 
 
 def compute_explanation_report(conversation,
