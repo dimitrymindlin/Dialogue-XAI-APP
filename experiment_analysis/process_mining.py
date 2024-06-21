@@ -32,34 +32,21 @@ class ProcessMining:
     def create_pm_csv(self,
                       analysis,
                       datapoint_count=[5],
-                      filter_by_score: str = None):
+                      target_user_ids=None,
+                      target_group_name="none"):
         """
         Preprocesses experiment event df into a format suitable for process mining.
         Format should be table of [CaseID, Activity, Timestamp]
         :param event_df: DataFrame with event data
         :param user_scores_df: DataFrame with user scores, used to filter users by score
         :param datapoint_count: Datapoint count to filter by datapoint (conversation turn)
-        :param filter_by_score: Filter users by score, e.g. "best" or "worst"
+        :param target_user_ids: List of user ids to filter by
         """
-        interactive_users = analysis.user_df[analysis.user_df["study_group"] == "interactive"]
-        if filter_by_score:
-            # Keep only users with best or worst scores
-            best_users = interactive_users[interactive_users["score_improvement"] >= 3]
-            worst_users = interactive_users[interactive_users["score_improvement"] <= 0]
-
-            best_users_ids = best_users["id"].to_list()
-            worst_users_ids = worst_users["id"].to_list()
-
-            # filter event_df by user_scores_df
-            if filter_by_score == "best":
-                questions_df = analysis.questions_over_time_df[
-                    analysis.questions_over_time_df["user_id"].isin(best_users_ids)]
-            elif filter_by_score == "worst":
-                questions_df = analysis.questions_over_time_df[
-                    analysis.questions_over_time_df["user_id"].isin(worst_users_ids)]
-            else:
-                # Take all users
-                questions_df = analysis.questions_over_time_df
+        if target_user_ids is not None:
+            questions_df = analysis.questions_over_time_df[
+                analysis.questions_over_time_df["user_id"].isin(target_user_ids)]
+        else:
+            raise ValueError("Best or worst user ids must be provided.")
 
         pm_event_df = pd.DataFrame(columns=["Case id", "Activity", "Timestamp"])
 
@@ -88,7 +75,5 @@ class ProcessMining:
         self.pm_event_df = pm_event_df
 
         # Save as csv file with header
-        if filter_by_score is not None:
-            self.pm_event_df.to_csv(f"process_mining_{datapoint_count}_{filter_by_score}.csv", index=False, header=True)
-        else:
-            self.pm_event_df.to_csv(f"process_mining_{datapoint_count}_all.csv", index=False, header=True)
+        self.pm_event_df.to_csv(f"pm_{datapoint_count}_{target_group_name}.csv", index=False, header=True)
+

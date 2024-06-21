@@ -90,7 +90,7 @@ def extract_questionnaires(user_df):
     questionnaires = pd.concat([questionnaires.drop(['questionnaires'], axis=1),
                                 questionnaires['questionnaires'].apply(pd.Series)], axis=1)
     # drop empty columns
-    questionnaires.drop([0, 4], axis=1, inplace=True)
+    questionnaires.drop([0], axis=1, inplace=True)
     # Change column names
     questionnaires.columns = ['id', 'ranking_q', 'self_assessment_q', 'exit_q']
     # Apply to user_df and drop id column

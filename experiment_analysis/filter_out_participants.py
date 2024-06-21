@@ -171,15 +171,15 @@ def _add_end_time(user_completed_df, prolific_df):
 def filter_by_prolific_users(analysis):
     # TODO: Include users that are not in prolific export
     prolific_df = pd.read_csv("prolific_export.csv")
-    """include_users_list = ["28389d4b-62ef-411d-a92a-4280cb409cb7",
+    include_users_list = ["28389d4b-62ef-411d-a92a-4280cb409cb7",
                           "9c6f2705-0681-4ca8-b56a-d5bc8cb322cb",
                           "45922c7e-d68a-4574-9a53-4794e0139c57",
                           "28389d4b-62ef-411d-a92a-4280cb409cb7",
                           "3715e50e-0a37-4a0e-841c-1b21ba8588f2",
                           "965ce6aa-2ebb-4325-a01a-a06293c9a27a",
                           "1b53a9fe-61f2-4b68-a33e-044f59961928",
-                          "e1420868-2337-4935-a730-c77f8275c845"]"""
-    include_users_list = []
+                          "e1420868-2337-4935-a730-c77f8275c845"]
+    #include_users_list = []
     # Exclude users
     non_prolific_user_ids = _add_end_time(analysis.user_completed_df, prolific_df)
     exclude_users_list = ["a4e2fba8-6e9f-4001-88d2-f109a1f9acc6", "9a84f941-a140-4d47-8766-01dc4e70993e"]

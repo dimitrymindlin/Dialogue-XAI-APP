@@ -4,11 +4,10 @@ from langchain.chains.llm import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain_community.chat_models import ChatOllama
 from langchain.chains.router.llm_router import LLMRouterChain, RouterOutputParser
-from langchain.chains.router.multi_prompt_prompt import MULTI_PROMPT_ROUTER_TEMPLATE
 
 from prompt_toolkit import HTML, prompt
 
-from parsing.llm_intent_recognition.prompts import get_xai_template_with_descriptions, ROUTING_TASK_PROMPT
+from parsing.llm_intent_recognition.prompts.prompt_A import get_xai_template_with_descriptions, ROUTING_TASK_PROMPT
 
 
 class Config():

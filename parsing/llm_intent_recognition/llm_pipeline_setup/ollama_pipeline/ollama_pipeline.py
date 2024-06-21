@@ -1,12 +1,11 @@
 import json
+import math
 import re
-import sys
 
 import pandas as pd
 from langchain.chains.llm import LLMChain
 from langchain.chains.router import MultiPromptChain
-from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
-from langchain.output_parsers import ResponseSchema, StructuredOutputParser
+from langchain.memory import ConversationBufferMemory
 from langchain_core.messages import AIMessage
 from langchain_community.llms import Ollama
 from langchain_core.prompts import PromptTemplate
@@ -17,17 +16,17 @@ import matplotlib.pyplot as plt
 import os
 from dotenv import load_dotenv
 
-from parsing.llm_intent_recognition.prompts import get_xai_template_with_descriptions, \
+from parsing.llm_intent_recognition.prompts.prompt_A import get_xai_template_with_descriptions, \
     possible_categories, question_to_id_mapping, get_template_wich_checklist, \
-    get_tempalte_wich_checklist_and_memory, simple_user_question_prompt, get_system_prompt_condensed
+    get_template_wich_checklist_and_memory, get_template_with_checklist_plus_agreement, simple_user_question_prompt
 from parsing.llm_intent_recognition.router_chain import generate_destination_chains, generate_router_chain
 
 load_dotenv()
 
 ### Langsmith
-"""os.environ['LANGCHAIN_API_KEY'] = os.getenv('LANGSMITH_API_KEY')
+os.environ['LANGCHAIN_API_KEY'] = os.getenv('LANGSMITH_API_KEY')
 os.environ['LANGCHAIN_TRACING_V2'] = 'true'
-os.environ['LANGCHAIN_ENDPOINT'] = 'https://api.smith.langchain.com'"""
+os.environ['LANGCHAIN_ENDPOINT'] = 'https://api.smith.langchain.com'
 
 LLM_MODEL = "llama3"
 llm = Ollama(model=LLM_MODEL, temperature=0, format='json')
@@ -48,10 +47,12 @@ def extract_json_from_response(response) -> dict:
         json_obj = json.loads(response)
         return json_obj
     except json.JSONDecodeError:
-        json_match = re.search(r'```(.*?)```', response.content, re.DOTALL)
+        json_match = re.search(r'({.*?})', response, re.DOTALL)
         if json_match:
             json_str = json_match.group(1).strip()
             try:
+                # Replace "None" with "null" to ensure valid JSON
+                json_str = json_str.replace("None", "null")
                 json_obj = json.loads(json_str)
                 return json_obj
             except json.JSONDecodeError:
@@ -120,7 +121,7 @@ class LLMSinglePrompt:
     def predict(self, question):
         message = self.chain.invoke({"input": f"{question}"})
         if isinstance(message, dict):
-            question = message["method"]
+            question = message["method_name"]
             feature = message["feature"]
         else:
             question = message[0]
@@ -132,20 +133,21 @@ class LLMSinglePrompt:
 
 class LLMSinglePromptSystemMessage:
     def __init__(self):
-        self.system_prompt = get_system_prompt_condensed()
+        self.system_prompt = PromptTemplate.from_template(
+            template=get_template_with_checklist_plus_agreement(
+                feature_names=["feature1", "feature2", "feature3"]))
         self.chain = (
                 PromptTemplate.from_template(
                     template=simple_user_question_prompt(),
-                    partial_variables={"input": "{question}"}) | Ollama(model=LLM_MODEL,
-                                                                        temperature=0,
-                                                                        format='json',
-                                                                        system=self.system_prompt) | extract_json_from_response
+                    partial_variables={"input": "{question}"}) |
+                Ollama(model=LLM_MODEL, temperature=0, system=self.system_prompt.template)
+                | extract_json_from_response
         )
 
     def predict(self, question):
-        message = self.chain.invoke({"input": f"{question}"})
+        message = self.chain.invoke({"question": f"{question}"})
         if isinstance(message, dict):
-            question = message["method"]
+            question = message["method_name"]
             feature = message["feature"]
         else:
             question = message[0]
@@ -159,7 +161,7 @@ class LLMSinglePromptWithMemory:
     def __init__(self, feature_names):
         self.memory = ConversationBufferMemory(memory_key="chat_history", k=5)
 
-        template = get_tempalte_wich_checklist_and_memory(feature_names)
+        template = get_template_wich_checklist_and_memory(feature_names)
 
         self.prompt = PromptTemplate(
             template=template,
@@ -302,13 +304,13 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
     id_to_question_mapping = {v: k for k, v in question_to_id_mapping.items()}
     # load test questions csv
     if not load_previous_results:
-        test_questions_df = pd.read_csv("llm_intent_test_set.csv", delimiter=";")
+        test_questions_df = pd.read_csv("../../llm_intent_test_set.csv", delimiter=";")
 
         # Keep only half of every xai method (10 questions per method)
         # test_questions_df = test_questions_df.groupby("xai method").head(10)
 
         # only keep certain methods
-        test_questions_df = test_questions_df[test_questions_df["xai method"].isin(["followUp"])]
+        test_questions_df = test_questions_df[test_questions_df["xai method"].isin(["agreement"])]
 
         # load llm model
         llm_model = LLMSinglePromptSystemMessage()
@@ -321,10 +323,17 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
         wrong_features = {}
         parsing_errors = {}
         for index, row in tqdm.tqdm(test_questions_df.iterrows(), total=len(test_questions_df), desc="Testing"):
-            correct_q_id = question_to_id_mapping[row["xai method"]]
+            try:
+                correct_q_id = question_to_id_mapping[row["xai method"]]
+            except KeyError:
+                print(row["xai method"], "not found in question_to_id_mapping")
             correct_feature = row["feature"]
             question = row["question"]
             total_predictions[correct_q_id] += 1
+
+            # Append suggested methods to the question if agreement is the method
+            if correct_q_id == question_to_id_mapping["agreement"] and not math.isnan(correct_feature):
+                question = "I saw the following suggested methods: " + correct_feature + ". " + question
 
             try:
                 predicted_q_id, feature = llm_model.predict(question)
@@ -432,7 +441,7 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
 
 
 if __name__ == "__main__":
-    current_approach_performance(question_to_id_mapping, load_previous_results=True)
+    current_approach_performance(question_to_id_mapping, load_previous_results=False)
     """feature_names = ["feature1", "feature2", "feature3", "feature4", "feature5"]
     llm_model = LLMSinglePromptWithMemory(feature_names)
 

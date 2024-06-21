@@ -13,20 +13,17 @@ from experiment_analysis.plot_overviews import plot_understanding_over_time, \
 from experiment_analysis.process_mining import ProcessMining
 import json
 
-from experiment_analysis.statistical_tests import perform_power_analysis
-from parsing.llm_intent_recognition.prompts import question_to_id_mapping
+from parsing.llm_intent_recognition.prompts.prompt_A import question_to_id_mapping
 
 POSTGRES_USER = "postgres"
 POSTGRES_PASSWORD = "example"
-POSTGRES_DB = "prolific_tmp"
+POSTGRES_DB = "prolific_study"
 POSTGRES_HOST = "localhost"
 
 analysis_steps = ["filter_by_prolific_users",
                   "filter_completed_users",
                   "filter_by_attention_check",
-                  "filter_by_time",
-                  "print_buttons_feedback",
-                  "plot_question_raking"]
+                  "filter_by_time"]
 
 
 def connect_to_db():
@@ -139,15 +136,15 @@ def main():
     analysis = AnalysisDataHolder(user_df=fetch_data_as_dataframe("SELECT * FROM users", conn),
                                   event_df=fetch_data_as_dataframe("SELECT * FROM events", conn),
                                   user_completed_df=fetch_data_as_dataframe("SELECT * FROM user_completed", conn))
-    if "filter_by_prolific_users" in analysis_steps:  # TODO: Change
-        filter_by_prolific_users(analysis)
-        analysis.create_time_columns()
+    # if "filter_by_prolific_users" in analysis_steps:
+    filter_by_prolific_users(analysis)
+    analysis.create_time_columns()
 
     print("Found users: ", len(analysis.user_df))
     print("Found events: ", len(analysis.event_df))
 
     ### Filtering
-    # filter_by_broken_variables(analysis)
+    filter_by_broken_variables(analysis)
     print("Amount of users per study group after broken variables filter:")
     print(analysis.user_df.groupby("study_group").size())
 
@@ -171,7 +168,7 @@ def main():
             exclude_user_ids.append(user_id)
             continue
 
-        if study_group == "interactive" or "chat":
+        if study_group == "interactive" or study_group == "chat":
             user_questions_over_time_df = extract_questions(user_events)
             if user_questions_over_time_df is not None:
                 user_questions_over_time_list.append(user_questions_over_time_df)
@@ -220,7 +217,7 @@ def main():
 
     ### Add Additional Columns to analysis.user_df
     # Calculate total score improvement and confidence improvement
-    analysis.user_df["score_improvement"] = analysis.user_df["final_score"] - analysis.user_df["intro_score"]
+    # analysis.user_df["score_improvement"] = analysis.user_df["final_score"] - analysis.user_df["intro_score"]
     analysis.user_df["confidence_avg_improvement"] = analysis.user_df["final_avg_confidence"] - analysis.user_df[
         "intro_avg_confidence"]
 
@@ -245,18 +242,18 @@ def main():
     assert len(analysis.user_df) == len(user_accuracy_over_time_df['user_id'].unique())
 
     # Extract questionnaires into columns
-    analysis.user_df = extract_questionnaires(analysis.user_df)
+    #analysis.user_df = extract_questionnaires(analysis.user_df)
 
     # Save the dfs to csv
     folder_path = "data/"
-    analysis.user_df.to_csv(folder_path + "user_df.csv", index=False)
+    """analysis.user_df.to_csv(folder_path + "user_df.csv", index=False)
     analysis.event_df.to_csv(folder_path + "event_df.csv", index=False)
     analysis.user_completed_df.to_csv(folder_path + "user_completed_df.csv", index=False)
     analysis.initial_test_preds_df.to_csv(folder_path + "initial_test_preds_df.csv", index=False)
     analysis.learning_test_preds_df.to_csv(folder_path + "learning_test_preds_df.csv", index=False)
     analysis.final_test_preds_df.to_csv(folder_path + "final_test_preds_df.csv", index=False)
     analysis.questions_over_time_df.to_csv(folder_path + "questions_over_time_df.csv", index=False)
-    user_accuracy_over_time_df.to_csv(folder_path + "user_accuracy_over_time_df.csv", index=False)
+    user_accuracy_over_time_df.to_csv(folder_path + "user_accuracy_over_time_df.csv", index=False)"""
 
     print("Amount of users per study group after All filters:")
     print(analysis.user_df.groupby("study_group").size())
@@ -299,31 +296,47 @@ def main():
         print(correlation_df)
 
     def get_wort_and_best_users():
-        # Filter best users = score_improvement > 3
-        best_users = analysis.questions_over_time_df[analysis.questions_over_time_df["score_improvement"] >= 3]
-        worst_users = analysis.questions_over_time_df[analysis.questions_over_time_df["score_improvement"] <= 0]
+        score_name = "final_irt_score"
+        top_5_percent_threshold = analysis.user_df[score_name].quantile(0.85)
+        bottom_5_percent_threshold = analysis.user_df[score_name].quantile(0.15)
 
-        # Sort wors users by score_improvement (lowest first)
-        worst_users = worst_users.sort_values("score_improvement")
-        # Take same amount of worst users as best users
-        worst_users = worst_users[:len(best_users)]
-        return best_users, worst_users
+        # Filter best users and worst users
+        best_users = analysis.user_df[analysis.user_df["final_score"] >= top_5_percent_threshold]
+        worst_users = analysis.user_df[analysis.user_df["final_score"] <= bottom_5_percent_threshold]
 
-    # print_correlation_ranking("score_improvement", group="interactive")
-    # print_correlation_ranking("score_improvement", group="static")
-    # print_correlation_ranking("final_score", group="interactive")
-    print_correlation_ranking("final_score", group="static")
+        # Count best and worst users (unique user_ids)
+        best_users_count = len(best_users["user_id"].unique())
+        worst_users_count = len(worst_users["user_id"].unique())
+
+        # Make sure to have same amount of best and worst users
+        if worst_users_count > best_users_count:
+            # Order by final_score and take the worst users
+            worst_users = worst_users.sort_values("final_score", ascending=True)
+            worst_users = worst_users.head(best_users_count)
+        else:
+            best_users = best_users.sort_values("final_score", ascending=False)
+            best_users = best_users.head(worst_users_count)
+        print("Best users: ", len(best_users["user_id"].unique()))
+        print("Worst users: ", len(worst_users["user_id"].unique()))
+        best_users_ids = best_users[["user_id"]]
+        worst_users_ids = worst_users[["user_id"]]
+        return best_users_ids, worst_users_ids
 
     analysis.questions_over_time_df = analysis.questions_over_time_df.merge(
-        analysis.user_df[["id", "score_improvement"]],
+        analysis.user_df[["id", "final_score"]],
         left_on="user_id", right_on="id")
-    best_users, worst_users = get_wort_and_best_users()
-
-    plot_questions_tornado(best_users, worst_users)
+    best_user_ids, worst_user_ids = get_wort_and_best_users()
+    # Get questions_over_time_df for best and worst users
+    best_users = analysis.questions_over_time_df[
+        analysis.questions_over_time_df["user_id"].isin(best_user_ids["user_id"])]
+    worst_users = analysis.questions_over_time_df[
+        analysis.questions_over_time_df["user_id"].isin(worst_user_ids["user_id"])]
 
     pm = ProcessMining()
-    pm.create_pm_csv(analysis, datapoint_count=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                     filter_by_score="best")
+    pm.create_pm_csv(analysis,
+                     datapoint_count=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                     target_user_ids=best_users,
+                     target_group_name="best")
 
 
 if __name__ == "__main__":
