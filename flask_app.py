@@ -82,6 +82,8 @@ def init():
         'prediction_choices': user_experiment_prediction_choices,
         'user_study_task_description': user_study_task_description
     }
+    bot_dict[user_id].dialogue_manager.reset_state()
+    bot_dict[user_id].dialogue_manager.print_transitions()
     return result
 
 
