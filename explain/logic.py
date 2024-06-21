@@ -297,9 +297,12 @@ class ExplainBot:
         """
         Returns the current prediction.
         """
-        current_prediction = np.argmax(self.current_instance[2])
-        # Turn to string
-        prediction_string = self.conversation.class_names[current_prediction]
+        # Can be either [2], then argmax, or [3] then its a string
+        if isinstance(self.current_instance[2], np.ndarray):
+            current_prediction = np.argmax(self.current_instance[2])
+            prediction_string = self.conversation.class_names[current_prediction]
+        else:
+            prediction_string = self.current_instance[3]  # This is the prediction string
         return prediction_string
 
     def get_feature_tooltips(self):
