@@ -129,26 +129,36 @@ def get_train_datapoint():
     """
     user_id = request.args.get("user_id")
     user_study_group = bot_dict[user_id].get_study_group()
-    instance_dict = get_datapoint(user_id, "train")
+    result_dict = get_datapoint(user_id, "train")
+    bot_dict[user_id].dialogue_manager.reset_state()
 
     if user_study_group == "interactive":
         prompt = f"""
-            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{instance_dict["ml_prediction"]}</b>. <br>
+            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{result_dict["ml_prediction"]}</b>. <br>
             If you have questions about the prediction, select questions from the right and I will answer them.
             """
     else:  # chat
         prompt = f"""
-            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{instance_dict["ml_prediction"]}</b>. <br>
+            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{result_dict["ml_prediction"]}</b>. <br>
             If you have questions about the prediction, type them in the chat and I will answer them.
             """
-    instance_dict["initial_prompt"] = prompt
+
+    # Create message dict to return ({isUser: false, feedback: false, text: initial_prompt, id: 1000})
+    result_dict["initial_message"] = {
+        "isUser": False,
+        "feedback": False,
+        "text": prompt,
+        "id": 1000,
+        "followup": bot_dict[user_id].get_suggested_method()
+        # [{"id": "shapAllFeatures", "question": "Would you like to see the feature contributions?"}]
+    }
 
     if user_study_group == "static":
         # Get the explanation report
         static_report = bot_dict[user_id].get_explanation_report()
         static_report["instance_type"] = bot_dict[user_id].instance_type_naming
-        instance_dict["static_report"] = static_report
-    return instance_dict
+        result_dict["static_report"] = static_report
+    return result_dict
 
 
 @bp.route('/get_test_datapoint', methods=['GET'])
@@ -201,6 +211,24 @@ def get_user_correctness():
     print(correctness_string)
     response = {"correctness_string": correctness_string}
     return response
+
+
+@bp.route("/get_proceeding_okay", methods=['GET'])
+def get_proceeding_okay():
+    user_id = request.args.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
+    bot = bot_dict[user_id]
+    proceeding_okay, follow_up_questions, response_text = bot.get_proceeding_okay()
+    # Make it a message dict
+    message = {
+        "isUser": False,
+        "feedback": False,
+        "text": response_text,
+        "id": 1000,
+        "followup": follow_up_questions
+    }
+    return {"proceeding_okay": proceeding_okay, "message": message}
 
 
 @bp.route("/get_questions", methods=['POST'])
