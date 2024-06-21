@@ -282,7 +282,22 @@ def get_bot_response():
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
-        return response[0]
+
+        try:
+            print(feature_id)
+        except Exception as e:
+            feature_id = None
+
+        message_dict = {
+            "isUser": False,
+            "feedback": False,
+            "text": response[0],
+            "id": question_id,
+            "feature_id": feature_id,
+            "followup": bot_dict[user_id].get_suggested_method()
+        }
+
+        return jsonify(message_dict)
 
 
 @bp.route("/get_nl_response", methods=['POST'])
