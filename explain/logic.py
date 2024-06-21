@@ -24,6 +24,7 @@ from create_experiment_data.test_instances import TestInstances
 from explain.action import run_action, run_action_new, compute_explanation_report
 from explain.actions.explanation import explain_cfe_by_given_features
 from explain.conversation import Conversation
+from explain.dialogue_manager.manager import DialogueManager
 from explain.explanation import MegaExplainer
 from explain.explanations.anchor_explainer import TabularAnchor
 from explain.explanations.ceteris_paribus import CeterisParibus
@@ -229,6 +230,10 @@ class ExplainBot:
         self.load_explanations(background_ds_x=background_dataset,
                                background_ds_y=background_y_values)
 
+        ## Initialize Dialogue Manager
+        self.dialogue_manager = DialogueManager(intent_recognition=self.intent_recognition_model,
+                                                template_manager=template_manager)
+
     def get_feature_display_name_dict(self):
         template_manager = self.conversation.get_var('template_manager').contents
         return template_manager.feature_display_names.feature_name_to_display_name
@@ -270,6 +275,9 @@ class ExplainBot:
             total_counter += 1
         correctness_string = f"{correct_counter} out of {total_counter}"
         return correctness_string
+
+    def get_proceeding_okay(self):
+        return self.dialogue_manager.get_proceeding_okay()
 
     def get_next_instance_triple(self, instance_type, return_probability=False):
         """
@@ -566,6 +574,9 @@ class ExplainBot:
         else:
             return dataset, y_values
 
+    def get_suggested_method(self):
+        return self.dialogue_manager.get_suggested_explanations()
+
     def set_num_prompts(self, num_prompts):
         """Updates the number of prompts to a new number"""
         self.prompts.set_num_prompts(num_prompts)
@@ -744,9 +755,26 @@ class ExplainBot:
                     output: The response to the user input.
                 """
 
-        if user_input is not None:
+        instance_id = self.current_instance[0]
+        most_important_attribute = run_action_new(self.conversation,
+                                                  "mostImportantFeature",
+                                                  instance_id,
+                                                  None,
+                                                  instance_type_naming=self.instance_type_naming)
+
+        self.dialogue_manager.save_most_important_attribute(most_important_attribute)
+
+        question_id, feature_name = self.dialogue_manager.update_state(user_input, question_id, feature_id)
+
+        # Get feature_id from feature_name if feature_id
+        if feature_name is not None:
+            self.dialogue_manager.save_current_attribute(feature_name)
+            feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
+            feature_id = feature_list.index(feature_name.lower())
+
+        """if user_input is not None:
             try:
-                question_id, feature_name = self.intent_recognition_model.predict(user_input.strip())
+                question_id, feature_name = self.intent_recognition_model.predict_explanation_method(user_input.strip())
             except Exception as e:
                 print(
                     f"Error in intent recognition: {e}... Did you load the model? Check config if LLM intent recognition is defined.")
@@ -754,18 +782,18 @@ class ExplainBot:
             # If feature specific, get feature
             if feature_name is not None:
                 feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
-                feature_id = feature_list.index(feature_name)
+                feature_id = feature_list.index(feature_name)"""
 
         if question_id is None:
             return '', None, None
 
-        app.logger.info(f'USER INPUT: q_id:{question_id}, f_id:{feature_id}')
-        instance_id = self.current_instance[0]
-        # Convert feature_id to int if not None
         if feature_id is not None:
             feature_id = int(feature_id)
+
+        app.logger.info(f'USER INPUT: q_id:{question_id}, f_id:{feature_id}')
+        # Convert feature_id to int if not None
         returned_item = run_action_new(self.conversation,
-                                       int(question_id),
+                                       question_id,
                                        instance_id,
                                        feature_id,
                                        instance_type_naming=self.instance_type_naming)
