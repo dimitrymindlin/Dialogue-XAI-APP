@@ -57,6 +57,7 @@ Conversation.question_bank_path =  "./data/question_bank.csv"
 DatasetDescription.dataset_objective = "Predict whether an individual earns more than 50k a years or less."
 DatasetDescription.dataset_description = "adult census dataset"
 DatasetDescription.model_description = "random forest model"
+DatasetDescription.user_study_objective = "guess the model's prediction for the shown individual"
 
 # Feature Tooltip
 ExplainBot.feature_tooltip_mapping = {
@@ -67,7 +68,7 @@ ExplainBot.feature_tooltip_mapping = {
     "work life balance": "A self-reported assessment of the individual's work-life balance, ranging from poor to excellent. This subjective measure reflects the individual's satisfaction with their ability to balance work and personal life.",
     "occupation": "The general category of the individual's occupation, such as White-Collar (professional or managerial roles), Blue-Collar (manual labor), Service Industry, Specialized (requiring specific skills or training), and Miscellaneous.",
     "workclass": "The work class of the person: Government, Private Sector, Self-Employed / Entrepreneurial, Unemployed and Other.",
-    "investment outcome": "The result of the individual's investment activities, categorized as: No investment, Loss, or Gain. This reflects whether the individual has investments and if so, whether they have made a profit or a loss over a given period."
+    "investment outcome": "The result of the individual's investment activities, categorized as: No investment, Loss, or Gain. This reflects whether the individual has investments and if so, whether they have made a profit or a loss."
 }
 
 # Feature Units
