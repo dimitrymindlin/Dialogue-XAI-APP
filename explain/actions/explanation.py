@@ -82,6 +82,8 @@ def explain_local_feature_importances(conversation,
         top_features_dict = feature_importances[0]
         predicted_label = list(top_features_dict.keys())[0]
         top_features_dict = top_features_dict[predicted_label]
+        # sort the dict by absolute value
+        top_features_dict = dict(sorted(top_features_dict.items(), key=lambda item: abs(item[1][0]), reverse=True))
         return top_features_dict, 1
 
 
