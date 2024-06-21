@@ -16,7 +16,9 @@ import matplotlib.pyplot as plt
 import os
 from dotenv import load_dotenv
 
-from parsing.llm_intent_recognition.prompts import question_to_id_mapping, openai_system_prompt, openai_user_prompt
+from parsing.llm_intent_recognition.prompts.prompt_A import question_to_id_mapping, openai_system_prompt_A, \
+    openai_user_prompt
+from parsing.llm_intent_recognition.prompts.prompt_B import openai_system_prompt_B, openai_user_prompt_B
 
 load_dotenv()
 
@@ -34,7 +36,9 @@ client = OpenAI()
 # llm = ChatOpenAI(model=LLM_MODEL, temperature=0.0)
 
 response_schemas = [
-    ResponseSchema(name="method_name", description="name of the method to answer the user question."),
+    ResponseSchema(name="reasoning",
+                   description="The reasoning behind the classification. For each classification possibility, the reasoning should be explained."),
+    ResponseSchema(name="method", description="id of the method to answer the user question, based on the reasoning."),
     ResponseSchema(name="feature", description="Feature that the user mentioned, can be None."),
 ]
 
@@ -46,18 +50,25 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
     def __init__(self, feature_names):
         self.memory = ConversationBufferMemory(memory_key="chat_history")
 
-        self.chat_template = ChatPromptTemplate.from_messages(
+        self.prompt_A_chat_template = ChatPromptTemplate.from_messages(
             [
-                openai_system_prompt(feature_names),
+                openai_system_prompt_A(feature_names),
                 openai_user_prompt(),
             ]
         )
 
-    def process_question(self, question):
+        self.prompt_B_chat_template = ChatPromptTemplate.from_messages(
+            [
+                openai_system_prompt_B(feature_names),
+                openai_user_prompt_B(),
+            ]
+        )
+
+    def call_prompt_a_function(self, question):
         # Retrieve chat history
         chat_history = self.memory.load_memory_variables({})["chat_history"]
         # Directly pass question and chat_history as inputs
-        formatted_messages = self.chat_template.format_messages(
+        formatted_messages = self.prompt_A_chat_template.format_messages(
             input=question, chat_history=chat_history, format_instructions=format_instructions)
 
         messages = [
@@ -89,19 +100,55 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
 
         return response
 
-    def predict(self, user_question):
-        response = self.process_question(user_question)
+    def call_prompt_b_function(self, explanation_suggestions, user_intent):
+        formatted_messages = self.prompt_B_chat_template.format_messages(
+            explanation_suggestions=explanation_suggestions, user_response=user_intent)
+        messages = [
+            {"role": "system", "content": formatted_messages[0].content},
+            {"role": "user", "content": formatted_messages[1].content},
+        ]
+        response_format = ResponseFormat(type="json_object")
+
+        # Wrapper to use Langsmith client
+        response = lc_openai.chat.completions.create(
+            messages=messages, model=LLM_MODEL, temperature=0, response_format=response_format)
+
         try:
-            mapped_question = response[0]
+            response = response.choices[0].message['content']
+        # Exception if not a dict
+        except KeyError:
+            response = response.choices[0].message.content
+
+        response = json.loads(response)
+        return response
+
+    def predict_explanation_method(self, user_question):
+        """
+        Predict the XAI method to answer the user question. (Prompt A)
+        """
+        response = self.call_prompt_a_function(user_question)
+        try:
+            question_id = response[0]
             feature = response[1]
         except KeyError:
-            try:
-                mapped_question = response["method_name"]
-            except KeyError:
-                mapped_question = response["method"]
+            question_id = response["method"]
             feature = response["feature"]
-        question_id = question_to_id_mapping.get(mapped_question, -1)
         return question_id, feature
+
+    def interpret_user_answer(self, explanation_suggestions, user_question):
+        """
+        Predict the user intent as an answer to the suggested XAI method. (Prompt B)
+        """
+        response = self.call_prompt_b_function(explanation_suggestions, user_question)
+        print(response)
+        try:
+            classification = response["classification"]
+            mapped_question = response["method"]
+            feature = response["feature"]
+        except KeyError:
+            print("Key error in:", response)
+            return None, None, None
+        return classification, mapped_question, feature
 
 
 def current_approach_performance(question_to_id_mapping, load_previous_results=False):
@@ -138,7 +185,7 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
             total_predictions[correct_q_id] += 1
 
             try:
-                predicted_q_id, feature = llm_model.predict(question)
+                predicted_q_id, feature = llm_model.predict_explanation_method(question)
             except Exception as e:
                 print(f"Error for question {question}: {e}")
                 try:

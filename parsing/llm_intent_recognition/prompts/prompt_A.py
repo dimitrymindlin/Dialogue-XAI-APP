@@ -1,3 +1,7 @@
+"""
+Prompt A is the prompt to select an XAI or dialogue intent.
+"""
+
 whyExplanation_template = """
 whyExplanation: Explains possible explanations when the user asks a general why question.
     Best for questions like: "Why this prediction?", "What led to this result?", "Can you explain why the model chose this class?"
@@ -294,23 +298,27 @@ def get_system_prompt_condensed(feature_names=[]):
 
 
 def get_system_prompt_condensed_with_history(feature_names=""):
-    return f"""The user was presented with an instance with various features. The model predicted a class. Based on the 
+    return f"""<<Context>>\n
+    The user was presented with a machine learning datapoint with various features. The model predicted a class. Based on the 
         user's question about the prediction, follow the checklist to determine the best method. Return ONLY a JSON with 
-        'method' and 'feature'. 'feature' can be None. Do not justify the choice. The possible feature names are: {feature_names}
-
-        1. Greeting:
+        'method' and 'feature'. 'feature' can be None. The possible feature names are: {feature_names}\n
+    <<Methods>>\n
+        - Greeting:
             - Examples: "Hey, how are you?", "Hello!", "Good morning."
             - JSON: method: "greeting", feature: None
-        2. Not stand alone, Short feature question without asking for a feature value change, feature value, or distribution:
+        - What can you do?:
+            - Examples: "What can you do?", "What explanations can you provide?", "How can you help me?"
+            - JSON: method: "notXaiMethod", feature: None
+        - Not stand alone, Short feature question without asking for a feature value change, feature value, or distribution:
             - Examples: "And what about age?", "income?", "Education level as well?"
             - JSON: method: "followUp", feature: "age" (or relevant feature)
-        3. Unspecific 'why' question:
+        - Unspecific 'why' question:
             - Examples: "Why this prediction?", "What led to this result?"
             - JSON: method: "whyExplanation", feature: None
-        4. Not Xai Method and is rather a general or clarification question not related to model prediction?
+        - Not Xai Method and is rather a general or clarification question not related to model prediction?
             - Examples: "What does it mean?", "Can you clarify this term?", "How was the data collected?", "What is the accuracy of the model?", "What are the ethical implications of this model?"
             - JSON: method: "notXaiMethod", feature: None
-        5. Feature-specific or general XAI question:
+        - Feature-specific or general XAI question:
             - Feature-specific:
                 - Impact of changing a feature:
                     - Examples: "What if marital status was different?", "What if hours per week increased?", "What if older?"
@@ -335,7 +343,7 @@ def get_system_prompt_condensed_with_history(feature_names=""):
                     - Examples: "What factors guarantee this prediction?", "Which features must stay the same?"
                     - JSON: method: "anchor", feature: None
 
-        Task: Decide which method fits best. Return a single JSON.
+        <<Task>> Decide which method fits best by reasoning over every possible method. Return a single JSON with the following keys:
         
         <<Previous user questions and mapped methods>>
         \n{{chat_history}}
@@ -345,7 +353,7 @@ def get_system_prompt_condensed_with_history(feature_names=""):
         """
 
 
-def simple_user_question_prompt():
+def simple_user_question_prompt_json_response():
     return f"""
     <<User Question>>
     \n{{input}}
@@ -354,12 +362,21 @@ def simple_user_question_prompt():
     """
 
 
-def openai_system_prompt(feature_names):
+def simple_user_question_prompt():
+    return f"""
+    <<User Question>>
+    \n{{question}}
+    \n
+    <<Response>>
+    """
+
+
+def openai_system_prompt_A(feature_names):
     return "system", get_system_prompt_condensed_with_history(feature_names)
 
 
 def openai_user_prompt():
-    return "user", simple_user_question_prompt()
+    return "user", simple_user_question_prompt_json_response()
 
 
 def get_template_with_checklist_condensed(feature_names):
@@ -420,7 +437,7 @@ def get_template_with_checklist_condensed(feature_names):
         """
 
 
-def get_tempalte_wich_checklist_and_memory(feature_names):
+def get_template_wich_checklist_and_memory(feature_names):
     return f"""The following is an intent recognition sequence in a conversation between an AI and a human user and 
     about machine learning model decisions. The AI is helpful and understands what the users intent is, given his question.
      The user was presented with an instance containing various features. The machine learning model predicted a class. 
@@ -482,6 +499,71 @@ def get_tempalte_wich_checklist_and_memory(feature_names):
     The AI responds with a python tuple containing the method and feature if applicable. feature can be None.
     
     <<AI Response>>
+    """
+
+
+def get_template_with_checklist_plus_agreement(feature_names):
+    return f"""The following is an intent recognition sequence in a conversation between an AI and a human user and 
+    about machine learning model decisions. The AI is helpful and understands what the users intent is, given his question.
+     The user was presented with an instance containing various features. The machine learning model predicted a class. 
+     Given the user's question, the AI thinks step by step and follows the checklist to determine the most suitable method to answer it. 
+     
+    First, check if the user agreed to a suggested method:
+        The suggested methods are shown before the user question.
+        - Example questions: "Yes, show me the top 3 features.", "Okay, would like to see the feature statistics.", "Yes.", "Good Idea."
+        - JSON response: method_name: agreement, feature: method name if applicable.
+        
+    Then, check if the user simply disagreed or is interested in seeing other explanation possibilities:
+        - Example questions: "No, I would like to see the impact of all features.", "I disagree, show me the anchor features.", "I don't think so, show me the least 3 features.", "I would like to see something else."
+        - JSON response: method_name: rejection, feature: None
+
+    If not, check if it is a greeting:
+        - Example questions: "Hey, how are you?", "Hello!", "Good morning."
+        - JSON response: method_name: "greeting", feature: None
+
+    If it is not a greeting, check if it is a very short question about a feature without specifying a change or statistics:
+        - Example questions: "And what about feature1?", "feature2?", "feature1 as well?", "And feature3?."
+        - JSON response: method_name: "followUp", feature: "feature1" (or the relevant feature mentioned)
+
+    If it is not a followUp question, check if it is a unspecific 'why did this happen' question. The user is interested
+        in understanding the prediction but does not ask for a specific explanation:
+        - Example questions: "Why this prediction?", "What led to this result?", "Can you explain why the model chose this class?"
+        - JSON response: method_name: "whyExplanation", feature: None
+
+    If it is not a a greeting, followUp or general whyExplanations, check if the question is a feature-specific or general xai question:
+        - If feature-specific:
+            - If asking for the impact of changing a specific feature:
+                - Example questions: "What would happen if marital status was different?", "What if hours per week increased?", "How would the prediction change if this feature value was altered?"
+                - JSON response: method_name: "ceterisParibus", feature: "marital status" (or the relevant feature mentioned)
+            - If asking for feature statistics:
+                - Example questions: "What are the typical values and distributions of 'feature1' in my dataset?", "Can you show the statistics for this feature?", "What is the average value of this attribute?"
+                - JSON response: method_name: "featureStatistics", feature: "feature1" (or the relevant feature mentioned)
+            - If asking for the anchor features:
+                - Example questions: "What factors guarantee this prediction remains the same?", "Which features must stay the same for this result?", "How can we be sure this prediction won't change?"
+                - JSON response: method_name: "anchor", feature: None
+        - If general:
+            - If asking for the impact of all features:
+                - Example questions: "What is the strength of each feature?", "How much does each feature contribute?", "Can you show the impact of all features?"
+                - JSON response: method_name: "shapAllFeatures", feature: None
+            - If asking for the top three features:
+                - Example questions: "Which features had the greatest impact on this prediction?", "What are the top factors influencing this result?", "Can you show the most important features?"
+                - JSON response: method_name: "top3Features", feature: None
+            - If asking for the least three features:
+                - Example questions: "Which features had the least impact on this prediction?", "What are the least important factors?", "Can you show the features that matter the least?"
+                - JSON response: method_name: "least3Features", feature: None
+             If asking for class changes, without specifying a feature:
+                - Example questions: "Why is it not class [other class]?", "In which case would it be another class?", "What changes would lead to a different prediction?"
+                - JSON response: method_name: "counterfactualAnyChange", feature: "hours per week" (or the relevant feature mentioned)
+
+    If it's not specific XAI question of the above, check if the question is not related to the model prediction but is a
+        clarification question or dataset related question, i.e. it is not directed to the model prediction:
+        - If it is not related to XAI, use `notXaiMethod`.
+            - Example questions: "What does it mean?", "Can you clarify this term?", "What is meant by 'X' in this context?", "How was the data collected?", "What is the accuracy of the model?", "What are the ethical implications of this model?"
+            - JSON response: method_name: "notXaiMethod", feature: None
+
+    The AI decide which method fits best. It thinks step by step and returns the final answer as a json.
+    Possible feature that the user might ask about: {feature_names}.
+    
     """
 
 
@@ -582,6 +664,8 @@ question_to_id_mapping = {
     "notXaiMethod": 100,
     "greeting": 99,
     "None": -1,
+    "agreement": 101,
+    "rejection": 102
 }
 
 """response_schemas = [
