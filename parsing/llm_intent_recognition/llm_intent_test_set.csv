@@ -99,66 +99,66 @@ How does each individual feature affect the prediction?;shapAllFeatures;
 What influence does each feature have on the prediction?;shapAllFeatures;
 Can you detail the impact of each feature on the prediction?;shapAllFeatures;
 What part does each feature play in the prediction?;shapAllFeatures;
-"What happens to the prediction if glucose changes?";"ceterisParibus";"glucose"
-"How does altering age affect the prediction?";"ceterisParibus";"age"
-"What is the impact on the prediction if BMI is different?";"ceterisParibus";"BMI"
-"How does a change in insulin influence the prediction?";"ceterisParibus";"insulin"
-"What effect does modifying blood pressure have on the prediction?";"ceterisParibus";"blood pressure"
-"What happens to the prediction when skin thickness changes?";"ceterisParibus";"skin thickness"
-"How is the prediction affected by a change in pregnancies?";"ceterisParibus";"pregnancies"
-"What is the result of altering diabetes pedigree function on the prediction?";"ceterisParibus";"diabetes pedigree function"
-"How does the prediction shift if triceps skin fold thickness is modified?";"ceterisParibus";"triceps skin fold thickness"
-"What difference does a change in serum insulin make to the prediction?";"ceterisParibus";"serum insulin"
-"How does adjusting blood pressure alter the prediction?";"ceterisParibus";"blood pressure"
-"What happens to the prediction with a different BMI?";"ceterisParibus";"BMI"
-"How is the prediction influenced by changing age?";"ceterisParibus";"age"
-"What effect does a different glucose level have on the prediction?";"ceterisParibus";"glucose level"
-"How does the prediction change when serum insulin is altered?";"ceterisParibus";"serum insulin"
-"What is the impact on the prediction with a change in pregnancies?";"ceterisParibus";"pregnancies"
-"How does modifying skin thickness affect the prediction outcome?";"ceterisParibus";"skin thickness"
-"What happens to the prediction if there is a change in diabetes pedigree function?";"ceterisParibus";"diabetes pedigree function"
-"How does a different blood pressure influence the prediction?";"ceterisParibus";"blood pressure"
-"What effect does changing insulin levels have on the prediction?";"ceterisParibus";"insulin levels"
-"What is the distribution of age?";"featureStatistics";"age"
-"What are the highest and lowest values of glucose?";"featureStatistics";"glucose"
-"Can you show the average value of BMI?";"featureStatistics";"BMI"
-"What are the typical values for insulin?";"featureStatistics";"insulin"
-"What is the range of blood pressure?";"featureStatistics";"blood pressure"
-"What is the mean value of skin thickness?";"featureStatistics";"skin thickness"
-"How does pregnancies vary across the data?";"featureStatistics";"pregnancies"
-"What is the median value of diabetes pedigree function?";"featureStatistics";"diabetes pedigree function"
-"What are the most common values of triceps skin fold thickness?";"featureStatistics";"triceps skin fold thickness"
-"Can you show the spread of serum insulin values?";"featureStatistics";"serum insulin"
-"What is the standard deviation of blood pressure?";"featureStatistics";"blood pressure"
-"What are the key statistics for BMI?";"featureStatistics";"BMI"
-"What is the variance of age?";"featureStatistics";"age"
-"Can you show the frequency distribution of glucose?";"featureStatistics";"glucose"
-"What is the typical range for insulin?";"featureStatistics";"insulin"
-"What are the minimum and maximum values of blood pressure?";"featureStatistics";"blood pressure"
-"What is the average range of skin thickness?";"featureStatistics";"skin thickness"
-"What is the typical value of pregnancies?";"featureStatistics";"pregnancies"
-"How is diabetes pedigree function distributed across the dataset?";"featureStatistics";"diabetes pedigree function"
-"What is the summary of triceps skin fold thickness values?";"featureStatistics";"triceps skin fold thickness"
-"And what about credit amount?";"followUp";"credit amount"
-"How does age look?";"followUp";"age"
-"What about duration?";"followUp";"duration"
-"And for housing?";"followUp";"housing"
-"Can you show me job?";"followUp";"job"
-"What does personal status show?";"followUp";"personal status"
-"Tell me about checking account status";"followUp";"checking account status"
-"What if we look at savings account?";"followUp";"savings account"
-"And credit history?";"followUp";"credit history"
-"What do we see for purpose?";"followUp";"purpose"
-"And how does employment duration compare?";"followUp";"employment duration"
-"Can you explain other debtors as well?";"followUp";"other debtors"
-"What is the data for installment rate?";"followUp";"installment rate"
-And what about property?;"followUp";"property"
-"Can we check other installment plans?";"followUp";"other installment plans"
-"Show me existing credits";"followUp";"existing credits"
-"What about the details of residence duration?";"followUp";"residence duration"
-"And the analysis for number of dependents?";"followUp";"number of dependents"
-"What does foreign worker status say?";"followUp";"foreign worker status"
-"Can you provide information on telephone?";"followUp";"telephone"
+What happens to the prediction if glucose changes?;ceterisParibus;glucose
+How does altering age affect the prediction?;ceterisParibus;age
+What is the impact on the prediction if BMI is different?;ceterisParibus;BMI
+How does a change in insulin influence the prediction?;ceterisParibus;insulin
+What effect does modifying blood pressure have on the prediction?;ceterisParibus;blood pressure
+What happens to the prediction when skin thickness changes?;ceterisParibus;skin thickness
+How is the prediction affected by a change in pregnancies?;ceterisParibus;pregnancies
+What is the result of altering diabetes pedigree function on the prediction?;ceterisParibus;diabetes pedigree function
+How does the prediction shift if triceps skin fold thickness is modified?;ceterisParibus;triceps skin fold thickness
+What difference does a change in serum insulin make to the prediction?;ceterisParibus;serum insulin
+How does adjusting blood pressure alter the prediction?;ceterisParibus;blood pressure
+What happens to the prediction with a different BMI?;ceterisParibus;BMI
+How is the prediction influenced by changing age?;ceterisParibus;age
+What effect does a different glucose level have on the prediction?;ceterisParibus;glucose level
+How does the prediction change when serum insulin is altered?;ceterisParibus;serum insulin
+What is the impact on the prediction with a change in pregnancies?;ceterisParibus;pregnancies
+How does modifying skin thickness affect the prediction outcome?;ceterisParibus;skin thickness
+What happens to the prediction if there is a change in diabetes pedigree function?;ceterisParibus;diabetes pedigree function
+How does a different blood pressure influence the prediction?;ceterisParibus;blood pressure
+What effect does changing insulin levels have on the prediction?;ceterisParibus;insulin levels
+What is the distribution of age?;featureStatistics;age
+What are the highest and lowest values of glucose?;featureStatistics;glucose
+Can you show the average value of BMI?;featureStatistics;BMI
+What are the typical values for insulin?;featureStatistics;insulin
+What is the range of blood pressure?;featureStatistics;blood pressure
+What is the mean value of skin thickness?;featureStatistics;skin thickness
+How does pregnancies vary across the data?;featureStatistics;pregnancies
+What is the median value of diabetes pedigree function?;featureStatistics;diabetes pedigree function
+What are the most common values of triceps skin fold thickness?;featureStatistics;triceps skin fold thickness
+Can you show the spread of serum insulin values?;featureStatistics;serum insulin
+What is the standard deviation of blood pressure?;featureStatistics;blood pressure
+What are the key statistics for BMI?;featureStatistics;BMI
+What is the variance of age?;featureStatistics;age
+Can you show the frequency distribution of glucose?;featureStatistics;glucose
+What is the typical range for insulin?;featureStatistics;insulin
+What are the minimum and maximum values of blood pressure?;featureStatistics;blood pressure
+What is the average range of skin thickness?;featureStatistics;skin thickness
+What is the typical value of pregnancies?;featureStatistics;pregnancies
+How is diabetes pedigree function distributed across the dataset?;featureStatistics;diabetes pedigree function
+What is the summary of triceps skin fold thickness values?;featureStatistics;triceps skin fold thickness
+And what about credit amount?;followUp;credit amount
+How does age look?;followUp;age
+What about duration?;followUp;duration
+And for housing?;followUp;housing
+Can you show me job?;followUp;job
+What does personal status show?;followUp;personal status
+Tell me about checking account status;followUp;checking account status
+What if we look at savings account?;followUp;savings account
+And credit history?;followUp;credit history
+What do we see for purpose?;followUp;purpose
+And how does employment duration compare?;followUp;employment duration
+Can you explain other debtors as well?;followUp;other debtors
+What is the data for installment rate?;followUp;installment rate
+And what about property?;followUp;property
+Can we check other installment plans?;followUp;other installment plans
+Show me existing credits;followUp;existing credits
+What about the details of residence duration?;followUp;residence duration
+And the analysis for number of dependents?;followUp;number of dependents
+What does foreign worker status say?;followUp;foreign worker status
+Can you provide information on telephone?;followUp;telephone
 Why was this prediction made?;whyExplanation;
 Why did the model predict this outcome?;whyExplanation;
 Why is this the result?;whyExplanation;
@@ -219,3 +219,44 @@ What does this section refer to?;notXaiMethod;
 Can you elaborate on this?;notXaiMethod;
 What is meant by this?;notXaiMethod;
 Can you clarify what this means?;notXaiMethod;
+Sure, let's see those features.;agreement;
+Absolutely, go ahead.;agreement;
+That sounds great, please do.;agreement;
+Yes, I'd like to see that.;agreement;
+Please show me.;agreement;
+I'm interested, let's do it.;agreement;
+Sounds good to me.;agreement;
+Okay, show me the details.;agreement;
+Yes, I'm curious about that.;agreement;
+Go for it.;agreement;
+Alright, let's have a look.;agreement;
+Yes, show me the most important features.;agreement;most important features
+Yes, I would like to see the feature importance.;agreement;feature importance
+Sure, show me the feature contributions.;agreement;feature contributions
+Yes, show me how the model makes decisions.;agreement;model decisions
+Yes, I'd like to see the feature impacts.;agreement;feature impacts
+Definitely, show me the feature relevance.;agreement;feature relevance
+Okay, I'd like to see the top features.;agreement;top features
+Yes, please show me the feature analysis.;agreement;feature analysis
+Sure thing, show me the key features.;agreement;key features
+No, I would like to see the impact of all features.;rejection;impact of all features
+I disagree, show me the anchor features.;rejection;anchor features
+I don't think so, show me the least 3 features.;rejection;least 3 features
+I would like to see something else.;rejection;
+No, show me a different analysis.;rejection;different analysis
+I'm not interested, show me other metrics.;rejection;other metrics
+I prefer to see the full feature list.;rejection;full feature list
+No, let's look at the feature interactions.;rejection;feature interactions
+I'd rather see the overall model performance.;rejection;overall model performance
+No, I want to see the individual predictions.;rejection;individual predictions
+I'm not convinced, show me the least important features.;rejection;least important features
+No, I need to see the feature correlations.;rejection;feature correlations
+I disagree, let's look at the residual analysis.;rejection;residual analysis
+No, I'd prefer to see the feature distribution.;rejection;feature distribution
+I'm not sure, show me the counterfactuals.;rejection;counterfactuals
+No, I want to see the global explanations.;rejection;global explanations
+I'd like to see the local explanations instead.;rejection;local explanations
+No, show me the sensitivity analysis.;rejection;sensitivity analysis
+I disagree, let's check the model fairness.;rejection;model fairness
+No, show me the feature heatmap.;rejection;feature heatmap
+
