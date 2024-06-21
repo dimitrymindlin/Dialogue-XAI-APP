@@ -318,7 +318,18 @@ def get_bot_response_from_nl():
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
             question_id = None
             feature_id = None
-        return jsonify({"response": response, "question_id": question_id, "feature_id": feature_id})
+
+        # TODO: Handle the case where the user input is not understood...
+
+        message_dict = {
+            "isUser": False,
+            "feedback": False,
+            "text": response,
+            "id": question_id,
+            "feature_id": feature_id,
+            "followup": bot_dict[user_id].get_suggested_method()
+        }
+        return jsonify(message_dict)
 
 
 app = Flask(__name__)
