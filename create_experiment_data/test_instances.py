@@ -48,7 +48,7 @@ class TestInstances:
                            save_to_cache: bool = True,
                            close_instances: bool = True) -> Dict[str, Any]:
         """
-        Generates diverse instances for testing based on the provided dataset.
+        Generates instances for testing based on the provided dataset.
 
         Parameters:
             instance_count (int): Number of diverse instances to generate.
