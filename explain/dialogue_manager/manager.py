@@ -1,3 +1,5 @@
+from typing import Dict
+
 from explain.dialogue_manager.dialogue_policy import DialoguePolicy
 
 
@@ -13,20 +15,43 @@ class DialogueManager:
             self.dialogue_policy = None
         self.user_questions = 0
         self.interacted_explanations = set()
+        self.feature_importances: Dict = None
+        # Count position of next feature to explain
+        self.ceteris_paribus_features_explained = set()
+        self.feature_statistics_explained = set()
+
+    def reset_state(self):
+        """
+        Reset the state of the dialogue manager for new interactions
+        """
+        self.dialogue_policy.reset_state()
+        self.user_questions = 0
+        self.interacted_explanations = set()
         self.most_important_attribute = None
-        self.most_important_attribute_id = None
-        self.current_attribute = None
-        self.current_attribute_id = None
+        self.ceteris_paribus_features_explained.clear()
+        self.feature_statistics_explained.clear()
 
-    def save_most_important_attribute(self, most_important_attribute):
-        display_name = self.template_manager.get_feature_display_name_by_name(most_important_attribute)
-        self.most_important_attribute = display_name
-        self.most_important_attribute_id = most_important_attribute
+    def get_next_feature(self, method_name):
+        """
+        Get the next feature for the method cp or feature statistics by considering the features that were already explained.
+        Take the next feature from the feature importances that was not explained yet for the given method.
+        """
+        assert method_name in ["ceterisParibus", "featureStatistics"]
+        already_explained = None
+        if method_name == "ceterisParibus":
+            already_explained = self.ceteris_paribus_features_explained
+        elif method_name == "featureStatistics":
+            already_explained = self.feature_statistics_explained
+        for feature_id, importance in self.feature_importances.items():
+            if feature_id not in already_explained:
+                return feature_id
+        return None
 
-    def save_current_attribute(self, current_attribute):
-        display_name = self.template_manager.get_feature_display_name_by_name(current_attribute)
-        self.current_attribute = display_name
-        self.current_attribute_id = current_attribute
+    def mark_as_explained(self, explanation, feature):
+        if explanation == "ceterisParibus":
+            self.ceteris_paribus_features_explained.add(feature)
+        elif explanation == "featureStatistics":
+            self.feature_statistics_explained.add(feature)
 
     def update_state(self, user_input, question_id=None, feature_id=None):
         """
@@ -44,6 +69,7 @@ class DialogueManager:
             self.interacted_explanations.add(question_id)
             if self.active_mode:
                 self.dialogue_policy.model.trigger(question_id)
+                self.mark_as_explained(question_id, feature_id)
             return question_id, feature_id
 
         # If question_id is None, the user input needs NLU
@@ -51,48 +77,38 @@ class DialogueManager:
         method_name = None
         feature_name = None
 
-        # Get user Intent
+        # Get user Intent (step 1)
         if self.active_mode:
             intent_classification, method_name, feature_name = self.intent_recognition_model.interpret_user_answer(
                 self.get_suggested_explanations(),
                 user_input)
 
+        # If the intent is not recognized or the dialogue manager is not active, predict the explanation method
         if not self.active_mode or intent_classification == "other":
             method_name, feature_name = self.intent_recognition_model.predict_explanation_method(user_input)
 
         # Update the state machine
         if self.active_mode:
             self.dialogue_policy.model.trigger(method_name)
+            self.interacted_explanations.add(method_name)
+            self.mark_as_explained(method_name, feature_name)
         return method_name, feature_name
 
     def replace_most_important_attribute(self, suggested_followups):
-        # Replace "most important attribute" with the actual attribute name
-        if self.most_important_attribute is not None:
-            for followup in suggested_followups:
-                # Feature specific questions have this placeholder
-                if "most important attribute" in followup['question']:
-                    followup['question'] = followup['question'].replace("most important attribute",
-                                                                        self.most_important_attribute)
-                    followup['feature'] = self.most_important_attribute_id
-                if "current attribute" in followup['question']:
-                    followup['question'] = followup['question'].replace("current attribute",
-                                                                        self.current_attribute)
-                    followup['feature'] = self.current_attribute_id
-        return suggested_followups
+        # Replace "most important attribute" with the name of the next feature to explain
+        for followup in suggested_followups:
+            if "most important attribute" in followup['question']:
+                method = followup['id']
+                next_feature_to_explain = self.get_next_feature(method)
+                display_name = self.template_manager.get_feature_display_name_by_name(next_feature_to_explain)
+                followup['question'] = followup['question'].replace("most important attribute",
+                                                                    display_name)
+                followup['feature'] = next_feature_to_explain
 
     def get_suggested_explanations(self):
         suggested_followups = self.dialogue_policy.get_suggested_followups()
-        suggested_followups = self.replace_most_important_attribute(suggested_followups)
+        self.replace_most_important_attribute(suggested_followups)
         return suggested_followups
-
-    def reset_state(self):
-        """
-        Reset the state of the dialogue manager for new interactions
-        """
-        self.dialogue_policy.reset_state()
-        self.user_questions = 0
-        self.interacted_explanations = set()
-        self.most_important_attribute = None
 
     def print_transitions(self):
         self.dialogue_policy.to_mermaid()
