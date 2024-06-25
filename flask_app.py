@@ -113,12 +113,11 @@ def get_datapoint(user_id, datapoint_type, return_probability=False):
         user_id = "TEST"
     current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple(datapoint_type,
                                                                                                return_probability=return_probability)
-    (instance_id, instance_dict, probas, ml_label) = current_instance_with_units
+    (instance_id, instance_dict, probas, ml_label, _) = current_instance_with_units
     instance_dict["id"] = str(instance_id)
     if return_probability:
         instance_dict["probabilities"] = probas
     instance_dict["ml_prediction"] = ml_label
-    print(instance_dict)
     return instance_dict
 
 
@@ -130,7 +129,7 @@ def get_train_datapoint():
     user_id = request.args.get("user_id")
     user_study_group = bot_dict[user_id].get_study_group()
     result_dict = get_datapoint(user_id, "train")
-    bot_dict[user_id].dialogue_manager.reset_state()
+    bot_dict[user_id].reset_dialogue_manager()
 
     if user_study_group == "interactive":
         prompt = f"""
