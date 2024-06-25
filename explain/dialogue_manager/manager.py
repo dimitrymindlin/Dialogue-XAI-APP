@@ -95,15 +95,20 @@ class DialogueManager:
         return method_name, feature_name
 
     def replace_most_important_attribute(self, suggested_followups):
-        # Replace "most important attribute" with the name of the next feature to explain
+        updated_followups = []
         for followup in suggested_followups:
             if "most important attribute" in followup['question']:
                 method = followup['id']
                 next_feature_to_explain = self.get_next_feature(method)
+                if next_feature_to_explain is None:
+                    continue  # Skip adding this followup to the updated list because all features were explained
                 display_name = self.template_manager.get_feature_display_name_by_name(next_feature_to_explain)
-                followup['question'] = followup['question'].replace("most important attribute",
-                                                                    display_name)
+                followup['question'] = followup['question'].replace("most important attribute", display_name)
                 followup['feature'] = next_feature_to_explain
+            updated_followups.append(followup)
+
+        # Replace the original list with the updated list
+        suggested_followups[:] = updated_followups
 
     def get_suggested_explanations(self):
         suggested_followups = self.dialogue_policy.get_suggested_followups()
