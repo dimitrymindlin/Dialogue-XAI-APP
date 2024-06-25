@@ -801,6 +801,27 @@ class ExplainBot:
         final_result = returned_item
         return final_result, question_id, feature_id
 
+    def get_feature_importances_for_current_instance(self):
+        mega_explainer = self.conversation.get_var('mega_explainer').contents
+        instance = self.current_instance[1]
+        data = pd.DataFrame(instance, index=[self.current_instance[0]])
+        feature_importance_dict = mega_explainer.get_feature_importances(data, [], False)[0]
+        # Turn display names into feature names
+        feature_importance_dict = {self.get_feature_display_name_dict().get(k, k): v for k, v in
+                                   feature_importance_dict.items()}
+        # Extract the feature importances for the current instance from outer dict with current class as key
+        current_prediction_class = self.current_instance[4]
+        feature_importance_dict = feature_importance_dict[current_prediction_class]
+        return feature_importance_dict
+
+    def reset_dialogue_manager(self):
+        """
+        Resets the dialogue manager to the initial state and resets the feature importances for the current instance.
+        """
+        current_feature_importances = self.get_feature_importances_for_current_instance()
+        self.dialogue_manager.reset_state()
+        self.dialogue_manager.feature_importances = current_feature_importances
+
     def get_explanation_report(self):
         """Returns the explanation report."""
         instance_id = self.current_instance[0]
