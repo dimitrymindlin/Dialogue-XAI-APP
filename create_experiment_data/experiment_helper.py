@@ -60,9 +60,9 @@ class ExperimentHelper:
             # Order instance features according to the feature ordering
             instance_features = instance[1]
             instance_features = {feature: instance_features[feature] for feature in self.feature_ordering}
-            instance = (instance[0], instance_features, instance[2], instance[3])
+            instance = (instance[0], instance_features, instance[2], instance[3], instance[4])
         else:  # alphabetically order features
-            instance = (instance[0], dict(sorted(instance[1].items())), instance[2], instance[3])
+            instance = (instance[0], dict(sorted(instance[1].items())), instance[2], instance[3], instance[4])
         # Make sure all values are strings
         self._convert_values_to_string(instance[1])
         # Make display feature names for the instance keys
@@ -71,9 +71,9 @@ class ExperimentHelper:
         if not return_probabilities and instance[2] is not None:
             ml_prediction = np.argmax(instance[2])
             display_ml_prediction = self.conversation.class_names[ml_prediction]
-            instance = (instance[0], new_instance, display_ml_prediction, instance[3])
+            instance = (instance[0], new_instance, display_ml_prediction, instance[3], instance[4])
         else:
-            instance = (instance[0], new_instance, instance[2], instance[3])
+            instance = (instance[0], new_instance, instance[2], instance[3], instance[4])
         return instance
 
     def get_next_instance(self, instance_type, return_probability=False):
@@ -96,9 +96,12 @@ class ExperimentHelper:
                 self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance, index=[0])))
             model_predicted_label = self.conversation.class_names[predicted_label_index]
             probability = None
-            instance = (instance_id, instance, probability, model_predicted_label)
+            instance = (instance_id, instance, probability, model_predicted_label, predicted_label_index)
         else:  # "train"
             instance, counter, probability = get_instance_methods[instance_type]()
+            predicted_label_index = np.argmax(
+                self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance[1], index=[0])))
+            instance = (instance[0], instance[1], instance[2], instance[3], predicted_label_index)
 
         self.current_instance_type = instance_type
         instance = self._make_displayable_instance(instance)
