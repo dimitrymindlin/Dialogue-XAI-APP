@@ -9,11 +9,11 @@ from experiment_analysis.analysis_data_holder import AnalysisDataHolder
 from experiment_analysis.calculations import create_predictions_df
 from experiment_analysis.filter_out_participants import filter_by_prolific_users, filter_by_broken_variables
 from experiment_analysis.plot_overviews import plot_understanding_over_time, \
-    plot_asked_questions_per_user, plot_questions_tornado
+    plot_asked_questions_per_user
 from experiment_analysis.process_mining import ProcessMining
 import json
 
-from parsing.llm_intent_recognition.prompts.prompt_A import question_to_id_mapping
+from parsing.llm_intent_recognition.prompts.explanations_prompt import question_to_id_mapping
 
 POSTGRES_USER = "postgres"
 POSTGRES_PASSWORD = "example"

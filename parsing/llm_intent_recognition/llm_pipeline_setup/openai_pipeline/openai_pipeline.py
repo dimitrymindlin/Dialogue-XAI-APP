@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 import os
 from dotenv import load_dotenv
 
-from parsing.llm_intent_recognition.prompts.prompt_A import question_to_id_mapping, openai_system_prompt_A, \
+from parsing.llm_intent_recognition.prompts.explanations_prompt import question_to_id_mapping, openai_system_explanations_prompt, \
     openai_user_prompt
-from parsing.llm_intent_recognition.prompts.prompt_B import openai_system_prompt_B, openai_user_prompt_B
+from parsing.llm_intent_recognition.prompts.initial_routing_prompt import openai_system_prompt_initial_routing, openai_user_prompt_initial_routing
 
 load_dotenv()
 
@@ -50,25 +50,26 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
     def __init__(self, feature_names):
         self.memory = ConversationBufferMemory(memory_key="chat_history")
 
-        self.prompt_A_chat_template = ChatPromptTemplate.from_messages(
+        self.explanations_prompt_chat_template = ChatPromptTemplate.from_messages(
             [
-                openai_system_prompt_A(feature_names),
+                openai_system_explanations_prompt(feature_names),
                 openai_user_prompt(),
             ]
         )
 
-        self.prompt_B_chat_template = ChatPromptTemplate.from_messages(
+        self.initial_routing_prompt_chat_template = ChatPromptTemplate.from_messages(
             [
-                openai_system_prompt_B(feature_names),
-                openai_user_prompt_B(),
+                openai_system_prompt_initial_routing(feature_names),
+                openai_user_prompt_initial_routing(),
             ]
         )
 
-    def call_prompt_a_function(self, question):
+    def call_explanations_prompt_function(self, question):
+        """ Explanation Methods prompt """
         # Retrieve chat history
         chat_history = self.memory.load_memory_variables({})["chat_history"]
         # Directly pass question and chat_history as inputs
-        formatted_messages = self.prompt_A_chat_template.format_messages(
+        formatted_messages = self.explanations_prompt_chat_template.format_messages(
             input=question, chat_history=chat_history, format_instructions=format_instructions)
 
         messages = [
@@ -100,13 +101,15 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
 
         return response
 
-    def call_prompt_b_function(self, explanation_suggestions, user_intent):
-        formatted_messages = self.prompt_B_chat_template.format_messages(
+    def call_initial_routing_function(self, explanation_suggestions, user_intent):
+        """ Prompt B is about initial user response intent (agreement, disagreement, other)"""
+        formatted_messages = self.initial_routing_prompt_chat_template.format_messages(
             explanation_suggestions=explanation_suggestions, user_response=user_intent)
         messages = [
             {"role": "system", "content": formatted_messages[0].content},
             {"role": "user", "content": formatted_messages[1].content},
         ]
+
         response_format = ResponseFormat(type="json_object")
 
         # Wrapper to use Langsmith client
@@ -126,7 +129,7 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
         """
         Predict the XAI method to answer the user question. (Prompt A)
         """
-        response = self.call_prompt_a_function(user_question)
+        response = self.call_explanations_prompt_function(user_question)
         try:
             question_id = response[0]
             feature = response[1]
@@ -139,7 +142,7 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
         """
         Predict the user intent as an answer to the suggested XAI method. (Prompt B)
         """
-        response = self.call_prompt_b_function(explanation_suggestions, user_question)
+        response = self.call_initial_routing_function(explanation_suggestions, user_question)
         print(response)
         try:
             classification = response["classification"]

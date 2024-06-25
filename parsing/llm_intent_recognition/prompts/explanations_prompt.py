@@ -298,11 +298,12 @@ def get_system_prompt_condensed(feature_names=[]):
 
 
 def get_system_prompt_condensed_with_history(feature_names=""):
-    return f"""<<Context>>\n
-    The user was presented with a machine learning datapoint with various features. The model predicted a class. Based on the 
-        user's question about the prediction, follow the checklist to determine the best method. Return ONLY a JSON with 
-        'method' and 'feature'. 'feature' can be None. The possible feature names are: {feature_names}\n
-    <<Methods>>\n
+    return f"""<<Context>>:\n
+    The user was presented with datapoint from a machine learning dataset with various features. The model predicted a class. Based on the 
+        user's question about the prediction, follow the methods checklist to determine the best method.
+        The possible feature names that the user might ask about are: {feature_names}\n
+        
+    <<Methods>>:\n
         - Greeting:
             - Examples: "Hey, how are you?", "Hello!", "Good morning."
             - JSON: method: "greeting", feature: None
@@ -343,22 +344,24 @@ def get_system_prompt_condensed_with_history(feature_names=""):
                     - Examples: "What factors guarantee this prediction?", "Which features must stay the same?"
                     - JSON: method: "anchor", feature: None
 
-        <<Task>> Decide which method fits best by reasoning over every possible method. Return a single JSON with the following keys:
+        <<Task>>:\n
+        Decide which method fits best by reasoning over every possible method. 
+        Return a single JSON with the following keys:
         
-        <<Previous user questions and mapped methods>>
-        \n{{chat_history}}
-        
-        <<Format Instructions>>
+        <<Format Instructions>>:\n
         \n{{format_instructions}}
+        
+        <<Previous user questions and mapped methods>>:\n
+        \n{{chat_history}}
         """
 
 
 def simple_user_question_prompt_json_response():
     return f"""
-    <<User Question>>
+    <<User Question>>:
     \n{{input}}
     \n
-    <<Method Json Response>>
+    <<Json Response>>:
     """
 
 
@@ -371,7 +374,7 @@ def simple_user_question_prompt():
     """
 
 
-def openai_system_prompt_A(feature_names):
+def openai_system_explanations_prompt(feature_names):
     return "system", get_system_prompt_condensed_with_history(feature_names)
 
 

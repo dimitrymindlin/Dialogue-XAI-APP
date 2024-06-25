@@ -10,7 +10,7 @@ os.environ['LANGCHAIN_API_KEY'] = os.getenv('LANGSMITH_API_KEY')
 os.environ['LANGCHAIN_TRACING_V2'] = 'true'
 os.environ['LANGCHAIN_ENDPOINT'] = 'https://api.smith.langchain.com'
 
-from parsing.llm_intent_recognition.prompts.prompt_A import get_template_with_full_descriptions
+from parsing.llm_intent_recognition.prompts.explanations_prompt import get_template_with_full_descriptions
 
 LLM_MODEL = "llama3"
 

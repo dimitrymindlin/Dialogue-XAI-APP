@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import os
 from dotenv import load_dotenv
 
-from parsing.llm_intent_recognition.prompts.prompt_A import get_xai_template_with_descriptions, \
+from parsing.llm_intent_recognition.prompts.explanations_prompt import get_xai_template_with_descriptions, \
     possible_categories, question_to_id_mapping, get_template_wich_checklist, \
     get_template_wich_checklist_and_memory, get_template_with_checklist_plus_agreement, simple_user_question_prompt
 from parsing.llm_intent_recognition.router_chain import generate_destination_chains, generate_router_chain

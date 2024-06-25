@@ -7,7 +7,7 @@ from langchain.chains.router.llm_router import LLMRouterChain, RouterOutputParse
 
 from prompt_toolkit import HTML, prompt
 
-from parsing.llm_intent_recognition.prompts.prompt_A import get_xai_template_with_descriptions, ROUTING_TASK_PROMPT
+from parsing.llm_intent_recognition.prompts.explanations_prompt import get_xai_template_with_descriptions, ROUTING_TASK_PROMPT
 
 
 class Config():
