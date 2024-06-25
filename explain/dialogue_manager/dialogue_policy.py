@@ -63,18 +63,18 @@ class DialoguePolicy:
     }
 
     followups = {
-        'initial': [SHOW_TOP3, SHOW_SHAP_ALL],
-        'shownTop3': [SHOW_LEAST3, SHOW_SHAP_ALL, SHOW_ANCHOR],
-        'shownLeast3': [SHOW_SHAP_ALL],
-        'shownShapAll': [SHOW_CETERIS_PARIBUS, SHOW_FEATURE_STATISTICS],
-        'shownCeterisParibus': [SHOW_CETERIS_PARIBUS, SHOW_COUNTERFACTUAL_ANY_CHANGE],
-        'shownFeatureStatistics': [SHOW_CETERIS_PARIBUS],
-        'shownCounterfactualAnyChange': [SHOW_CETERIS_PARIBUS, SHOW_ANCHOR],
-        'shownAnchor': [SHOW_CETERIS_PARIBUS, SHOW_COUNTERFACTUAL_ANY_CHANGE],
-        'shownNotXaiMethod': [SHOW_SHAP_ALL, SHOW_COUNTERFACTUAL_ANY_CHANGE],
-        'shownFollowUp': [SHOW_CETERIS_PARIBUS],
-        'shownWhyExplanation': [SHOW_SHAP_ALL, SHOW_COUNTERFACTUAL_ANY_CHANGE],
-        'shownGreeting': [SHOW_TOP3, SHOW_SHAP_ALL],
+        'initial': [SHOW_TOP3, SHOW_ANCHOR, SHOW_COUNTERFACTUAL_ANY_CHANGE],
+        'shownTop3': [SHOW_LEAST3, SHOW_SHAP_ALL, SHOW_CETERIS_PARIBUS],
+        'shownLeast3': [SHOW_SHAP_ALL, SHOW_COUNTERFACTUAL_ANY_CHANGE],
+        'shownShapAll': [SHOW_COUNTERFACTUAL_ANY_CHANGE, SHOW_CETERIS_PARIBUS, SHOW_FEATURE_STATISTICS],
+        'shownCeterisParibus': [SHOW_CETERIS_PARIBUS, SHOW_FEATURE_STATISTICS],
+        'shownFeatureStatistics': [SHOW_FEATURE_STATISTICS],
+        'shownCounterfactualAnyChange': [SHOW_CETERIS_PARIBUS],
+        'shownAnchor': [SHOW_COUNTERFACTUAL_ANY_CHANGE],
+        'shownNotXaiMethod': [],  # Suggest Most Used XAI Methods
+        'shownFollowUp': [SHOW_CETERIS_PARIBUS, SHOW_FEATURE_STATISTICS],  # Suggest Follow Up Questions
+        'shownWhyExplanation': [SHOW_SHAP_ALL, SHOW_ANCHOR, SHOW_COUNTERFACTUAL_ANY_CHANGE],
+        'shownGreeting': [],
     }
 
     def __init__(self):
@@ -99,6 +99,12 @@ class DialoguePolicy:
         current_state = self.model.state
         return [{'id': trigger, 'question': DialoguePolicy.questions[trigger], 'feature': None} for trigger in
                 DialoguePolicy.followups.get(current_state, [])]
+
+    def get_last_explanation(self):
+        try:
+            return self.asked_questions[-1]
+        except IndexError:
+            return None
 
     def get_not_asked_questions(self, num_questions=2):
         """
