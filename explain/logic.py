@@ -759,19 +759,11 @@ class ExplainBot:
                 """
 
         instance_id = self.current_instance[0]
-        most_important_attribute = run_action_new(self.conversation,
-                                                  "mostImportantFeature",
-                                                  instance_id,
-                                                  None,
-                                                  instance_type_naming=self.instance_type_naming)
-
-        self.dialogue_manager.save_most_important_attribute(most_important_attribute)
 
         question_id, feature_name = self.dialogue_manager.update_state(user_input, question_id, feature_id)
 
         # Get feature_id from feature_name if feature_id
         if feature_name is not None:
-            self.dialogue_manager.save_current_attribute(feature_name)
             feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
             feature_id = feature_list.index(feature_name.lower())
 
