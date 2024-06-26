@@ -114,6 +114,7 @@ class DialogueManager:
 
         # Replace the original list with the updated list
         suggested_followups[:] = updated_followups
+        return suggested_followups
 
     def get_suggested_explanations(self):
         suggested_followups = self.dialogue_policy.get_suggested_followups()
@@ -135,7 +136,12 @@ class DialogueManager:
             if self.active_mode:
                 not_asked_yet = self.dialogue_policy.get_not_asked_questions()
                 not_asked_yet = self.replace_most_important_attribute(not_asked_yet)
-                return False, not_asked_yet[:3], "Already want to proceed? Maybe the following could be interesting..."
+                try:
+                    not_asked_yet = not_asked_yet[:3]
+                except (IndexError, TypeError):
+                    not_asked_yet = []
+                return False, not_asked_yet[
+                              :3], "Already want to proceed? Maybe you have some more questions ... ?"
             else:
                 return False, None, "Already want to proceed? You could ask about the most or least important attribute," \
                                     "the influences of features or about which changes would lead to a different prediction..."
