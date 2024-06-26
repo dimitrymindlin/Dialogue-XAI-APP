@@ -136,7 +136,8 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
         except KeyError:
             question_id = response["method"]
             feature = response["feature"]
-        return question_id, feature
+            reasoning = response["reasoning"]
+        return question_id, feature, reasoning
 
     def interpret_user_answer(self, explanation_suggestions, user_question):
         """
@@ -148,10 +149,11 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
             classification = response["classification"]
             mapped_question = response["method"]
             feature = response["feature"]
+            reasoning = response["reasoning"]
         except KeyError:
             print("Key error in:", response)
             return None, None, None
-        return classification, mapped_question, feature
+        return classification, mapped_question, feature, reasoning
 
 
 def current_approach_performance(question_to_id_mapping, load_previous_results=False):

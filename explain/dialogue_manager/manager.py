@@ -70,29 +70,34 @@ class DialogueManager:
             if self.active_mode:
                 self.dialogue_policy.model.trigger(question_id)
                 self.mark_as_explained(question_id, feature_id)
-            return question_id, feature_id
+            single_reasoning_string = "Clicked on question"
+            return question_id, feature_id, single_reasoning_string
 
         # If question_id is None, the user input needs NLU
         intent_classification = None
         method_name = None
         feature_name = None
+        single_reasoning_string = ""
 
         # Get user Intent (step 1)
         if self.active_mode:
-            intent_classification, method_name, feature_name = self.intent_recognition_model.interpret_user_answer(
+            intent_classification, method_name, feature_name, reasoning_1 = self.intent_recognition_model.interpret_user_answer(
                 self.get_suggested_explanations(),
                 user_input)
+            single_reasoning_string = "Step1:" + reasoning_1
 
-        # If the intent is not recognized or the dialogue manager is not active, predict the explanation method
+            # If the intent is not recognized or the dialogue manager is not active, predict the explanation method
         if not self.active_mode or intent_classification == "other":
-            method_name, feature_name = self.intent_recognition_model.predict_explanation_method(user_input)
+            method_name, feature_name, reasoning_2 = self.intent_recognition_model.predict_explanation_method(
+                user_input)
+            single_reasoning_string += "Step2:" + reasoning_2
 
         # Update the state machine
         if self.active_mode:
             self.dialogue_policy.model.trigger(method_name)
             self.interacted_explanations.add(method_name)
             self.mark_as_explained(method_name, feature_name)
-        return method_name, feature_name
+        return method_name, feature_name, single_reasoning_string
 
     def replace_most_important_attribute(self, suggested_followups):
         updated_followups = []

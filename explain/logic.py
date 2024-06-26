@@ -760,7 +760,7 @@ class ExplainBot:
 
         instance_id = self.current_instance[0]
 
-        question_id, feature_name = self.dialogue_manager.update_state(user_input, question_id, feature_id)
+        question_id, feature_name, reasoning = self.dialogue_manager.update_state(user_input, question_id, feature_id)
 
         # Get feature_id from feature_name if feature_id
         if feature_name is not None:
@@ -780,7 +780,7 @@ class ExplainBot:
                 feature_id = feature_list.index(feature_name)"""
 
         if question_id is None:
-            return '', None, None
+            return '', None, None, reasoning
 
         if feature_id is not None:
             feature_id = int(feature_id)
@@ -799,7 +799,7 @@ class ExplainBot:
         # response, then present all the data
         # final_result = returned_item + f"<>{response_id}"
         final_result = returned_item
-        return final_result, question_id, feature_id
+        return final_result, question_id, feature_id, reasoning
 
     def get_feature_importances_for_current_instance(self):
         mega_explainer = self.conversation.get_var('mega_explainer').contents

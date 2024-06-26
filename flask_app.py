@@ -224,7 +224,8 @@ def get_proceeding_okay():
         "feedback": True,
         "text": response_text,
         "id": 1000,
-        "followup": follow_up_questions
+        "followup": follow_up_questions,
+        "reasoning": "",
     }
     return {"proceeding_okay": proceeding_okay, "message": message}
 
@@ -287,7 +288,8 @@ def get_bot_response():
             "text": response[0],
             "id": question_id,
             "feature_id": feature_id,
-            "followup": bot_dict[user_id].get_suggested_method()
+            "followup": bot_dict[user_id].get_suggested_method(),
+            "reasoning": response[3]
         }
 
         return jsonify(message_dict)
@@ -304,7 +306,8 @@ def get_bot_response_from_nl():
         try:
             data = json.loads(request.data)
             # print(data["message"])
-            response, question_id, feature_id = bot_dict[user_id].update_state_new(user_input=data["message"])
+            response, question_id, feature_id, reasoning = bot_dict[user_id].update_state_new(
+                user_input=data["message"])
             followup = bot_dict[user_id].get_suggested_method()
         except Exception as ext:
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
@@ -313,6 +316,7 @@ def get_bot_response_from_nl():
             question_id = None
             feature_id = None
             followup = []
+            reasoning = ""
 
         message_dict = {
             "isUser": False,
@@ -320,7 +324,8 @@ def get_bot_response_from_nl():
             "text": response,
             "id": question_id,
             "feature_id": feature_id,
-            "followup": followup
+            "followup": followup,
+            "reasoning": reasoning
         }
         return jsonify(message_dict)
 
