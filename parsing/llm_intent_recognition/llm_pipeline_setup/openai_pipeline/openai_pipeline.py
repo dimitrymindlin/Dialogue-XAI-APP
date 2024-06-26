@@ -16,16 +16,18 @@ import matplotlib.pyplot as plt
 import os
 from dotenv import load_dotenv
 
-from parsing.llm_intent_recognition.prompts.explanations_prompt import question_to_id_mapping, openai_system_explanations_prompt, \
+from parsing.llm_intent_recognition.prompts.explanations_prompt import question_to_id_mapping, \
+    openai_system_explanations_prompt, \
     openai_user_prompt
-from parsing.llm_intent_recognition.prompts.initial_routing_prompt import openai_system_prompt_initial_routing, openai_user_prompt_initial_routing
+from parsing.llm_intent_recognition.prompts.initial_routing_prompt import openai_system_prompt_initial_routing, \
+    openai_user_prompt_initial_routing
 
 load_dotenv()
 
-### Langsmith
+"""### Langsmith
 os.environ['LANGCHAIN_API_KEY'] = os.getenv('LANGSMITH_API_KEY')
 os.environ['LANGCHAIN_TRACING_V2'] = 'true'
-os.environ['LANGCHAIN_ENDPOINT'] = 'https://api.smith.langchain.com'
+os.environ['LANGCHAIN_ENDPOINT'] = 'https://api.smith.langchain.com'"""
 
 ### OpenAI
 os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
