@@ -82,8 +82,6 @@ def init():
         'prediction_choices': user_experiment_prediction_choices,
         'user_study_task_description': user_study_task_description
     }
-    bot_dict[user_id].dialogue_manager.reset_state()
-    bot_dict[user_id].dialogue_manager.print_transitions()
     return result
 
 
@@ -142,13 +140,17 @@ def get_train_datapoint():
             If you have questions about the prediction, <b>type them</b> in the chat and I will answer them.
             """
 
+    if bot_dict[user_id].use_active_dialogue_manager:
+        followup = bot_dict[user_id].get_suggested_method()
+    else:
+        followup = []
     # Create message dict to return ({isUser: false, feedback: false, text: initial_prompt, id: 1000})
     result_dict["initial_message"] = {
         "isUser": False,
         "feedback": False,
         "text": prompt,
         "id": 1000,
-        "followup": bot_dict[user_id].get_suggested_method()
+        "followup": followup
         # [{"id": "shapAllFeatures", "question": "Would you like to see the feature contributions?"}]
     }
 
@@ -282,13 +284,17 @@ def get_bot_response():
             app.logger.info(f"Exception getting bot response: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
 
+        if bot_dict[user_id].use_active_dialogue_manager:
+            followup = bot_dict[user_id].get_suggested_method()
+        else:
+            followup = []
         message_dict = {
             "isUser": False,
             "feedback": True,
             "text": response[0],
             "id": question_id,
             "feature_id": feature_id,
-            "followup": bot_dict[user_id].get_suggested_method(),
+            "followup": followup,
             "reasoning": response[3]
         }
 
@@ -308,7 +314,10 @@ def get_bot_response_from_nl():
             # print(data["message"])
             response, question_id, feature_id, reasoning = bot_dict[user_id].update_state_new(
                 user_input=data["message"])
-            followup = bot_dict[user_id].get_suggested_method()
+            if bot_dict[user_id].use_active_dialogue_manager:
+                followup = bot_dict[user_id].get_suggested_method()
+            else:
+                followup = []
         except Exception as ext:
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")

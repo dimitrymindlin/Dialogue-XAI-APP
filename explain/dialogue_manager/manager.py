@@ -24,7 +24,8 @@ class DialogueManager:
         """
         Reset the state of the dialogue manager for new interactions
         """
-        self.dialogue_policy.reset_state()
+        if self.active_mode:
+            self.dialogue_policy.reset_state()
         self.user_questions = 0
         self.interacted_explanations = set()
         self.most_important_attribute = None
@@ -122,7 +123,8 @@ class DialogueManager:
         return suggested_followups
 
     def print_transitions(self):
-        self.dialogue_policy.to_mermaid()
+        if self.active_mode:
+            self.dialogue_policy.to_mermaid()
 
     def get_proceeding_okay(self):
         """
