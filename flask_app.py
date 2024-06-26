@@ -139,7 +139,7 @@ def get_train_datapoint():
     else:  # chat
         prompt = f"""
             The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{result_dict["ml_prediction"]}</b>. <br>
-            If you have questions about the prediction, type them in the chat and I will answer them.
+            If you have questions about the prediction, <b>type them</b> in the chat and I will answer them.
             """
 
     # Create message dict to return ({isUser: false, feedback: false, text: initial_prompt, id: 1000})
@@ -207,7 +207,6 @@ def get_user_correctness():
         user_id = "TEST"
     bot = bot_dict[user_id]
     correctness_string = bot.get_user_correctness()
-    print(correctness_string)
     response = {"correctness_string": correctness_string}
     return response
 
@@ -222,7 +221,7 @@ def get_proceeding_okay():
     # Make it a message dict
     message = {
         "isUser": False,
-        "feedback": False,
+        "feedback": True,
         "text": response_text,
         "id": 1000,
         "followup": follow_up_questions
@@ -282,14 +281,9 @@ def get_bot_response():
             app.logger.info(f"Exception getting bot response: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
 
-        try:
-            print(feature_id)
-        except Exception as e:
-            feature_id = None
-
         message_dict = {
             "isUser": False,
-            "feedback": False,
+            "feedback": True,
             "text": response[0],
             "id": question_id,
             "feature_id": feature_id,
@@ -309,24 +303,24 @@ def get_bot_response_from_nl():
         app.logger.info("generating the bot response for nl input")
         try:
             data = json.loads(request.data)
-            print(data["message"])
+            # print(data["message"])
             response, question_id, feature_id = bot_dict[user_id].update_state_new(user_input=data["message"])
+            followup = bot_dict[user_id].get_suggested_method()
         except Exception as ext:
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
             question_id = None
             feature_id = None
-
-        # TODO: Handle the case where the user input is not understood...
+            followup = []
 
         message_dict = {
             "isUser": False,
-            "feedback": False,
+            "feedback": True,
             "text": response,
             "id": question_id,
             "feature_id": feature_id,
-            "followup": bot_dict[user_id].get_suggested_method()
+            "followup": followup
         }
         return jsonify(message_dict)
 

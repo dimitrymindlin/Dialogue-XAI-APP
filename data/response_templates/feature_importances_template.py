@@ -38,7 +38,7 @@ def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=
         if "least" in filtering_text:
             position = "least" if i == 0 else f"{position_prefix} least"
         else:
-            position = "most" if i == 0 else f"{position_prefix}"
+            position = "most" if i == 0 else f"{position_prefix} most"
         increase_decrease = "increases" if feature_importance > 0 else "decreases"
         # output_text += f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute which {increase_decrease} the model's output.</li>"
         output_text += f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute.</li>"
