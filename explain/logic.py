@@ -82,7 +82,8 @@ class ExplainBot:
                  encoded_col_mapping_path: dict = None,
                  feature_ordering: List[str] = None,
                  use_selection: bool = False,
-                 use_intent_recognition: bool = False):
+                 use_intent_recognition: bool = False,
+                 use_active_dialogue_manager: bool = False):
         """The init routine.
 
         Arguments:
@@ -146,6 +147,7 @@ class ExplainBot:
         self.feature_ordering = feature_ordering
         self.use_selection = use_selection
         self.use_intent_recognition = use_intent_recognition
+        self.use_active_dialogue_manager = use_active_dialogue_manager
 
         # A variable used to help file uploads
         self.manual_var_filename = None
@@ -232,7 +234,8 @@ class ExplainBot:
 
         ## Initialize Dialogue Manager
         self.dialogue_manager = DialogueManager(intent_recognition=self.intent_recognition_model,
-                                                template_manager=template_manager)
+                                                template_manager=template_manager,
+                                                active=self.use_active_dialogue_manager)
 
     def get_feature_display_name_dict(self):
         template_manager = self.conversation.get_var('template_manager').contents
