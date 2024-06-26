@@ -66,7 +66,7 @@ ExplainBot.feature_tooltip_mapping = {
     "weekly working hours": "The total number of hours the individual works in a typical week.",
     "marital status": "The individual's marital status, indicating whether they are Married or Single. This simplification may encompass a broader range of legal statuses.",
     "work life balance": "A self-reported assessment of the individual's work-life balance, ranging from poor to excellent. This subjective measure reflects the individual's satisfaction with their ability to balance work and personal life.",
-    "occupation": "The general category of the individual's occupation, such as White-Collar (professional or managerial roles), Blue-Collar (manual labor), Service Industry, Specialized (requiring specific skills or training), and Miscellaneous.",
+    "occupation": "The general category of the individual's occupation, such as Admin, Blue-Collar, Military, Professional, Sales, Service or White-Collar",
     "workclass": "The work class of the person: Government, Private Sector, Self-Employed / Entrepreneurial, Unemployed and Other.",
     "investment outcome": "The result of the individual's investment activities, categorized as: No investment, Loss, or Gain. This reflects whether the individual has investments and if so, whether they have made a profit or a loss."
 }
