@@ -169,9 +169,8 @@ def run_action_new(conversation: Conversation,
 
     if question_id == "counterfactualAnyChange":
         # How should this instance change to get a different prediction?
-        explanation, desired_class = explain_cfe(conversation, data, parse_op, regen)
-        desired_class_str = conversation.get_class_name_from_label(desired_class)
-        explanation = f"Here are possible scenarios that would change the prediction to <b>{desired_class_str}</b>:<br> <br>" + \
+        explanation, _ = explain_cfe(conversation, data, parse_op, regen)
+        explanation = f"Here are possible scenarios that would change the prediction to <b>{opposite_class}</b>:<br> <br>" + \
                       explanation + "<br>There might be other possible changes. These are examples."
         return explanation
     if question_id == "counterfactualSpecificFeatureChange":
