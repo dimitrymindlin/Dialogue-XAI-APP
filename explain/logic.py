@@ -768,6 +768,8 @@ class ExplainBot:
         # Get feature_id from feature_name if feature_id
         if feature_name is not None:
             feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
+            # remove whitespace between words
+            feature_name = feature_name.replace(" ", "")
             feature_id = feature_list.index(feature_name.lower())
 
         """if user_input is not None:
