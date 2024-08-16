@@ -62,7 +62,12 @@ class ProcessMining:
                 if int(row["datapoint_count"]) not in datapoint_count:
                     continue
                 question_id = row["question_id"]
-                question = question_text[question_id]
+                if "chat" not in target_group_name:
+                    question = question_text[question_id]
+                else:
+                    question = question_id
+                if question != question:
+                    question = "Unknown"
                 case_id = row["user_id"] + "_" + str(row["datapoint_count"])
                 timestamp = row["created_at"].strftime("%Y-%m-%d %H:%M:%S")
                 process_mining_rows.append({"Case id": case_id, "Activity": question, "Timestamp": timestamp})

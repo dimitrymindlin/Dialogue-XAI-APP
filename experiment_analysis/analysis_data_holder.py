@@ -64,11 +64,10 @@ class AnalysisDataHolder:
         Adds the questions_over_time_df to the AnalysisDataHolder.
         Extracts the 'datapoint_count', 'question', and 'question_id' columns from the 'details' column.
         """
-        questions_over_time_df['details'] = questions_over_time_df['details'].apply(json.loads)
-        questions_over_time_df[['datapoint_count', 'question', 'question_id']] = \
-            questions_over_time_df[
-                'details'].apply(pd.Series)
-        questions_over_time_df.drop(columns=['details'], inplace=True)
+        """questions_over_time_df['details'] = questions_over_time_df['details'].apply(json.loads)
+        details_df = questions_over_time_df['details'].apply(pd.Series)
+        # Concatenate the original DataFrame with the new columns
+        questions_over_time_df = pd.concat([questions_over_time_df.drop(columns=['details']), details_df], axis=1)"""
         self.questions_over_time_df = questions_over_time_df
 
     def create_time_columns(self):

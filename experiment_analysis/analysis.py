@@ -1,29 +1,55 @@
+import os
+
 import psycopg2
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 from fuzzywuzzy import fuzz
 
-from experiment_analysis.analyse_explanation_ranking import extract_questionnaires
 from experiment_analysis.analysis_data_holder import AnalysisDataHolder
 from experiment_analysis.calculations import create_predictions_df
 from experiment_analysis.filter_out_participants import filter_by_prolific_users, filter_by_broken_variables
-from experiment_analysis.plot_overviews import plot_understanding_over_time, \
-    plot_asked_questions_per_user
-from experiment_analysis.process_mining import ProcessMining
+from experiment_analysis.plot_overviews import plot_understanding_over_time
 import json
 
 from parsing.llm_intent_recognition.prompts.explanations_prompt import question_to_id_mapping
 
 POSTGRES_USER = "postgres"
 POSTGRES_PASSWORD = "example"
-POSTGRES_DB = "prolific_study"
+POSTGRES_DB = "prolific_chat_final"
 POSTGRES_HOST = "localhost"
+prolific_file_name = "prolific_export_llm_combined.csv"
+prolific_file_name1 = "prolific_export_llm_passive.csv"
+prolific_file_name2 = "prolific_export_llm_active.csv"
+result_folder_path = "data_chat_final/"
+
+
+def merge_prolific_files():
+    # Read the CSV files into dataframes
+    df1 = pd.read_csv(prolific_file_name1)
+    df2 = pd.read_csv(prolific_file_name2)
+
+    # Append df2 to df1
+    df_combined = df1.append(df2, ignore_index=True)
+
+    # Delete old combined file
+    try:
+        os.remove('prolific_export_llm_combined.csv')
+    except FileNotFoundError:
+        pass
+
+    # Save the combined dataframe back to a CSV file
+    df_combined.to_csv('prolific_export_llm_combined.csv', index=False)
+
 
 analysis_steps = ["filter_by_prolific_users",
                   "filter_completed_users",
                   "filter_by_attention_check",
-                  "filter_by_time"]
+                  "filter_by_time",
+                  "remove_users_that_didnt_ask_questions",
+                  "plot_question_raking",
+                  "remove_users_with_high_ml_knowledge"]
+
+
+# Possible steps: remove_users_with_high_ml_knowledge
 
 
 def connect_to_db():
@@ -51,46 +77,23 @@ def append_user_data_to_df(df, user_id, study_group, data, column_name="time"):
     return df
 
 
-def plot_pairplot(df, vars, hue, title):
-    sns.pairplot(df, vars=vars, hue=hue, diag_kind="hist", kind="hist")
-    plt.suptitle(title, y=1.02)  # y is a float that adjusts the position of the title vertically
-    plt.show()
-
-
-def plot_heatmap(df, cols, title):
-    df = df[cols]  # Select only the columns in cols
-    corr = df.corr()
-    sns.heatmap(corr, annot=True, fmt=".2f", cmap='coolwarm')
-    plt.title(title)
-    plt.tight_layout()
-    plt.show()
-
-
-def extract_exit_feedback(user_df, user_id):
-    exit_q = None
+def extract_all_feedback(user_df, user_id):
     try:
         questionnaires = user_df[user_df["id"] == user_id]["questionnaires"].values[0]
-        # Remove redundant keys and values
-        if len(questionnaires) > 4:
-            found_exit = False
-            for questionnaire in questionnaires:
-                if isinstance(questionnaire, dict):
-                    continue
-                questionnaire = json.loads(questionnaire)
-                if "exit" in questionnaire.keys():
-                    exit_q = questionnaire['exit']
-                    found_exit = True
-            if not found_exit:
-                print("no exit q.", len(questionnaires), user_id)
-        else:
-            exit_questionnaire = json.loads(questionnaires[3])['exit']
-            exit_q = exit_questionnaire
+        feedback_dict = {"user_id": user_id}
+        for questionnaire in questionnaires:
+            if isinstance(questionnaire, dict):
+                continue
+            questionnaire = json.loads(questionnaire)
+            for key, value in questionnaire.items():
+                feedback_dict[f"{key}"] = value['questions']
+                feedback_dict[f"{key}_answers"] = value['answers']
     except (KeyError, IndexError):
-        print(f"{user_id} did not complete the exit questionnaire.")
+        print(f"{user_id} did not complete the questionnaires.")
 
-    # Append the user_id and exit_q to the DataFrame
-    new_row = pd.DataFrame([{"user_id": user_id, "exit_q_answers": exit_q['answers']}])
-    return new_row
+    # Create a DataFrame from the feedback dictionary
+    feedback_df = pd.DataFrame([feedback_dict])
+    return feedback_df
 
 
 def get_study_group_and_events(user_df, event_df, user_id):
@@ -99,17 +102,72 @@ def get_study_group_and_events(user_df, event_df, user_id):
     return study_group, user_events
 
 
-def extract_questions(user_events):
+def extract_questions(user_events, study_group):
     """
     Process the interactive group by extracting user questions over time.
     """
     user_questions_over_time = user_events[
         (user_events["action"] == "question") & (user_events["source"] == "teaching")]
+
     # Check how many users have not asked any questions (i.e. all cols contain nan)
     if user_questions_over_time.empty:
         return None
 
-    return user_questions_over_time
+    ## UNPACK DETAILS COLUMN
+    # Details is a string that contains a dictionary
+    user_questions_over_time = user_questions_over_time.copy()
+    user_questions_over_time.loc[:, 'details'] = user_questions_over_time['details'].apply(json.loads)
+    details_df = user_questions_over_time['details'].apply(pd.Series)
+
+    # Check is study group is chat or active chat
+    if study_group in ["chat", "active_chat"]:
+        if study_group == "chat":
+            # Message is a string that contains a dictionary
+            try:
+                message_details = details_df['message'].apply(pd.Series)
+                # Delete feedback column and isUser column
+                message_details = message_details.drop(columns=['feedback', 'isUser', 'feature_id', 'id', 'followup'])
+                # Concatenate the original DataFrame with the new columns
+                details_df = details_df.drop(columns=['message'])
+                user_questions_over_time = pd.concat(
+                    [user_questions_over_time.drop(columns=['details']), details_df, message_details], axis=1)
+            except KeyError:
+                # No 'message' column found in details_df
+                user_questions_over_time = pd.concat([user_questions_over_time.drop(columns=['details']), details_df],
+                                                     axis=1)
+                # Add 'user_question' column with the value "follow_up"
+                user_questions_over_time.loc[:, "user_question"] = "follow_up"
+        else:
+            try:  # user used some free chat
+                message_details = details_df['message'].apply(pd.Series)
+                # Only keep columns "reasoning" and "text"
+                message_details = message_details[['reasoning', 'text']]
+                # Concatenate the original DataFrame with the new columns
+                details_df = details_df.drop(columns=['message'])
+                # for rows with methods ceterisParibus and featureStatistics, set "feature_id" to "infer_from_question"
+                details_df.loc[details_df['question_id'].isin(
+                    ["ceterisParibus", "featureStatistics"]), "feature_id"] = "infer_from_question"
+                user_questions_over_time = pd.concat(
+                    [user_questions_over_time.drop(columns=['details']), details_df, message_details], axis=1)
+            except KeyError:  # User did not use free chat at all
+                user_questions_over_time = pd.concat(
+                    [user_questions_over_time.drop(columns=['details']), details_df], axis=1)
+                # Add text col with None values
+                user_questions_over_time.loc[:, "text"] = ""
+            # rename question to clicked_question
+            user_questions_over_time.rename(columns={"question": "clicked_question"}, inplace=True)
+
+        # rename user_question to typed_question
+        user_questions_over_time.rename(columns={"user_question": "typed_question"}, inplace=True)
+        # Set 'id' as the index
+        user_questions_over_time.set_index('id', inplace=True)
+        # Replace nan in text col with ""
+        try:
+            user_questions_over_time["text"].fillna("", inplace=True)
+        except KeyError:
+            raise KeyError(
+                "No 'text' column found in user_questions_over_time. Maybe you forgot to change change 'active_users' in pg admin?")
+        return user_questions_over_time
 
 
 def analyse_user_questions(questions_df):
@@ -132,16 +190,52 @@ def analyse_user_questions(questions_df):
 
 
 def main():
+    """merge_prolific_files()
+    quit()"""
     conn = connect_to_db()
     analysis = AnalysisDataHolder(user_df=fetch_data_as_dataframe("SELECT * FROM users", conn),
                                   event_df=fetch_data_as_dataframe("SELECT * FROM events", conn),
                                   user_completed_df=fetch_data_as_dataframe("SELECT * FROM user_completed", conn))
     # if "filter_by_prolific_users" in analysis_steps:
-    filter_by_prolific_users(analysis)
+    filter_by_prolific_users(analysis, prolific_file_name)
     analysis.create_time_columns()
+
+    uuid_list = [
+        "5b20033c-8c81-4fcf-8f98-1b57a0ab2e8f",
+        "e9633076-9982-41cb-9e9d-ccc941ec7487",
+        "5e8881d1-a3ae-49d6-8220-60926a3a8bc6",
+        "64771ca5-17dd-4ac2-b302-1e9341fb3f83",
+        "16a79c62-55f1-4e68-b4a4-b3e86609dad6",
+        "35114667-d73c-4271-9b79-a61ba96f2099",
+        "ea8992e7-4192-4f5e-bd81-92baab08effa",
+        "9402f154-9297-4af6-b890-d25d44f0fa9c",
+        "a09c056a-bfe7-401c-ba33-a776cffb74e7",
+        "9a1d48f8-97d3-4c87-9026-a287fd53ff7f",
+        "d117806b-b981-4eb1-ba45-265146526335",
+        "fcb0b9b7-f6e9-43f1-a9c9-560681f52c89",
+        "9f320cc2-8e2c-445c-af82-5dba8ae665ca",
+        "34da3fab-5da8-4717-9cf3-98fa310398c1",
+        "0036b2c7-7a21-4fd6-bdcf-d2ed542211bd"
+    ]
+
+    print(len(uuid_list))
+
+    # Get prolific ids of the users in uuid_list
+    prolific_ids = analysis.user_df[analysis.user_df["id"].isin(uuid_list)]["prolific_id"].values
+    # print them line by line with a comma after the id and a 1 after the comma
+    for id in prolific_ids:
+        if id in ["64401708880c30ec28b9aef4",
+                      "5f406d28899a9b1a9ddd609a",
+                      "5f653cb18aad310a9ee7c32d",
+                      "57acc170c6bab4000172a42e",
+                      "665a086659c5d96abbd29687",
+                      "65636b8039e7d18bb07ff7b9",
+                      "5e9fd9d1ae42fb18d841f570"]:
+            print(f"{id},1")
 
     print("Found users: ", len(analysis.user_df))
     print("Found events: ", len(analysis.event_df))
+    print(analysis.user_df.groupby("study_group").size())
 
     ### Filtering
     filter_by_broken_variables(analysis)
@@ -152,7 +246,7 @@ def main():
     initial_test_preds_list = []
     learning_test_preds_list = []
     final_test_preds_list = []
-    final_q_feedback_list = []
+    all_q_list = []
     exclude_user_ids = []
     wlb_users = []
     for user_id in analysis.user_df["id"]:
@@ -168,12 +262,13 @@ def main():
             exclude_user_ids.append(user_id)
             continue
 
-        if study_group == "interactive" or study_group == "chat":
-            user_questions_over_time_df = extract_questions(user_events)
+        if study_group != "static":
+            user_questions_over_time_df = extract_questions(user_events, study_group)
             if user_questions_over_time_df is not None:
                 user_questions_over_time_list.append(user_questions_over_time_df)
             else:
-                exclude_user_ids.append(user_id)
+                if "remove_users_that_didnt_ask_questions" in analysis_steps:
+                    exclude_user_ids.append(user_id)
 
         intro_test_preds, preds_learning, final_test_preds, exclude = create_predictions_df(analysis.user_df,
                                                                                             user_events,
@@ -194,8 +289,42 @@ def main():
                 wlb_users.append((user_id, f))
 
         # Get User Final Q. Feedback from interactive group
-        exit_q_df = extract_exit_feedback(analysis.user_df, user_id)
-        final_q_feedback_list.append(exit_q_df)
+        # exit_q_df = extract_exit_feedback(analysis.user_df, user_id)
+
+        all_questionnaires_df = extract_all_feedback(analysis.user_df, user_id)
+        all_q_list.append(all_questionnaires_df)
+
+    # Check how many rows are there where "text" column starts with "Sorry" in user_questions_over_time_list
+    count = 0
+    user_id_set = set()
+    for df in user_questions_over_time_list:
+        try:
+            total_rows = len(df)
+            sorry_rows = df[df["text"].str.startswith("Sorry")]
+            amount = len(sorry_rows)
+            if amount / total_rows > 0.15:
+                count += amount
+                # get user id
+                if amount > 0:
+                    user_id_set.update(sorry_rows["user_id"])
+        except ValueError:
+            print("ValueError occurred in checking 'Sorry' rows.")
+
+    print(f"Amount of questions starting with 'Sorry': {count}")
+    print(f"Amount of users with 'Sorry': {len(user_id_set)}")
+
+    # Get latest "created_at" of users in user_id_set
+    latest_created_at = analysis.user_df[analysis.user_df["id"].isin(user_id_set)]["created_at"].max()
+    # Get the user id of the user with the latest "created_at"
+    latest_user_id = analysis.user_df[analysis.user_df["created_at"] == latest_created_at]["id"].values[0]
+    # Find that event of the user that has "Sorry" in the text
+    for df in user_questions_over_time_list:
+        if latest_user_id in df["user_id"].values:
+            print(df[df["user_id"] == latest_user_id][df["text"].str.startswith("Sorry")])
+            break
+
+    # Remove these users from the analysis
+    exclude_user_ids.extend(list(user_id_set))
 
     # Update analysis dfs and exclude users
     print(f"Users excluded: {len(exclude_user_ids)}")
@@ -204,10 +333,10 @@ def main():
 
     # Save wlb_users to a csv file for manual analysis
     wlb_users_df = pd.DataFrame(wlb_users, columns=["user_id", "feedback"])
-    wlb_users_df.to_csv("data/wlb_users.csv", index=False)
+    wlb_users_df.to_csv(f"wlb_users_{prolific_file_name}.csv", index=False)
     # get wlb user ids and exclude them
     wlb_user_ids = wlb_users_df["user_id"].values
-    analysis.update_dfs(wlb_user_ids)
+    # analysis.update_dfs(wlb_user_ids)
 
     print("Amount of users per study group after first filters:")
     print(analysis.user_df.groupby("study_group").size())
@@ -218,12 +347,9 @@ def main():
     ### Add Additional Columns to analysis.user_df
     # Calculate total score improvement and confidence improvement
     # analysis.user_df["score_improvement"] = analysis.user_df["final_score"] - analysis.user_df["intro_score"]
-    analysis.user_df["confidence_avg_improvement"] = analysis.user_df["final_avg_confidence"] - analysis.user_df[
-        "intro_avg_confidence"]
 
     # Merge final_q_feedback_list to analysis.user_df on user_id
-    analysis.user_df = analysis.user_df.merge(pd.concat(final_q_feedback_list), left_on="id", right_on="user_id",
-                                              how="left")
+    analysis.user_df = analysis.user_df.merge(pd.concat(all_q_list), left_on="id", right_on="user_id", how="left")
 
     initial_test_preds_df = pd.concat(initial_test_preds_list)
     learning_test_preds_df = pd.concat(learning_test_preds_list)
@@ -235,6 +361,8 @@ def main():
     # Update all dfs
     analysis.update_dfs()
 
+    print(analysis.user_df.loc[analysis.user_df['id'] == "5470e036-7300-4de0-bd37-088a0a7816e5"])
+
     assert len(analysis.user_df) == len(analysis.initial_test_preds_df['user_id'].unique())
     assert len(analysis.user_df) == len(analysis.learning_test_preds_df['user_id'].unique())
 
@@ -242,25 +370,46 @@ def main():
     assert len(analysis.user_df) == len(user_accuracy_over_time_df['user_id'].unique())
 
     # Extract questionnaires into columns
-    #analysis.user_df = extract_questionnaires(analysis.user_df)
+    # analysis.user_df = extract_questionnaires(analysis.user_df)
 
-    # Save the dfs to csv
-    folder_path = "data/"
-    """analysis.user_df.to_csv(folder_path + "user_df.csv", index=False)
-    analysis.event_df.to_csv(folder_path + "event_df.csv", index=False)
-    analysis.user_completed_df.to_csv(folder_path + "user_completed_df.csv", index=False)
-    analysis.initial_test_preds_df.to_csv(folder_path + "initial_test_preds_df.csv", index=False)
-    analysis.learning_test_preds_df.to_csv(folder_path + "learning_test_preds_df.csv", index=False)
-    analysis.final_test_preds_df.to_csv(folder_path + "final_test_preds_df.csv", index=False)
-    analysis.questions_over_time_df.to_csv(folder_path + "questions_over_time_df.csv", index=False)
-    user_accuracy_over_time_df.to_csv(folder_path + "user_accuracy_over_time_df.csv", index=False)"""
+    # Remove users with too high ML knowledge (>3)
+    # Turn mL knowledge to int
+    analysis.user_df["ml_knowledge"] = analysis.user_df["ml_knowledge"].astype(int)
+    print(analysis.user_df["ml_knowledge"].value_counts())
+    # Print how many > 3 per study group
+    print(analysis.user_df[analysis.user_df["ml_knowledge"] > 3].groupby("study_group").size())
+
+    if "remove_users_with_high_ml_knowledge" in analysis_steps:
+        users_to_remove = analysis.user_df[analysis.user_df["ml_knowledge"] > 3]["id"].values
+        # Sort user_ids by created_at and save id and created_at to a df
+        # users_to_remove_df = analysis.user_df[analysis.user_df["id"].isin(users_to_remove)][["id", "created_at", "study_group"]]
+        analysis.update_dfs(users_to_remove)
+        # Print ml knowledge categories per study group
+        print(analysis.user_df.groupby(["study_group", "ml_knowledge"]).size())
 
     print("Amount of users per study group after All filters:")
     print(analysis.user_df.groupby("study_group").size())
 
+
+    """# Save the dfs to csv
+    analysis.user_df.to_csv(result_folder_path + "user_df.csv", index=False)
+    analysis.event_df.to_csv(result_folder_path + "event_df.csv", index=False)
+    analysis.user_completed_df.to_csv(result_folder_path + "user_completed_df.csv", index=False)
+    analysis.initial_test_preds_df.to_csv(result_folder_path + "initial_test_preds_df.csv", index=False)
+    analysis.learning_test_preds_df.to_csv(result_folder_path + "learning_test_preds_df.csv", index=False)
+    analysis.final_test_preds_df.to_csv(result_folder_path + "final_test_preds_df.csv", index=False)
+    analysis.questions_over_time_df.to_csv(result_folder_path + "questions_over_time_df.csv", index=False)
+    user_accuracy_over_time_df.to_csv(result_folder_path + "user_accuracy_over_time_df.csv", index=False)"""
+
+
+    # Load final_chat_user_ids.csv
+    final_chat_user_ids = pd.read_csv("final_chat_user_ids.csv")
+    # Filter analysis.user_df by final_chat_user_ids
+    analysis.user_df = analysis.user_df[analysis.user_df["id"].isin(final_chat_user_ids["id"])]
+
     # Get demographics of the users
     user_prolific_ids = analysis.user_df["prolific_id"].values
-    prolific_df = pd.read_csv("prolific_export.csv")
+    prolific_df = pd.read_csv(prolific_file_name)
     prolific_df = prolific_df[prolific_df["Participant id"].isin(user_prolific_ids)]
     # Get Age statistics
     # ignore revoked from analysis for now
@@ -275,68 +424,13 @@ def main():
     # Turn mL knowledge to int
     analysis.user_df["ml_knowledge"] = analysis.user_df["ml_knowledge"].astype(int)
     print(analysis.user_df["ml_knowledge"].value_counts())
+    # Print ml knowledge categories per study group
+    print(analysis.user_df.groupby(["study_group", "ml_knowledge"]).size())
+
     print()
 
     # Get top 10 people based on final score with their prolific id
     # print(analysis.user_df[["prolific_id", "final_score"]].sort_values("final_score", ascending=False).head(10))
-
-    ### LOOK AT ANALYSIS
-    if "plot_question_raking" in analysis_steps:
-        plot_asked_questions_per_user(analysis.questions_over_time_df, analysis)
-
-    def print_correlation_ranking(target_var, group=None):
-        # Make correlation df for user_df with each column against score_improvement
-        if group is not None:
-            correlation_df = analysis.user_df[analysis.user_df["study_group"] == group]
-        correlation_df = correlation_df.corr()
-        correlation_df = correlation_df[target_var].reset_index()
-        correlation_df.columns = ["column", "correlation"]
-        correlation_df = correlation_df.sort_values("correlation", ascending=False)
-        print(f"Correlation ranking for {group}", target_var)
-        print(correlation_df)
-
-    def get_wort_and_best_users():
-        score_name = "final_irt_score"
-        top_5_percent_threshold = analysis.user_df[score_name].quantile(0.85)
-        bottom_5_percent_threshold = analysis.user_df[score_name].quantile(0.15)
-
-        # Filter best users and worst users
-        best_users = analysis.user_df[analysis.user_df["final_score"] >= top_5_percent_threshold]
-        worst_users = analysis.user_df[analysis.user_df["final_score"] <= bottom_5_percent_threshold]
-
-        # Count best and worst users (unique user_ids)
-        best_users_count = len(best_users["user_id"].unique())
-        worst_users_count = len(worst_users["user_id"].unique())
-
-        # Make sure to have same amount of best and worst users
-        if worst_users_count > best_users_count:
-            # Order by final_score and take the worst users
-            worst_users = worst_users.sort_values("final_score", ascending=True)
-            worst_users = worst_users.head(best_users_count)
-        else:
-            best_users = best_users.sort_values("final_score", ascending=False)
-            best_users = best_users.head(worst_users_count)
-        print("Best users: ", len(best_users["user_id"].unique()))
-        print("Worst users: ", len(worst_users["user_id"].unique()))
-        best_users_ids = best_users[["user_id"]]
-        worst_users_ids = worst_users[["user_id"]]
-        return best_users_ids, worst_users_ids
-
-    analysis.questions_over_time_df = analysis.questions_over_time_df.merge(
-        analysis.user_df[["id", "final_score"]],
-        left_on="user_id", right_on="id")
-    best_user_ids, worst_user_ids = get_wort_and_best_users()
-    # Get questions_over_time_df for best and worst users
-    best_users = analysis.questions_over_time_df[
-        analysis.questions_over_time_df["user_id"].isin(best_user_ids["user_id"])]
-    worst_users = analysis.questions_over_time_df[
-        analysis.questions_over_time_df["user_id"].isin(worst_user_ids["user_id"])]
-
-    pm = ProcessMining()
-    pm.create_pm_csv(analysis,
-                     datapoint_count=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                     target_user_ids=best_users,
-                     target_group_name="best")
 
 
 if __name__ == "__main__":

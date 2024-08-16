@@ -168,21 +168,46 @@ def _add_end_time(user_completed_df, prolific_df):
     return non_prolific_user_ids
 
 
-def filter_by_prolific_users(analysis):
+def filter_by_prolific_users(analysis, prolific_file_name):
     # TODO: Include users that are not in prolific export
-    prolific_df = pd.read_csv("prolific_export.csv")
-    include_users_list = ["28389d4b-62ef-411d-a92a-4280cb409cb7",
+    prolific_df = pd.read_csv(prolific_file_name)
+    """include_users_list = ["28389d4b-62ef-411d-a92a-4280cb409cb7",
                           "9c6f2705-0681-4ca8-b56a-d5bc8cb322cb",
                           "45922c7e-d68a-4574-9a53-4794e0139c57",
                           "28389d4b-62ef-411d-a92a-4280cb409cb7",
                           "3715e50e-0a37-4a0e-841c-1b21ba8588f2",
                           "965ce6aa-2ebb-4325-a01a-a06293c9a27a",
                           "1b53a9fe-61f2-4b68-a33e-044f59961928",
-                          "e1420868-2337-4935-a730-c77f8275c845"]
-    #include_users_list = []
+                          "e1420868-2337-4935-a730-c77f8275c845"]"""
+    include_users_list = []
     # Exclude users
     non_prolific_user_ids = _add_end_time(analysis.user_completed_df, prolific_df)
-    exclude_users_list = ["a4e2fba8-6e9f-4001-88d2-f109a1f9acc6", "9a84f941-a140-4d47-8766-01dc4e70993e"]
+    # Fatal user 8d9f18d9-db90-4ce6-ba44-719e242e51bf
+    exclude_users_list = ["a4e2fba8-6e9f-4001-88d2-f109a1f9acc6", "9a84f941-a140-4d47-8766-01dc4e70993e",
+                          "8d9f18d9-db90-4ce6-ba44-719e242e51bf",
+                          "5fab286a-90b7-4eab-93c0-c033e3667a8b",  # From here, because of knowledge too high
+                          "f383429a-10ad-4986-8069-d00ee92865c1",
+                          "0d0cac57-1b99-4437-9d52-bcdd4a8d607e",
+                          "72f2ade2-58ef-4415-a949-bf4864ac8181",
+                          # From here because "Sorry i cannot understand"
+                          'ba51a07b-0d9b-4533-a6f6-0c15ebd12191',
+                          'e7a5c102-8c1a-4d1e-a9e9-1bd4b0356fdf',
+                          'f3ca4b1c-dbcc-455d-a2a5-a3f95dd8d9ae',
+                          '7056ef0d-a408-4a28-b539-c08e5823f8ad',
+                          'b59e936f-311e-40a1-a793-3fed5cd3e878',
+                          'ea960cf7-6cfa-4d43-a48f-d59f8d069b6c',
+                          '1b2551b8-d14b-4ea7-9039-c6b2673eadef',
+                          '7ba157ae-753b-4169-9d2b-7f05c84dc79e',
+                          'c800795b-c050-457d-8af3-29d1e30cf0e0',
+                          '24cf145e-c985-4423-becd-bcb98e1373aa',
+                          '45535fbf-68a3-4432-bea1-75c78271ecc9',
+                          '3c30f681-7215-487c-abfa-61ef56c5b352',
+                          '5b0ff77e-3ad2-4aa7-9a77-83ffae20daf3',
+                          'f8cb2154-037e-4519-b569-e1648f82a8d1',
+                          '61be6d32-5b0c-473c-abcc-bdc768432fd5',
+                          'c87eae3b-359c-4723-8c3b-4a7bb334f01c',
+                          '91dbbedb-9d53-4a93-8cf2-96f3929efac9',
+                          '5cfa78c8-2505-4c3b-b5b1-185b1bf0e0d2']
     non_prolific_user_ids.extend(exclude_users_list)
     non_prolific_user_ids = [user_id for user_id in non_prolific_user_ids if user_id not in include_users_list]
     analysis.update_dfs(non_prolific_user_ids)
@@ -229,14 +254,14 @@ def filter_by_negative_times(analysis):
     remove_user_ids = []
     # Check if there are rows where total_exp_time is negative
     negative_exp_times = analysis.user_df[analysis.user_df["total_exp_time"] < 0][
-        ["event_start_time", "event_end_time"]]
+        ["user_id", "event_start_time", "event_end_time"]]
 
     if not negative_exp_times.empty:
         remove_user_ids.extend(negative_exp_times["user_id"].tolist())
 
     # Check if there are rows where exp_instruction_time is negative
     negative_intruct_times = analysis.user_df[analysis.user_df["exp_instruction_time"] < 0][
-        ["prolific_start_time", "event_start_time"]]
+        ["user_id", "prolific_start_time", "event_start_time"]]
     if not negative_intruct_times.empty:
         remove_user_ids.extend(negative_intruct_times["user_id"].tolist())
 

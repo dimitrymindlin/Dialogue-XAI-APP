@@ -100,12 +100,15 @@ def get_user_id_predictions_over_time_matrix(user_predictions_over_time_df):
     user_predictions_over_time_df['accuracy'] = user_predictions_over_time_df.apply(
         lambda row: 'Correct' if row['prediction'] == row['true_label'] else 'Wrong', axis=1)
 
+    # Ger result_df of user with id 5470e036-7300-4de0-bd37-088a0a7816e5
+    user_5470e036 = user_predictions_over_time_df[user_predictions_over_time_df['user_id'] == '5470e036-7300-4de0-bd37-088a0a7816e5']
+
     # Now pivot the table with 'accuracy' as the values
     result_df = user_predictions_over_time_df.pivot_table(
         index='user_id',
         columns='datapoint_count',
         values='accuracy',
-        aggfunc=lambda x: x  # you can choose to list, or keep the first, or count the occurrences of 'Correct'/'Wrong'
+        aggfunc=lambda x: x
     )
 
     # Flattening the multi-index in columns
@@ -129,8 +132,6 @@ def get_user_id_predictions_over_time_matrix(user_predictions_over_time_df):
     remove_ids = result_df[~mask.all(axis=1)]['user_id']
     print(f"Removed {len(remove_ids)} users with missing or invalid data.")
     remove_ids = remove_ids.tolist()
-    # get df where user_id = 'e1420868-2337-4935-a730-c77f8275c845'
-    dimi_df = result_df[result_df['user_id'].isin(["e1420868-2337-4935-a730-c77f8275c845"])]
     return result_df, remove_ids
 
 

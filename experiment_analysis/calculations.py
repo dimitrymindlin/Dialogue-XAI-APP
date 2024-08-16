@@ -93,7 +93,7 @@ def create_predictions_df(user_df, user_events, exclude_incomplete=False):
                                                               ["datapoint_count", "accuracy"])
 
     if exclude_incomplete:
-        if len(predictions_final_test) != 10 or len(predictions_intro_test) != 10 or len(predictions_learning_test) != 10:
+        if len(predictions_final_test) != 10 or len(predictions_intro_test) != 10 or len(predictions_learning_test) < 10:
             return None, None, None, True
 
     # Calculate scores and confidence

@@ -257,6 +257,8 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
 
     for q_id in id_to_question_mapping.keys():
         q_id = str(q_id)
+        if q_id in ["101", "102"]:
+            continue
         correct_count = total_predictions[q_id]
         incorrect_count = 0
         parsing_error_count = 0
@@ -274,6 +276,10 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
         incorrect_predictions.append(incorrect_count)
         parsing_errors_list.append(parsing_error_count)
         correct_predictions.append(correct_count - incorrect_count - parsing_error_count)
+
+    # Print percentage of correct predictions in total
+    print(f"Percentage of correct predictions: {sum(correct_predictions) / sum(total_predictions.values()) * 100}%")
+
 
     # Plotting the stacked bar plot
     fig, ax = plt.subplots()

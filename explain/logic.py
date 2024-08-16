@@ -4,6 +4,7 @@ This file contains the core logic for facilitating conversations. It orchestrate
 routines for setting up conversations, controlling the state of the conversation, and running
 the functions to get the responses to user inputs.
 """
+import difflib
 import json
 import pickle
 from random import seed as py_random_seed
@@ -770,7 +771,18 @@ class ExplainBot:
             feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
             # remove whitespace between words
             feature_name = feature_name.replace(" ", "")
-            feature_id = feature_list.index(feature_name.lower())
+            try:
+                feature_id = feature_list.index(feature_name.lower())
+            except ValueError:
+                # Get closest match
+                closest_matches = difflib.get_close_matches(feature_name, feature_list, n=1, cutoff=0.5)
+                if closest_matches:
+                    feature_id = feature_list.index(closest_matches[0])
+                else:
+                    feature_id = None
+                    # Optionally handle the case where no close match is found
+                    print(f"No close match found for feature name: {feature_name}")
+
 
         """if user_input is not None:
             try:
