@@ -6,13 +6,10 @@ are things like running an explanation or performing filtering.
 """
 import numpy as np
 from flask import Flask
-from explain.actions.explanation import explain_local_feature_importances, explain_cfe, \
-    get_feature_importance_by_feature_id, explain_cfe_by_given_features, \
+from explain.actions.explanation import explain_local_feature_importances, explain_cfe, explain_cfe_by_given_features, \
     explain_anchor_changeable_attributes_without_effect, explain_feature_statistic, explain_feature_importances_as_plot, \
-    explain_global_feature_importances, explain_ceteris_paribus
+    explain_ceteris_paribus
 from explain.actions.filter import filter_operation
-from explain.actions.important import important_operation
-from explain.actions.interaction_effects import measure_interaction_effects
 from explain.actions.prediction_likelihood import predict_likelihood
 from explain.conversation import Conversation
 from explain.actions.get_action_functions import get_all_action_functions_map
