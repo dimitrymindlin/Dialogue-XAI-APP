@@ -76,7 +76,7 @@ class Explanation:
             try:
                 pkl.dump(self.cache, file)
             except AttributeError:
-                    dill.dump(self.cache, file)
+                dill.dump(self.cache, file)
 
     def _get_from_cache(self, ids: list[int], ids_to_regenerate: list[int] = None):
         if ids_to_regenerate is None:
