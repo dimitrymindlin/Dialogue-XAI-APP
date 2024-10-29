@@ -266,7 +266,7 @@ def get_feature_ranges():
         return response
 
 
-@bp.route("/get_response", methods=['POST'])
+@bp.route("/get_response_clicked", methods=['POST'])
 def get_bot_response():
     """Load the box response."""
     user_id = request.args.get("user_id")
@@ -301,8 +301,8 @@ def get_bot_response():
         return jsonify(message_dict)
 
 
-@bp.route("/get_nl_response", methods=['POST'])
-def get_bot_response_from_nl():
+@bp.route("/get_response_nl", methods=['POST'])
+async def get_bot_response_from_nl():
     """Load the box response."""
     user_id = request.args.get("user_id")
     if user_id is None:
@@ -312,7 +312,7 @@ def get_bot_response_from_nl():
         try:
             data = json.loads(request.data)
             # print(data["message"])
-            response, question_id, feature_id, reasoning = bot_dict[user_id].update_state_new(
+            response, question_id, feature_id, reasoning = await bot_dict[user_id].update_state_from_nl(
                 user_input=data["message"])
             if bot_dict[user_id].use_active_dialogue_manager:
                 followup = bot_dict[user_id].get_suggested_method()
