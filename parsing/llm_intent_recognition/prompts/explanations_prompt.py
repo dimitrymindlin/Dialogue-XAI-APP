@@ -1,5 +1,5 @@
 """
-Prompt A is the prompt to select an XAI or dialogue intent.
+Explanation intent prompt is the prompt to select an XAI or dialogue intent.
 """
 
 whyExplanation_template = """
@@ -345,8 +345,9 @@ def get_system_prompt_condensed_with_history(feature_names=""):
                     - JSON: method: "anchor", feature: None
 
         <<Task>>:\n
-        Decide which method fits best by reasoning over every possible method. 
-        Return a single JSON with the following keys:
+        Decide which method fits best by reasoning over every possible method. If you choose a feature specific method,
+        the feature cannot be None. If the user did not provide a specific feature, the method should be a fitting 
+        general one. Return a single JSON with the following keys:
         
         <<Format Instructions>>:\n
         \n{{format_instructions}}
