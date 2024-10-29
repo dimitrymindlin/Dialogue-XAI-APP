@@ -12,9 +12,9 @@ from data.response_templates.ceteris_paribus_template import cp_categorical_temp
 from explain.actions.utils import gen_parse_op_text
 
 
-def fig_to_base64(fig):
+def save_plot_as_base64(fig):
     """
-    Converts a matplotlib or plotly figure to a base64 string.
+    Converts a matplotlib or plotly figure to a base64 string and stores it in a BytesIO object.
 
     Parameters:
     - fig: A matplotlib or plotly Figure object.
@@ -87,10 +87,6 @@ def explain_local_feature_importances(conversation,
         return top_features_dict, 1
 
 
-def get_fi_follow_up(conversation, data, parse_op, regen, template_manager):
-    pass
-
-
 def explain_global_feature_importances(conversation, as_plot=True):
     global_shap_explainer = conversation.get_var('global_shap').contents
     # get shap explainer
@@ -119,11 +115,7 @@ def explain_global_feature_importances(conversation, as_plot=True):
         plt.tight_layout()
 
         # Save the plot to a BytesIO object
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png')
-        buf.seek(0)
-        image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-        buf.close()
+        image_base64 = save_plot_as_base64(fig)
 
         # Clear the current plot to free memory
         plt.close()
@@ -183,11 +175,7 @@ def explain_feature_importances_as_plot(conversation,
     ax.set_xticklabels(xticks)
 
     # Save the plot to a BytesIO object
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-    buf.close()
+    image_base64 = save_plot_as_base64(fig)
 
     # Clear the current plot to free memory
     plt.close()
@@ -307,7 +295,7 @@ def explain_feature_statistic(conversation,
         feature_name = template_manager.get_feature_display_name_by_name(feature_name)
         # Convert the figure to PNG as a BytesIO object
         if isinstance(explanation, plt.Figure):
-            image_base64 = fig_to_base64(explanation)
+            image_base64 = save_plot_as_base64(explanation)
             # Create the HTML string with the base64 image
             html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
                           f'<span>Distribution of the possible values for <b>{feature_name}</b>.</span>'
@@ -361,7 +349,7 @@ def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name
     fig = ceteris_paribus_exp.get_explanation(data, feature_name)
     fig.show()
     # Convert the figure to PNG as a BytesIO object
-    image_base64 = fig_to_base64(fig)
+    image_base64 = save_plot_as_base64(fig)
     if feature_id in ceteris_paribus_exp.categorical_mapping.keys():
         axis = 'X-axis'
     else:
@@ -374,19 +362,3 @@ def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name
                   f' not be able to change the probability enough.</span>'
 
     return html_string, 1
-
-
-def explain_remaining_explanations(conversation, data, feature_name, instance_type_name, opposite_class, as_text=False):
-    # TODO: Implement only showing the remaining explanations that have not been explained yet.
-
-    explanations_string = "Hello, I am an assistant to help you understand the prediction of the Machine Learning model. You can " \
-                          "ask about <br>" \
-                          "<ul>" \
-                          "<li>the most or least important attributes,</li>, " \
-                          "<li>the strength and influence of each attribute,</li>" \
-                          "<li>which changes would switch the prediction of the model,</li>" \
-                          "<li>which attributes guarantee this prediction,</li>" \
-                          "<li>the distribution of a single feature,</li>" \
-                          "<li>or if the prediction changes by altering a specific feature.</li>" \
-                          "</ul>"
-    # TODO: ...
