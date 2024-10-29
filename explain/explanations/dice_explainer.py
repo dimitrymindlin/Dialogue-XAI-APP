@@ -26,7 +26,8 @@ class TabularDice(Explanation):
                  class_names: dict = None,
                  categorical_mapping: dict = None,
                  background_dataset=None,
-                 final_cfe_amount: int = 5):
+                 final_cfe_amount: int = 5,
+                 features_to_vary="all"):
         """Init.
 
         Arguments:
@@ -52,6 +53,7 @@ class TabularDice(Explanation):
         self.permitted_range_dict = None
         self.background_data = background_dataset
         self.final_cfe_amount = final_cfe_amount
+        self.features_to_vary = features_to_vary
 
         # Format data in dice accepted format
         predictions = self.model.predict(data)
@@ -88,15 +90,13 @@ class TabularDice(Explanation):
 
     def run_explanation(self,
                         data: pd.DataFrame,
-                        desired_class: str = None,
-                        features_to_vary="all"):
+                        desired_class: str = None):
         """Generate tabular dice explanations.
 
         Arguments:
             data: The data to generate explanations for in pandas df.
             desired_class: The desired class of the cfes. If None, will use the default provided
                            at initialization.
-            features_to_vary: Either a string "all" or a list of feature names to vary.
         Returns:
             explanations: The generated cf explanations.
         """
@@ -131,7 +131,7 @@ class TabularDice(Explanation):
                 cur_cfe = self.exp.generate_counterfactuals(current_instance,
                                                             total_CFs=self.num_cfes_per_instance,
                                                             desired_class=desired_class_tmp,
-                                                            features_to_vary=features_to_vary,
+                                                            features_to_vary=self.features_to_vary,
                                                             permitted_range=self.permitted_range_dict)
 
             cfes[d] = cur_cfe
@@ -172,9 +172,25 @@ class TabularDice(Explanation):
                         pass  # feature is numeric and not in categorical mapping
                     except IndexError:
                         print("Index error in DICE explanation encountered...")
-                # round cfe_f if it is float and turn to string to print
-                if isinstance(cfe_f, float):
-                    cfe_f = str(round(cfe_f, self.rounding_precision))
+                # check if cfe_f is a float or string and process accordingly
+                if isinstance(cfe_f, float) or isinstance(cfe_f, str):
+                    # if it's a string and contains a '.', attempt to convert to float
+                    if isinstance(cfe_f, str) and "." in cfe_f:
+                        try:
+                            cfe_f = float(cfe_f)
+                        except ValueError:
+                            pass  # if it fails to convert, leave as string
+
+                    # round if it's a float after conversion
+                    if isinstance(cfe_f, float):
+                        cfe_f = round(cfe_f, self.rounding_precision)
+                        # check if it can be safely converted to int (no decimal places)
+                        if cfe_f.is_integer():
+                            cfe_f = int(cfe_f)
+                    else:
+                        # if it's not a float, just return it as a string
+                        cfe_f = str(cfe_f)
+
                 feature_display_name = feature_display_names_dict[feature]
                 change_string += f"{inc_dec} <b>{feature_display_name}</b> to <b>{cfe_f}</b>"
                 change_string += " and "
