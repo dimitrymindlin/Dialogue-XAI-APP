@@ -1,16 +1,19 @@
 import decimal
 from typing import List
 
+import gin
 import numpy as np
 import pandas as pd
 import copy
 
+@gin.configurable
 class ExperimentHelper:
     def __init__(self, conversation,
                  categorical_mapping,
                  categorical_features,
                  template_manager,
-                 feature_ordering=None):
+                 feature_ordering=None,
+                 actionable_features=None):
         self.conversation = conversation
         self.categorical_mapping = categorical_mapping
         self.categorical_features = categorical_features
@@ -20,6 +23,7 @@ class ExperimentHelper:
         self.current_instance_type = None
         self.instance_counters = {"train": 0, "test": 0, "final_test": 0, "intro_test": 0}
         self.feature_ordering = feature_ordering
+        self.actionable_features = actionable_features
 
     def load_instances(self):
         self._load_data_instances()
@@ -187,7 +191,7 @@ class ExperimentHelper:
         # Turn original intstance into a dataframe
         if not isinstance(original_instance, pd.DataFrame):
             original_instance = pd.DataFrame.from_dict(original_instance["values"], orient="index").transpose()
-        cfes = dice_tabular.run_explanation(original_instance, "opposite", features_to_vary=features_to_vary)
+        cfes = dice_tabular.run_explanation(original_instance, "opposite")
         original_instance_id = original_instance.index[0]
         final_cfs_df = cfes[original_instance_id].cf_examples_list[0].final_cfs_df
         # drop y column
