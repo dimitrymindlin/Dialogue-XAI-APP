@@ -122,7 +122,7 @@ class DiverseInstances:
                                                                                       diverse_instances_pandas_indices,
                                                                                       self.instance_amount,
                                                                                       filter_by_additional_feature=True)
-                elif self.dataset_name == "german":
+                elif self.dataset_name == "german" or "diabetes":
                     diverse_instances_pandas_indices = self.filter_instances_by_class(data,
                                                                                       model,
                                                                                       diverse_instances_pandas_indices,
@@ -144,5 +144,5 @@ class DiverseInstances:
 
         if save_to_cache:
             with open(self.cache_location, 'wb') as file:
-                pkl.dump(diverse_instances_pandas_indices, file)
-        return diverse_instances_pandas_indices
+                pkl.dump(self.diverse_instances, file)
+        return self.diverse_instances
