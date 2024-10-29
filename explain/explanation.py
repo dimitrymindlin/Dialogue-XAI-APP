@@ -385,61 +385,56 @@ class MegaExplainer(Explanation):
 
         return full_print_out, shortened_output
 
-    def get_feature_importances(self,
-                                data: pd.DataFrame,
-                                ids_to_regenerate: list = None,
-                                save_to_cache=False):
+    def get_feature_importances(self, data: pd.DataFrame, ids_to_regenerate: list = None, save_to_cache=False):
         """
         Arguments:
             data: pandas df containing data.
-            ids_to_regenerate: ids of instances to regenerate explanations for even if they're cached
-            filtering_text: text describing the filtering operations for the data the explanations
-                            are run on.
-            save_to_cache: whether to write explanations generated_to_cache. If ids are regenerated and
-                           save_to_cache is set to true, the existing explanations will be overwritten.
+            ids_to_regenerate: ids of instances to regenerate explanations for even if they're cached.
+            save_to_cache: whether to write explanations generated_to_cache.
+                           If ids are regenerated and save_to_cache is set to true,
+                           the existing explanations will be overwritten.
         Returns:
-            summary: a string containing the summary.
+            feature_importances: A dictionary mapping label -> feature name -> list of importances.
+            scores: A dictionary mapping label -> list of scores.
         """
-        # TODO(dimi): Currently only works if data is one instance.
-        # Note that the explanations are returned as MegaExplanation
-        # dataclass instances
+
+        def _extract_feature_importances(explanations):
+            """
+            Extracts feature importances from explanations. The explanations are assumed to be
+            of the form {id: explanation} where explanation is an instance of the Explanation class.
+            """
+            feature_importances = {}
+            for current_id, explanation in explanations.items():
+                label = explanation.label
+                if label not in feature_importances:
+                    feature_importances[label] = {}
+
+                for feature_name, importance in explanation.list_exp:
+                    if feature_name not in feature_importances[label]:
+                        feature_importances[label][feature_name] = []
+                    feature_importances[label][feature_name].append(importance)
+
+            return feature_importances
+
+        def _extract_scores(explanations):
+            scores = {}
+            for current_id, explanation in explanations.items():
+                label = explanation.label
+                if label not in scores:
+                    scores[label] = []
+                scores[label].append(explanation.score)
+
+            return scores
+
         if ids_to_regenerate is None:
             ids_to_regenerate = []
-        ids = list(data.index)
 
-        explanations = self.get_explanations(ids,
-                                             data,
-                                             ids_to_regenerate=ids_to_regenerate,
+        explanations = self.get_explanations(list(data.index), data, ids_to_regenerate=ids_to_regenerate,
                                              save_to_cache=save_to_cache)
 
-        # Keep a dictionary of the different labels being
-        # explained and the associated feature importances.
-        # This dictionary maps label -> feature name -> feature importances
-        # Doing this makes it easy to summarize explanations across different
-        # predicted classes.
-        feature_importances = {}
+        feature_importances = _extract_feature_importances(explanations)
+        scores = _extract_scores(explanations)
 
-        # The same as above except for scores
-        scores = {}
-        for i, current_id in enumerate(ids):
-
-            # store the coefficients of the explanation
-            label = explanations[current_id].label
-            list_exp = explanations[current_id].list_exp
-
-            # Add the label if it is not in the dictionary
-            if label not in feature_importances:
-                feature_importances[label] = {}
-
-            for tup in list_exp:
-                if tup[0] not in feature_importances[label]:
-                    feature_importances[label][tup[0]] = []
-                feature_importances[label][tup[0]].append(tup[1])
-
-            # also retain the scores
-            if label not in scores:
-                scores[label] = []
-            scores[label].append(explanations[ids[i]].score)
         return feature_importances, scores
 
     def summarize_explanations(self,
@@ -487,5 +482,6 @@ class MegaExplainer(Explanation):
         follow_up_questions = []
         for i, sig in enumerate(sig_coefs):
             if i < 3:
-                follow_up_questions.append(f"Do you want to investigate the effect of {sig[0]} on the model's prediction?")
+                follow_up_questions.append(
+                    f"Do you want to investigate the effect of {sig[0]} on the model's prediction?")
         return follow_up_questions
