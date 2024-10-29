@@ -80,13 +80,19 @@ class FeatureStatisticsExplainer:
         """
         # Create a figure and axis object
         fig, ax = plt.subplots(figsize=(10, 6))
+        max_font_size = 20
 
         # Create a bar plot on the axis
         value_counts.plot(kind='bar', ax=ax)
-        ax.set_title(f'Frequency of {feature_name} Categories')
-        ax.set_xlabel('Category')
-        ax.set_ylabel('Frequency')
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+        ax.set_title(f'Frequency of {feature_name} Categories', fontsize=max_font_size)
+        ax.set_xlabel('Category', fontsize=max_font_size-2)
+        ax.set_ylabel('Frequency', fontsize=max_font_size-2)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=max_font_size-4)
+        ax.set_yticklabels(ax.get_yticks(), fontsize=max_font_size-4)
+
+        # Check if all y-ticks end with '.0' and replace the decimal with a comma
+        if all(tick.is_integer() for tick in ax.get_yticks()):
+            ax.set_yticklabels([f"{int(tick):,}" for tick in ax.get_yticks()])
 
         feature_id = self.data.columns.get_loc(feature_name)
         categorical_mapping_for_feature_list = self.categorical_mapping.get(feature_id, None)
@@ -124,21 +130,24 @@ class FeatureStatisticsExplainer:
         Returns:
         - A string with the frequencies, a pandas Series of frequencies, or a matplotlib Figure object.
         """
-        feature_value_frequencies = self.data[feature_name].value_counts()
+        feature_value_frequencies = self.data[feature_name].value_counts().to_dict()
         # Map feature indices to feature names if needed
-        if feature_name in self.categorical_mapping:
-            feature_id = self.data.columns.get_loc(feature_name)
-            feature_value_frequencies.index = self.categorical_mapping[feature_id]
-        feature_value_frequencies.sort_values(ascending=False, inplace=True)
+        feature_id = self.data.columns.get_loc(feature_name)
+
+        if feature_id in self.categorical_mapping:
+            # Replace numerical keys with categorical values
+            feature_value_frequencies = {self.categorical_mapping[feature_id][k]: v for k, v in
+                                         feature_value_frequencies.items()}
+        feature_value_frequencies = pd.Series(feature_value_frequencies).sort_values(ascending=False)
 
         if as_plot:
             return self.get_categorical_frequencies_fig(feature_value_frequencies, feature_name)
 
         if not as_string:
-            return feature_value_frequencies
+            return feature_value_frequencies.to_dict()
 
         result_text = ""
-        for value, frequency in feature_value_frequencies.items():
+        for value, frequency in feature_value_frequencies.to_dict().items():
             result_text += f"The value <b>{value}</b> occurs <b>{frequency}</b> times.<br>"
         return result_text
 
@@ -151,6 +160,7 @@ class FeatureStatisticsExplainer:
 
     def get_all_feature_statistics(self, template_manager, as_string=True):
         feature_stats = {}
+        as_plot = True if not as_string else False
         for feature_name in self.feature_names:
             # Make dict of feature names to feature statistics (min, max, mean)
             if feature_name in self.numerical_features:
@@ -162,7 +172,8 @@ class FeatureStatisticsExplainer:
                                                                           as_string=as_string)
                     feature_stats[feature_name] = {"mean": mean, "min": min_v, "max": max_v}
             else:
-                feature_stats[feature_name] = self.get_categorical_statistics(feature_name, as_plot=True)
+                feature_stats[feature_name] = self.get_categorical_statistics(feature_name, as_plot=as_plot,
+                                                                              as_string=as_string)
         return feature_stats
 
     def explain_numerical_statistics_as_plot(self, feature_data, feature_name):
