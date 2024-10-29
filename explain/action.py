@@ -101,7 +101,7 @@ def run_action_new(conversation: Conversation,
     # Get tmp dataset to perform explanation on (here, single ID will be in tmp_dataset)
     data = conversation.temp_dataset.contents['X']
     regen = conversation.temp_dataset.contents['ids_to_regenerate']
-    feature_name = data.columns[feature_id]
+    feature_name = data.columns[feature_id] if feature_id not in [None, ""] else None
     parse_op = f"ID {instance_id}"
     model_prediction_probas, _ = predict_likelihood(conversation, as_text=False)
     current_prediction_str = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
