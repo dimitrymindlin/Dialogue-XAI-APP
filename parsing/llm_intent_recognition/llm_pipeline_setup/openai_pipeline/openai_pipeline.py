@@ -4,11 +4,12 @@ import pandas as pd
 
 from langchain.memory import ConversationBufferMemory
 from langchain.output_parsers import ResponseSchema, StructuredOutputParser
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_community.chat_models import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain_community.adapters import openai as lc_openai
 
 from openai import OpenAI
-from openai.types.chat.completion_create_params import ResponseFormat
+from openai.types.chat.completion_create_params import ResponseFormat, ResponseFormatJSONObject
 
 import tqdm
 import matplotlib.pyplot as plt
@@ -17,8 +18,7 @@ import os
 from dotenv import load_dotenv
 
 from parsing.llm_intent_recognition.prompts.explanations_prompt import question_to_id_mapping, \
-    openai_system_explanations_prompt, \
-    openai_user_prompt
+    openai_system_explanations_prompt, openai_user_prompt
 from parsing.llm_intent_recognition.prompts.initial_routing_prompt import openai_system_prompt_initial_routing, \
     openai_user_prompt_initial_routing
 
@@ -35,7 +35,7 @@ os.environ["OPENAI_ORGANIZATION"] = os.getenv('OPENAI_ORGANIZATION_ID')
 
 LLM_MODEL = os.getenv('OPENAI_MODEL_NAME')
 client = OpenAI()
-# llm = ChatOpenAI(model=LLM_MODEL, temperature=0.0)
+llm = ChatOpenAI(model=LLM_MODEL, temperature=0.0)
 
 response_schemas = [
     ResponseSchema(name="reasoning",
@@ -78,7 +78,7 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
             {"role": "system", "content": formatted_messages[0].content},
             {"role": "user", "content": formatted_messages[1].content},
         ]
-        response_format = ResponseFormat(type="json_object")
+        response_format = { "type": "json_object" }
 
         # Wrapper to use Langsmith client
         response = lc_openai.chat.completions.create(
@@ -280,7 +280,6 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
     # Print percentage of correct predictions in total
     print(f"Percentage of correct predictions: {sum(correct_predictions) / sum(total_predictions.values()) * 100}%")
 
-
     # Plotting the stacked bar plot
     fig, ax = plt.subplots()
     bar_width = 0.5
@@ -300,6 +299,23 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     plt.show()
+
+
+class LLMBase:
+    def __init__(self):
+        self.memory = ConversationBufferMemory(memory_key="chat_history")
+        self.llm_model = LLM_MODEL  # Assume LLM_MODEL is defined elsewhere
+
+    def llm_call(self, messages):
+        response_format = ResponseFormat(type="json_object")
+        response = lc_openai.chat.completions.create(
+            messages=messages, model=self.llm_model, temperature=0, response_format=response_format
+        )
+        try:
+            content = response.choices[0].message['content']
+        except KeyError:
+            content = response.choices[0].message.content
+        return json.loads(content)
 
 
 if __name__ == "__main__":
