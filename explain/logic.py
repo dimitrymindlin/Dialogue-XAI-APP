@@ -772,7 +772,6 @@ class ExplainBot:
         return final_result
 
     def update_state_new(self,
-                         user_input: str = None,
                          question_id: int = None,
                          feature_id: int = None) -> tuple[str, int, Optional[int]]:
         """The main experiment driver.
@@ -788,43 +787,12 @@ class ExplainBot:
                 """
 
         instance_id = self.current_instance[0]
-
-        question_id, feature_name, reasoning = self.dialogue_manager.update_state(user_input, question_id, feature_id)
-
-        # Get feature_id from feature_name if feature_id
-        if feature_name is not None:
-            feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
-            # remove whitespace between words
-            feature_name = feature_name.replace(" ", "")
-            try:
-                feature_id = feature_list.index(feature_name.lower())
-            except ValueError:
-                # Get closest match
-                closest_matches = difflib.get_close_matches(feature_name, feature_list, n=1, cutoff=0.5)
-                if closest_matches:
-                    feature_id = feature_list.index(closest_matches[0])
-                else:
-                    feature_id = None
-                    # Optionally handle the case where no close match is found
-                    print(f"No close match found for feature name: {feature_name}")
-
-
-        """if user_input is not None:
-            try:
-                question_id, feature_name = self.intent_recognition_model.predict_explanation_method(user_input.strip())
-            except Exception as e:
-                print(
-                    f"Error in intent recognition: {e}... Did you load the model? Check config if LLM intent recognition is defined.")
-            feature_name = feature_name.lower() if feature_name is not None else None
-            # If feature specific, get feature
-            if feature_name is not None:
-                feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
-                feature_id = feature_list.index(feature_name)"""
+        question_id, feature_name, reasoning = self.dialogue_manager.update_state(None, question_id, feature_id)
 
         if question_id is None:
             return '', None, None, reasoning
 
-        if feature_id is not None:
+        if feature_id is not None and feature_id != "":
             feature_id = int(feature_id)
 
         app.logger.info(f'USER INPUT: q_id:{question_id}, f_id:{feature_id}')
@@ -842,6 +810,34 @@ class ExplainBot:
         # final_result = returned_item + f"<>{response_id}"
         final_result = returned_item
         return final_result, question_id, feature_id, reasoning
+
+    async def update_state_from_nl(self, user_input):
+        # 1. Get the question_id and feature_name from the user input
+        feature_name = None
+        feature_id = None
+        if self.use_llm_agent:
+            reasoning, response = await self.agent.answer_user_question(user_input)
+        elif self.use_intent_recognition:
+            # Get the question_id and feature_name from the user input
+            question_id, feature_name, reasoning = self.dialogue_manager.update_state(user_input)
+            if feature_name is not "" and feature_name is not None:
+                feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
+                # remove whitespace between words
+                feature_name = feature_name.replace(" ", "")
+                try:
+                    feature_id = feature_list.index(feature_name.lower())
+                except ValueError:
+                    # Get closest match
+                    closest_matches = difflib.get_close_matches(feature_name, feature_list, n=1, cutoff=0.5)
+                    if closest_matches:
+                        feature_id = feature_list.index(closest_matches[0])
+                    else:
+                        feature_id = None
+                        # Optionally handle the case where no close match is found
+                        print(f"No close match found for feature name: {feature_name}")
+
+        # 2. Update the state
+        return self.update_state_new(question_id, feature_id)
 
     def get_feature_importances_for_current_instance(self):
         mega_explainer = self.conversation.get_var('mega_explainer').contents
