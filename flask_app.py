@@ -11,6 +11,7 @@ import gin
 from flask import jsonify
 
 from explain.logic import ExplainBot
+from llm_agents import db
 
 
 # gunicorn doesn't have command line flags, using a gin file to pass command line args
@@ -341,7 +342,9 @@ async def get_bot_response_from_nl():
 
 app = Flask(__name__)
 app.register_blueprint(bp, url_prefix=args.baseurl)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('PG_VEC_CONNECTION_STRING')
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+db.init_app(app)
 
 if __name__ != '__main__':
     stream_handler = logging.StreamHandler()
