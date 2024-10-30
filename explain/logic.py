@@ -860,12 +860,13 @@ class ExplainBot:
         self.dialogue_manager.reset_state()
         self.dialogue_manager.feature_importances = current_feature_importances
 
-    def get_explanation_report(self):
+    def get_explanation_report(self, as_text=False):
         """Returns the explanation report."""
         instance_id = self.current_instance[0]
         report = compute_explanation_report(self.conversation, instance_id,
                                             instance_type_naming=self.instance_type_naming,
-                                            feature_display_name_mapping=self.get_feature_display_name_dict())
+                                            feature_display_name_mapping=self.get_feature_display_name_dict(),
+                                            as_text=as_text)
         return report
 
     def build_exit_survey_table(self):
