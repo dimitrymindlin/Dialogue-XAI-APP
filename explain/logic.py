@@ -442,7 +442,9 @@ class ExplainBot:
                                    num_features=numeric_f,
                                    class_names=self.conversation.class_names,
                                    categorical_mapping=self.categorical_mapping,
-                                   background_dataset=background_ds_x)
+                                   background_dataset=background_ds_x,
+                                   features_to_vary=self.conversation.get_var(
+                                       "experiment_helper").contents.actionable_features)
         tabular_dice.get_explanations(ids=diverse_instance_ids,
                                       data=test_data)
 
