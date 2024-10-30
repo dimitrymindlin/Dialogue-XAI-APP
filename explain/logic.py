@@ -9,7 +9,7 @@ import json
 import pickle
 from random import seed as py_random_seed
 import secrets
-from typing import List, Tuple, Union, Optional
+from typing import List, Tuple, Optional, Dict, Any
 import re
 
 from jinja2 import Environment, FileSystemLoader
@@ -84,7 +84,8 @@ class ExplainBot:
                  feature_ordering: List[str] = None,
                  use_selection: bool = False,
                  use_intent_recognition: bool = False,
-                 use_active_dialogue_manager: bool = False):
+                 use_active_dialogue_manager: bool = False,
+                 use_llm_agent=False):
         """The init routine.
 
         Arguments:
@@ -149,6 +150,7 @@ class ExplainBot:
         self.use_selection = use_selection
         self.use_intent_recognition = use_intent_recognition
         self.use_active_dialogue_manager = use_active_dialogue_manager
+        self.use_llm_agent = use_llm_agent
 
         # A variable used to help file uploads
         self.manual_var_filename = None
@@ -156,7 +158,7 @@ class ExplainBot:
         self.decoding_model_name = parsing_model_name
 
         # Initialize completion + parsing modules
-
+        self.intent_recognition_model = None
         if self.use_intent_recognition == "openAI":
             self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
         elif self.use_intent_recognition == "t5":
@@ -214,6 +216,12 @@ class ExplainBot:
                                                                     numerical_features,
                                                                     remove_underscores,
                                                                     store_to_conversation=False)
+
+        if self.use_llm_agent:
+            from llm_agents.workflow_agent.simple_workflow_agent import SimpleXAIWorkflowAgent as Agent
+            self.agent = Agent(feature_names=self.feature_ordering,
+                               domain_description=self.conversation.describe.get_dataset_description(),
+                               verbose=True)
 
         # Load Template Manager
         template_manager = TemplateManager(self.conversation,
@@ -292,6 +300,10 @@ class ExplainBot:
         self.current_instance, counter, self.current_instance_type = experiment_helper.get_next_instance(
             instance_type=instance_type,
             return_probability=return_probability)
+        # TODO: Update agent with new instance
+        if self.use_llm_agent:
+            xai_report = self.get_explanation_report(as_text=True)
+            self.agent.initialize_new_datapoint(self.current_instance, xai_report, self.get_current_prediction())
         return self.current_instance, counter
 
     def get_study_group(self):
@@ -366,6 +378,11 @@ class ExplainBot:
             # list(question_pd[question_pd["question_type"] == "feature"][["q_id", "paraphrased"]].values),
         }
         return answer_dict
+
+        except FileNotFoundError:
+            raise Exception(f"File not found: {self.conversation.question_bank_path}")
+        except pd.errors.EmptyDataError:
+            raise Exception("The question bank CSV file is empty or invalid.")
 
     def load_explanations(self,
                           background_ds_x,
