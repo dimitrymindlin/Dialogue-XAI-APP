@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any
+from typing import Dict, Any
 import pickle as pkl
 import gin
 import pandas as pd
@@ -29,7 +29,8 @@ class TestInstances:
                  diverse_instance_ids,
                  actionable_features,
                  max_features_to_vary=2,
-                 cache_location: str = "./cache/test-instances.pkl"):
+                 cache_location: str = "./cache/test-instances.pkl",
+                 instance_amount: int = 10):
         self.data = data
         self.diverse_instance_ids = diverse_instance_ids
         self.cache_location = cache_location
@@ -39,19 +40,19 @@ class TestInstances:
         self.actionable_features = actionable_features
         self.test_instances = load_cache(cache_location)
         self.max_features_to_vary = max_features_to_vary
+        self.instance_amount = instance_amount
 
     def get_random_instance(self):
         return self.data.sample(1)
 
     def get_test_instances(self,
-                           instance_count: int = 10,
                            save_to_cache: bool = True,
                            close_instances: bool = True) -> Dict[str, Any]:
         """
         Generates instances for testing based on the provided dataset.
 
         Parameters:
-            instance_count (int): Number of diverse instances to generate.
+            instance_count (int): Number of test instances to generate.
             save_to_cache (bool): Whether to save the generated instances to cache.
             close_instances (bool): Flag to determine whether to generate close (similar) or random instances.
 
@@ -61,7 +62,7 @@ class TestInstances:
         if self.test_instances:
             return self.test_instances
 
-        test_instances = self._generate_instances(instance_count, close_instances)
+        test_instances = self._generate_instances(self.instance_amount, close_instances)
         self._save_instances_to_cache(test_instances, save_to_cache)
         return test_instances
 
@@ -214,7 +215,11 @@ class TestInstances:
         for _, row in counterfactual_instances.iterrows():
             cf_instance = pd.DataFrame(row).transpose()
             cf_instance = cf_instance.astype(original_instance.dtypes.to_dict())  # Ensure dtype consistency
-            cf_logits = self.model.predict_proba(cf_instance)[0]
+            try:
+                cf_logits = self.model.predict_proba(cf_instance)[0]
+            except ValueError:
+                cf_instance = cf_instance.astype('float64')
+                cf_logits = self.model.predict_proba(cf_instance)[0]
 
             complexity = self._calculate_prediction_task_complexity(original_instance, cf_instance, feature_importances,
                                                                     original_logits, cf_logits)
