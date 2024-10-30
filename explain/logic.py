@@ -34,7 +34,6 @@ from explain.explanations.diverse_instances import DiverseInstances
 from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
-from explain.write_to_log import log_dialogue_input
 # from parsing.llm_intent_recognition.llm_pipeline_setup.ollama_pipeline.ollama_pipeline import LLMSinglePrompt REMOVED FOR PRODUCTION
 
 from parsing.llm_intent_recognition.llm_pipeline_setup.openai_pipeline.openai_pipeline import \
@@ -217,11 +216,11 @@ class ExplainBot:
                                                                     remove_underscores,
                                                                     store_to_conversation=False)
 
-        if self.use_llm_agent:
+        """if self.use_llm_agent:
             from llm_agents.workflow_agent.simple_workflow_agent import SimpleXAIWorkflowAgent as Agent
             self.agent = Agent(feature_names=self.feature_ordering,
                                domain_description=self.conversation.describe.get_dataset_description(),
-                               verbose=True)
+                               verbose=True)"""
 
         # Load Template Manager
         template_manager = TemplateManager(self.conversation,
@@ -623,7 +622,7 @@ class ExplainBot:
         """Performs the system logging."""
         assert isinstance(logging_input, dict), "Logging input must be dict"
         assert "time" not in logging_input, "Time field will be added to logging input"
-        log_dialogue_input(logging_input)
+        # log_dialogue_input(logging_input)
 
     @staticmethod
     def build_logging_info(bot_name: str,
