@@ -2,26 +2,11 @@
 import json
 
 import numpy as np
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder, FunctionTransformer
 import os
-
-
-class DebuggingTransformer(BaseEstimator, TransformerMixin):
-    def __init__(self, column_index):
-        self.column_index = column_index
-
-    def fit(self, X, y=None):
-        return self  # Nothing happens here.
-
-    def transform(self, X):
-        # Assuming X is a NumPy array. If it's a DataFrame, adjust accordingly.
-        column_data = X[:, self.column_index]  # Adjust this if X is not an array.
-        print(f"Unique values in column {self.column_index}: {np.unique(column_data)}")
-        return X  # Return data unchanged.
 
 
 def label_encode_and_save_classes(df, config):
