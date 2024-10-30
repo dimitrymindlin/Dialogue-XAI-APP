@@ -1,5 +1,5 @@
 """
-Prompt B is the prompt to check if the user response can be interpreted as a response to the suggested
+User response prompt is the prompt to check if the user response can be interpreted as a response to the suggested
 method or is otherwise a different question.
 """
 
