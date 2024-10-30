@@ -1,5 +1,5 @@
 # Docker file adapted from this tutorial https://github.com/bennzhang/docker-demo-with-simple-python-app
-FROM python:3.9.7
+FROM python:3.9.20
 
 # Creating Application Source Code Directory
 RUN mkdir -p /usr/src/app
