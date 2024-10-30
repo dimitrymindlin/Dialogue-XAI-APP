@@ -359,25 +359,31 @@ class ExplainBot:
         """Inits a var from manual load."""
         self.manual_var_filename = name.decode("utf-8")
 
-    def get_questions_attributes_featureNames(self):
+    def get_questions_attributes_featureNames(self) -> Dict[str, List[Dict[str, Any]]]:
         """
         Returns the questions and attributes and feature names for the current dataset.
         """
-        question_pd = pd.read_csv(self.conversation.question_bank_path, delimiter=";")
+        try:
+            # Read the question bank CSV file
+            question_pd = pd.read_csv(self.conversation.question_bank_path, delimiter=";")
 
-        # Replace "instance" in questions with instance_type_naming
-        for i, row in question_pd.iterrows():
-            question_pd.at[i, "paraphrased"] = row["paraphrased"].replace("instance", self.instance_type_naming)
+            # Replace "instance" in all 'paraphrased' entries with instance_type_naming
+            question_pd["paraphrased"] = question_pd["paraphrased"].str.replace("instance", self.instance_type_naming)
 
-        answer_dict = {
-            "general_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in
-                                  question_pd[question_pd["question_type"] == "general"].iterrows()],
-            # question_pd[question_pd["question_type"] == "general"][["q_id", "paraphrased"]],
-            "feature_questions": [{'id': row['q_id'], 'question': row['paraphrased']} for _, row in
-                                  question_pd[question_pd["question_type"] == "feature"].iterrows()],
-            # list(question_pd[question_pd["question_type"] == "feature"][["q_id", "paraphrased"]].values),
-        }
-        return answer_dict
+            # Create answer dictionary with general and feature questions
+            answer_dict = {
+                "general_questions": question_pd[question_pd["question_type"] == "general"]
+                                     .loc[:, ['q_id', 'paraphrased']]
+                .rename(columns={'paraphrased': 'question'})
+                .to_dict(orient='records'),
+
+                "feature_questions": question_pd[question_pd["question_type"] == "feature"]
+                                     .loc[:, ['q_id', 'paraphrased']]
+                .rename(columns={'paraphrased': 'question'})
+                .to_dict(orient='records')
+            }
+
+            return answer_dict
 
         except FileNotFoundError:
             raise Exception(f"File not found: {self.conversation.question_bank_path}")
