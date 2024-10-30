@@ -80,14 +80,14 @@ class DialogueManager:
         feature_name = None
         single_reasoning_string = ""
 
-        # Get user Intent (step 1)
+        # (step 1) Get user Intent
         if self.active_mode:
             intent_classification, method_name, feature_name, reasoning_1 = self.intent_recognition_model.interpret_user_answer(
                 self.get_suggested_explanations(),
                 user_input)
             single_reasoning_string = "Step1:" + reasoning_1
 
-            # If the intent is not recognized or the dialogue manager is not active, predict the explanation method
+        # (step 2) If the intent is not recognized or the dialogue manager is not active, predict the explanation method
         if not self.active_mode or intent_classification == "other":
             method_name, feature_name, reasoning_2 = self.intent_recognition_model.predict_explanation_method(
                 user_input)
