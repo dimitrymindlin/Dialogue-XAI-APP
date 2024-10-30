@@ -5,11 +5,11 @@ import pandas as pd
 from langchain.memory import ConversationBufferMemory
 from langchain.output_parsers import ResponseSchema, StructuredOutputParser
 from langchain_community.chat_models import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.adapters import openai as lc_openai
 
 from openai import OpenAI
-from openai.types.chat.completion_create_params import ResponseFormat, ResponseFormatJSONObject
+from openai.types.chat.completion_create_params import ResponseFormat
 
 import tqdm
 import matplotlib.pyplot as plt
