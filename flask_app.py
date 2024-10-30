@@ -344,9 +344,11 @@ app.register_blueprint(bp, url_prefix=args.baseurl)
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
 if __name__ != '__main__':
-    gunicorn_logger = logging.getLogger('gunicorn.error')
-    app.logger.handlers = gunicorn_logger.handlers
-    app.logger.setLevel(gunicorn_logger.level)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
+    app.logger.addHandler(stream_handler)
+    app.logger.setLevel(logging.INFO)
+
 
 if __name__ == "__main__":
     # clean up storage file on restart
