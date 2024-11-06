@@ -55,9 +55,9 @@ class DialogueManager:
         else:
             feature_name = feature
         if explanation == "ceterisParibus":
-            self.ceteris_paribus_features_explained.add(feature)
+            self.ceteris_paribus_features_explained.add(feature_name)
         elif explanation == "featureStatistics":
-            self.feature_statistics_explained.add(feature)
+            self.feature_statistics_explained.add(feature_name)
 
     def update_state(self, user_input, question_id=None, feature_id=None):
         """
