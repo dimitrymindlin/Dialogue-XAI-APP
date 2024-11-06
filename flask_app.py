@@ -283,6 +283,8 @@ def get_bot_response():
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
             response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
+            feature_id = None
+            question_id = None
 
         if bot_dict[user_id].use_active_dialogue_manager:
             followup = bot_dict[user_id].get_suggested_method()
