@@ -189,6 +189,7 @@ def filter_by_prolific_users(analysis, prolific_file_name):
                           "f383429a-10ad-4986-8069-d00ee92865c1",
                           "0d0cac57-1b99-4437-9d52-bcdd4a8d607e",
                           "72f2ade2-58ef-4415-a949-bf4864ac8181",
+                          "10fb2b52-fae7-4fa1-b883-30a5f0810a9e",
                           # From here because "Sorry i cannot understand"
                           'ba51a07b-0d9b-4533-a6f6-0c15ebd12191',
                           'e7a5c102-8c1a-4d1e-a9e9-1bd4b0356fdf',
@@ -205,7 +206,7 @@ def filter_by_prolific_users(analysis, prolific_file_name):
                           '5b0ff77e-3ad2-4aa7-9a77-83ffae20daf3',
                           'f8cb2154-037e-4519-b569-e1648f82a8d1',
                           '61be6d32-5b0c-473c-abcc-bdc768432fd5',
-                          'c87eae3b-359c-4723-8c3b-4a7bb334f01c',
+                          #'c87eae3b-359c-4723-8c3b-4a7bb334f01c',
                           '91dbbedb-9d53-4a93-8cf2-96f3929efac9',
                           '5cfa78c8-2505-4c3b-b5b1-185b1bf0e0d2']
     non_prolific_user_ids.extend(exclude_users_list)
@@ -232,7 +233,7 @@ def filter_by_work_life_balance(analysis, wlb_users):
 def filter_by_missing_ml_kowledge(analysis):
     # Extract ml_knowledge from profile column
     analysis.user_df["ml_knowledge"] = analysis.user_df["profile"].apply(
-        lambda x: int(json.loads(x)["fam_ml_val"]) if json.loads(x)["fam_ml_val"] != '' else None)
+        lambda x: int(json.loads(x)["fam_ml_val"]) if json.loads(x)["fam_ml_val"] not in  ['', "anonymous"] else None)
     analysis.user_df.drop(columns=["profile"], inplace=True)
     # Filter
     if analysis.user_df["ml_knowledge"].isnull().sum() > 0:
