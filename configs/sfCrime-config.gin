@@ -22,6 +22,7 @@ ExplainBot.dataset_index_column = 0
 ExplainBot.target_variable_name = "Crimes"
 ExplainBot.categorical_features = ["PdDistrict", "MonthPeriod", "DayOfWeek", "Month", "NFLGameDay"]
 ExplainBot.numerical_features = ['AvgTemp']
+ExplainBot.ordinary_features = []
 ExplainBot.remove_underscores = True
 ExplainBot.actionable_features = ["PdDistrict", "DayOfWeek", "Month", "NFLGameDay", "AvgTemp"]
 ExplainBot.categorical_mapping_path = "./data/sf_crime/categorical_mapping.json"
@@ -43,9 +44,6 @@ DiverseInstances.instance_amount = 10
 
 # Test Instances
 TestInstances.cache_location = "./cache/sf_crime-test-instances.pkl"
-
-# Global Explanations
-ShapGlobalExplainer.cache_location = "./cache/sf_crime-global.pkl"
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/sf_crime-ceteris-paribus.pkl"
