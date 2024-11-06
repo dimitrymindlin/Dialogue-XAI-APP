@@ -49,6 +49,11 @@ class DialogueManager:
         return None
 
     def mark_as_explained(self, explanation, feature):
+        # get feature name from feature id
+        if isinstance(feature, int):
+            feature_name = self.template_manager.conversation.get_var("dataset").contents["X"].columns[feature]
+        else:
+            feature_name = feature
         if explanation == "ceterisParibus":
             self.ceteris_paribus_features_explained.add(feature)
         elif explanation == "featureStatistics":
