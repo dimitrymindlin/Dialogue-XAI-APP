@@ -232,40 +232,6 @@ def get_proceeding_okay():
     return {"proceeding_okay": proceeding_okay, "message": message}
 
 
-@bp.route("/get_questions", methods=['POST'])
-def get_questions():
-    """Load the questions."""
-    user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    if request.method == "POST":
-        app.logger.info("generating the questions")
-        try:
-            response = bot_dict[user_id].get_questions_attributes_featureNames()
-        except Exception as ext:
-            app.logger.info(f"Traceback getting questions: {traceback.format_exc()}")
-            app.logger.info(f"Exception getting questions: {ext}")
-            response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
-        return response
-
-
-@bp.route("/get_feature_ranges", methods=['POST'])
-def get_feature_ranges():
-    """Load the feature ranges."""
-    user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    if request.method == "POST":
-        app.logger.info("generating the feature ranges")
-        try:
-            response = bot_dict[user_id].get_feature_ranges()
-        except Exception as ext:
-            app.logger.info(f"Traceback getting feature ranges: {traceback.format_exc()}")
-            app.logger.info(f"Exception getting feature ranges: {ext}")
-            response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
-        return response
-
-
 @bp.route("/get_response_clicked", methods=['POST'])
 def get_bot_response():
     """Load the box response."""
