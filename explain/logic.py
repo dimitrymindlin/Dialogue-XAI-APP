@@ -431,11 +431,8 @@ class ExplainBot:
         app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")
 
         # Compute explanations for diverse instances
-        mega_explainer.get_explanations(ids=diverse_instance_ids, data=test_data)
-        message = f"...loaded {len(mega_explainer.cache)} mega explainer explanations from cache!"
-        app.logger.info(message)
 
-        # Load dice explanations
+        ## Load dice explanations
         tabular_dice = TabularDice(model=model,
                                    data=test_data,
                                    num_features=numeric_f,
@@ -447,7 +444,15 @@ class ExplainBot:
         tabular_dice.get_explanations(ids=diverse_instance_ids,
                                       data=test_data)
 
+        # Remove ids without cfes from diverse_instance_ids
+        diverse_instance_ids = [id for id in diverse_instance_ids if id not in tabular_dice.ids_without_cfes]
+
         message = f"...loaded {len(tabular_dice.cache)} dice tabular explanations from cache!"
+        app.logger.info(message)
+
+        ## Feature Importance
+        mega_explainer.get_explanations(ids=diverse_instance_ids, data=test_data)
+        message = f"...loaded {len(mega_explainer.cache)} mega explainer explanations from cache!"
         app.logger.info(message)
 
         # Load anchor explanations

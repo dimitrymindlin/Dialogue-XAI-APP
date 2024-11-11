@@ -54,6 +54,7 @@ class TabularDice(Explanation):
         self.background_data = background_dataset
         self.final_cfe_amount = final_cfe_amount
         self.features_to_vary = features_to_vary
+        self.ids_without_cfes = []
 
         # Format data in dice accepted format
         predictions = self.model.predict(data)
@@ -133,7 +134,9 @@ class TabularDice(Explanation):
                                                             desired_class=desired_class_tmp,
                                                             features_to_vary=self.features_to_vary,
                                                             permitted_range=self.permitted_range_dict)
-
+            if cur_cfe.cf_examples_list[0].final_cfs_df is None:
+                self.ids_without_cfes.append(d)
+                continue
             cfes[d] = cur_cfe
         return cfes
 
