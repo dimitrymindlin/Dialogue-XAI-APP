@@ -195,7 +195,8 @@ class ExperimentHelper:
         original_instance_id = original_instance.index[0]
         final_cfs_df = cfes[original_instance_id].cf_examples_list[0].final_cfs_df
         # drop y column
-        final_cfs_df = final_cfs_df.drop(columns=["y"])
+        if final_cfs_df is not None:
+            final_cfs_df = final_cfs_df.drop(columns=["y"])
         return final_cfs_df
 
     def get_similar_instance(self,
