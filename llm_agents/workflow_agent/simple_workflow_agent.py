@@ -88,7 +88,7 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             xai_explanations=self.xai_explanations,
-            chat_history=self.agent.memory.get_text(),
+            chat_history=self.agent.memory.get_all(),
         )
 
         # Include format instructions
