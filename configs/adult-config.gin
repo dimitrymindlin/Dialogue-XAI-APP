@@ -23,7 +23,7 @@ ExplainBot.actionable_features = ["InvestmentOutcome", "EducationLevel", "Occupa
 ExplainBot.feature_ordering = ['Age', 'EducationLevel', 'MaritalStatus', 'Occupation', 'WeeklyWorkingHours', 'WorkLifeBalance', 'InvestmentOutcome']
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
-ExplainBot.use_llm_agent = False
+ExplainBot.use_llm_agent = True
 
 # Experiment Helper
 ExperimentHelper.actionable_features = ['Age', 'EducationLevel', 'MaritalStatus', 'Occupation', 'WeeklyWorkingHours', 'InvestmentOutcome']
