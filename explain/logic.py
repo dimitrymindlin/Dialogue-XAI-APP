@@ -817,6 +817,7 @@ class ExplainBot:
         feature_id = None
         if self.use_llm_agent:
             reasoning, response = await self.agent.answer_user_question(user_input)
+            return response, None, None, reasoning
         elif self.use_intent_recognition:
             # Get the question_id and feature_name from the user input
             question_id, feature_name, reasoning = self.dialogue_manager.update_state(user_input)
