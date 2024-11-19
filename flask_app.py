@@ -328,6 +328,12 @@ async def get_bot_response_from_nl():
             followup = []
             reasoning = ""
 
+        assert isinstance(response, str)
+        assert isinstance(question_id, int) or question_id is None
+        assert isinstance(feature_id, int) or feature_id is None
+        assert isinstance(followup, list)
+        assert isinstance(reasoning, str)
+
         message_dict = {
             "isUser": False,
             "feedback": True,
@@ -351,7 +357,6 @@ if __name__ != '__main__':
     stream_handler.setLevel(logging.INFO)
     app.logger.addHandler(stream_handler)
     app.logger.setLevel(logging.INFO)
-
 
 if __name__ == "__main__":
     # clean up storage file on restart

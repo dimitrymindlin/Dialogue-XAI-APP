@@ -1,8 +1,6 @@
-import json
-from typing import List, Union
+from llama_index.core import PromptTemplate
 from llama_index.core.llms import ChatMessage
 from llama_index.core.llms.llm import LLM
-from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.agent.openai import OpenAIAgent
 from llama_index.core.workflow import (
     Event,
@@ -18,7 +16,7 @@ from llm_agents.base_agent import XAIBaseAgent
 from llm_agents.query_engine_tools import build_query_engine_tools
 
 from llm_agents.xai_utils import process_xai_explanations, extract_instance_information
-from llm_agents.xai_prompts import get_single_answer_prompt_template
+from llm_agents.xai_prompts import get_single_answer_prompt_template, get_augment_user_question_prompt_template
 from llm_agents.output_parsers import get_analysis_output_parser, get_response_output_parser
 
 
@@ -59,10 +57,15 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
         self.response_format_instructions = self.response_output_parser.get_format_instructions()
 
     # Method to initialize a new datapoint
-    def initialize_new_datapoint(self, instance_information, xai_explanations, predicted_class_name):
-        self.xai_explanations = process_xai_explanations(xai_explanations)
+    def initialize_new_datapoint(self,
+                                 instance_information,
+                                 xai_explanations,
+                                 predicted_class_name,
+                                 opposite_class_name):
+        self.xai_explanations = process_xai_explanations(xai_explanations, predicted_class_name, opposite_class_name)
         self.instance = extract_instance_information(instance_information)
         self.predicted_class_name = predicted_class_name
+        self.opposite_class_name = opposite_class_name
         self.agent.memory.reset()
 
     # Step to handle new user message
@@ -70,7 +73,18 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
     async def new_user_msg(self, ctx: Context, ev: StartEvent) -> PrepEvent:
         # Get user input
         user_input = ev.input
-        user_msg = ChatMessage(role="user", content=user_input)
+        # Augment user message by history to create stand alone message
+        chat_history_text = [(message.role, message.content) for message in self.agent.memory.get_all()]
+        if len(chat_history_text) > 0:
+            augment_prompt = PromptTemplate(get_augment_user_question_prompt_template().format(
+                chat_history="\n".join([f"{role}: {content}" for role, content in chat_history_text]),
+                new_user_input=user_input))
+            augmented_user_input = await self.llm.apredict(augment_prompt)
+            print(f"Augmented user input: {augmented_user_input}")
+        else:
+            augmented_user_input = user_input
+
+        user_msg = ChatMessage(role="user", content=augmented_user_input)
         self.agent.memory.put(user_msg)
         # Clear current reasoning
         await ctx.set("current_reasoning", [])
@@ -80,6 +94,7 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
     @step
     async def answer_question(self, ctx: Context, ev: PrepEvent) -> StopEvent:
         # Get chat history text
+        chat_history_text = [(message.role, message.content) for message in self.agent.memory.get_all()[:-1]]
 
         # Prepare the analysis prompt
         analysis_prompt = get_single_answer_prompt_template().format(
@@ -88,7 +103,7 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             xai_explanations=self.xai_explanations,
-            chat_history=self.agent.memory.get_all(),
+            chat_history=chat_history_text,
         )
 
         # Include format instructions
@@ -111,14 +126,21 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
 
         # Parse the response
         response_content = response.message.content
+
+        # Save response to history
+        response_msg = ChatMessage(role="system", content=response_content)
+        self.agent.memory.put(response_msg)
+
         try:
             response_dict = self.analysis_output_parser.parse(response_content)
             analysis = response_dict['analysis']
             selected_methods = response_dict['selected_methods']
-            response = response_dict['response']
+            response_string = response_dict['response']
         except Exception as e:
-            analysis = "Unable to parse analysis."
-            selected_methods = []
+            response_dict = self.analysis_output_parser.parse(response_content)
+            response_string = response_dict['analysis']
+            analysis = ""
+            selected_methods = ""
 
         # Store the analysis in context
         await ctx.set("analysis", analysis)
@@ -127,7 +149,7 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
         return StopEvent(result={
             "analysis": await ctx.get("analysis", ""),
             "selected_methods": await ctx.get("selected_methods", []),
-            "response": response,
+            "response": response_string,
         })
 
     # Method to answer user question

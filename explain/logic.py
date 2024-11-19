@@ -217,8 +217,11 @@ class ExplainBot:
                                                                     remove_underscores,
                                                                     store_to_conversation=False)
 
-        if self.use_llm_agent:
-            from llm_agents.workflow_agent.simple_workflow_agent import SimpleXAIWorkflowAgent as Agent
+        if use_llm_agent is not False:
+            if self.use_llm_agent == "simple":
+                from llm_agents.workflow_agent.simple_workflow_agent import SimpleXAIWorkflowAgent as Agent
+            elif self.use_llm_agent == "mape_k":
+                from llm_agents.mape_k_approach.mape_k_workflow_agent import MapeKXAIWorkflowAgent as Agent
             self.agent = Agent(feature_names=self.feature_ordering,
                                domain_description=self.conversation.describe.get_dataset_description(),
                                verbose=True)
@@ -303,23 +306,28 @@ class ExplainBot:
         # TODO: Update agent with new instance
         if self.use_llm_agent:
             xai_report = self.get_explanation_report(as_text=True)
-            self.agent.initialize_new_datapoint(self.current_instance, xai_report, self.get_current_prediction())
+            opposite_class_name = self.conversation.class_names[1 - self.get_current_prediction(as_int=True)]
+            self.agent.initialize_new_datapoint(self.current_instance, xai_report, self.get_current_prediction(),
+                                                opposite_class_name=opposite_class_name)
         return self.current_instance, counter
 
     def get_study_group(self):
         return self.study_group
 
-    def get_current_prediction(self):
+    def get_current_prediction(self, as_int=False):
         """
         Returns the current prediction.
         """
         # Can be either [2], then argmax, or [3] then its a string
-        if isinstance(self.current_instance[2], np.ndarray):
-            current_prediction = np.argmax(self.current_instance[2])
-            prediction_string = self.conversation.class_names[current_prediction]
+        if not as_int:
+            if isinstance(self.current_instance[2], np.ndarray):
+                current_prediction = np.argmax(self.current_instance[2])
+                prediction_string = self.conversation.class_names[current_prediction]
+            else:
+                prediction_string = self.current_instance[3]  # This is the prediction string
+            return prediction_string
         else:
-            prediction_string = self.current_instance[3]  # This is the prediction string
-        return prediction_string
+            return np.argmax(self.current_instance[2])
 
     def get_feature_tooltips(self):
         """
