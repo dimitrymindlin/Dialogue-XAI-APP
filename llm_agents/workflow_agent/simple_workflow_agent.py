@@ -63,7 +63,7 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
         self.xai_explanations = process_xai_explanations(xai_explanations)
         self.instance = extract_instance_information(instance_information)
         self.predicted_class_name = predicted_class_name
-        self.agent.memory.clear()
+        self.agent.memory.reset()
 
     # Step to handle new user message
     @step
