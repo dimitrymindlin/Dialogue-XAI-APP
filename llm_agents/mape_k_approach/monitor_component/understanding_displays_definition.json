@@ -1,0 +1,32 @@
+[
+  {
+    "name": "acknowledge",
+    "description": "Acknowledgments are utterances consisting of short phrases such as “ok”, “yes”, “uh-huh”, that signal that the previous utterance was understood without necessarily signaling acceptance. They do not resolve the content of the utterance they address.",
+    "example": "Examples include 'ok', 'yes', 'uh-huh', 'right', 'alright'."
+  },
+  {
+    "name": "signal_understanding",
+    "description": "An utterance that signals understanding explicitly.",
+    "example": "Example: 'I see.'"
+  },
+  {
+    "name": "signal_partial_understanding",
+    "description": "An utterance which explicitly signals partial understanding.",
+    "example": "Example: 'Yeah, kind of.'"
+  },
+  {
+    "name": "signal_non_understanding",
+    "description": "An utterance that explicitly signals that the speaker has not understood the previous utterance.",
+    "example": "Examples: 'I don’t understand', 'What did you say?', 'What do you mean by that?'"
+  },
+  {
+    "name": "completion",
+    "description": "An utterance that shows understanding by finishing or adding to the clause that a speaker is in the middle of constructing.",
+    "example": "Example: Completing someone else's sentence."
+  },
+  {
+    "name": "non_lexical_backchannel",
+    "description": "A vocalized sound that has little or no referential meaning but still verbalizes the listener's attention.",
+    "example": "Examples: 'Whoa', 'Aww', 'Mm-hmm', 'Oh', 'Hmm', 'Um', 'Huh'."
+  }
+]

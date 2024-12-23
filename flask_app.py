@@ -41,7 +41,7 @@ gin.parse_config_file(args.config)
 bot_dict = {}
 
 
-@bp.route('/')
+"""@bp.route('/')
 def home():
     # Load the explanation interface.
     user_id = request.args.get("user_id")
@@ -52,7 +52,7 @@ def home():
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
     objective = bot_dict[user_id].conversation.describe.get_dataset_objective()
-    return render_template("index.html", currentUserId=user_id, datasetObjective=objective)
+    return render_template("index.html", currentUserId=user_id, datasetObjective=objective)"""
 
 
 @bp.route('/init', methods=['GET'])

@@ -1,0 +1,172 @@
+xai_explanations:
+  - explanation_name: "Counterfactuals"
+    description: "Answers questions about how to change the instance to get a different prediction."
+    explanation_steps:
+      - step_name: "Concept"
+        description: >
+          Counterfactual explanations show examples of feature changes that would flip the model prediction. 
+          The counterfactual method tries to find minimal counterfactuals first, only changing one attribute.
+        dependencies: [ ]
+        is_optional: false
+
+      - step_name: "ImpactSingleFeature"
+        description: >
+          Understanding how individual features impact the model prediction. If the counterfactuals do not provide
+          examples with a single feature change, check the ceteris paribus explanation.
+          {{counterfactuals.single_feature_cf}}
+        dependencies:
+          - "Concept"
+        is_optional: false
+
+      - step_name: "ImpactMultipleFeatures"
+        description: >
+          {{counterfactuals.possible_counterfactuals}}
+        dependencies:
+          - "Concept"
+        is_optional: false
+
+      - step_name: "Diagnostic Query"
+        description: >
+          What is the smallest change to flip the prediction?
+        dependencies:
+          - "Impact of Multiple Features"
+        is_optional: true
+
+      - step_name: "Wrong Assumptions"
+        description: >
+          Counterfactuals are not exhaustive, meaning that there might be other ways to flip the prediction.
+        dependencies:
+          - "Impact of Multiple Features"
+        is_optional: true
+
+  - explanation_name: "FeatureImportances"
+    description: "Understanding the importance and influence of features in the model's decision-making."
+    explanation_steps:
+      - step_name: "Concept"
+        description: >
+          Feature importance explanations highlight how individual features influence the model's predictions. Features
+          can contribute toward over 50k or under 50k predictions and have a strong or weak influence. This helps in 
+          identifying which features are most influential in driving the model's decisions. The combination of features
+          and their influences shows the full picture of how the prediction came to be.
+        dependencies: [ ]
+        is_optional: false
+
+      - step_name: "FeaturesInFavourOfOver50k"
+        description: >
+          {{feature_importance.features_in_favour_of_over_50k}}
+        dependencies:
+          - "Concept"
+        is_optional: false
+
+      - step_name: "FeaturesInFavourOfUnder50k"
+        description: >
+          {{feature_importance.features_in_favour_of_under_50k}}
+        dependencies:
+          - "Concept"
+        is_optional: false
+
+      - step_name: "FeatureInfluencesPlot"
+        description: >
+          A plot showing the feature importances and influences on the model's decision-making, blue bars show the
+          contribution towards the model prediction, and red bars show the contribution toward the opposite prediction.
+          The plot only shows the bars without further explanations, so consider explaining additional details if not
+          already provided beforehand. The plot will be places in the message as an image where the palceholder 
+          ##FeatureInfluencesPlot## is located.
+        dependencies:
+          - "Concept"
+        is_optional: false
+
+      - step_name: "Diagnostic Query"
+        description: >
+          What is the most important feature in favor of current prediction?
+        dependencies:
+          - "Most Important Features"
+        is_optional: true
+
+      - step_name: "Wrong Assumptions"
+        description: >
+          Feature importances and influences are correlation based and do not lead to causal statements.
+        dependencies:
+          - "Most Important Features"
+        is_optional: true
+
+  - explanation_name: "FeatureStatistics"
+    description: "An overview of the statistical distribution of features used in the model, such as minimum and maximum
+    values of features, the mean and occurrences of categories."
+    explanation_steps:
+      - step_name: "Concept"
+        description: >
+          The statistical breakdown of features, such as ranges, means, and value distributions, helps understand the dataset
+          and the value each feature can have. This information can highlight data imbalances, possible value ranges, and
+          categorical possible values.
+        dependencies: [ ]
+        is_optional: false
+
+      - step_name: "Feature Statistics"
+        description: >
+          {{feature_statistics.most_important_features_text}}
+        dependencies: [ "Feature Statistics Overview" ]
+        is_optional: false
+
+  - explanation_name: "CeterisParibus"
+    description: "Understanding the model's decision-making by observing how the model's prediction changes when only one
+    feature is changed."
+    explanation_steps:
+      - step_name: "Concept"
+        description: >
+          Ceteris Paribus explanations show how the model's prediction changes when only one feature is changed, while keeping
+          all other features constant. This helps in understanding the impact of individual features on the model's decision-making.
+        dependencies: [ ]
+        is_optional: false
+
+      - step_name: "PossibleClassFlips"
+        description: >
+          {{ceteris_paribus.possible_class_flips}}
+        dependencies:
+          - "Concept"
+        is_optional: false
+
+      - step_name: "ImpossibleClassFlips"
+        description: >
+          {{ceteris_paribus.impossible_class_flips}}
+        dependencies:
+          - "Concept"
+        is_optional: false
+
+      - step_name: "Diagnostic Query"
+        description: >
+          Are there individual features that are so important, they can flip the prediction?
+        dependencies:
+          - "Single Feature Ceteris Paribus"
+        is_optional: true
+
+      - step_name: "Wrong Assumptions"
+        description: >
+          Ceteris Paribus explanations are local and do not provide a global understanding of the model's decision-making.
+        dependencies:
+          - "Single Feature Ceteris Paribus"
+        is_optional: true
+
+  - explanation_name: "ScaffoldingStrategy"
+    description: "A strategy for improving understanding by simplifying, repeating, and eliciting feedback."
+    explanation_steps:
+      - step_name: "Reformulating"
+        description: >
+          Reformulating the explanation in a simpler way.
+        dependencies: [ ]
+        is_optional: true
+
+      - step_name: "Repeating"
+        description: >
+          Repeating the explanation slightly differently to reinforce understanding.
+        dependencies: [ ]
+        is_optional: true
+
+      - step_name: "ElicitingFeedback"
+        description: >
+          Question, prompting the user to restate or summarize the concept or specific parts of the explanation in their own 
+          words to assess their level of understanding and identify areas that may need further clarification. This step
+          requires to check the conversation history and user question to understand the context and ask a relevant question.
+          The question should test the understanding and help to identify the areas that need further clarification.
+        dependencies: [ ]
+        is_optional: true

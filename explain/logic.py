@@ -306,8 +306,12 @@ class ExplainBot:
         # TODO: Update agent with new instance
         if self.use_llm_agent:
             xai_report = self.get_explanation_report(as_text=True)
+            # Get visual explanations
+            visual_exp_dict = {}
+            visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeatures")[0]
             opposite_class_name = self.conversation.class_names[1 - self.get_current_prediction(as_int=True)]
-            self.agent.initialize_new_datapoint(self.current_instance, xai_report, self.get_current_prediction(),
+            self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
+                                                self.get_current_prediction(),
                                                 opposite_class_name=opposite_class_name)
         return self.current_instance, counter
 
@@ -780,7 +784,7 @@ class ExplainBot:
         return final_result
 
     def update_state_new(self,
-                         question_id: int = None,
+                         question_id: str = None,
                          feature_id: int = None) -> tuple[str, int, Optional[int]]:
         """The main experiment driver.
 

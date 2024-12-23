@@ -1,23 +1,88 @@
 # xai_utils.py
 
-def process_xai_explanations(xai_explanations, predicted_class_name, opposite_class_name):
+def process_xai_explanations(xai_explanations, predicted_class_name, opposite_class_name, instance_dict):
     numbered_importances = {}
+    explanation_text_list = []
+    favor_predicted = {}
+    favor_alternative = {}
     feature_importances = xai_explanations["feature_importance"][0]
+    top_feature_against_predicted = next(iter(feature_importances.values()))[0] < 0
+    # copy and make instance_dict keys lower case and remove whitespaces
+    feature_names_to_values = {k.lower().replace(" ", ""): v for k, v in instance_dict.items()}
+
+    for idx, (feature_name, importance) in enumerate(
+            sorted(feature_importances.items(), key=lambda item: abs(item[1][0]), reverse=True)
+    ):
+        feature_rank = idx + 1
+        feature_value_name = feature_names_to_values.get(feature_name.lower().replace(" ", ""), "unknown")
+        importance_percentage = round((importance[0] / sum(abs(val[0]) for val in feature_importances.values())) * 100)
+
+        if importance[0] > 0:
+            favor_predicted[feature_name] = {
+                "importance": importance_percentage,
+                "rank": feature_rank,
+                "description": f"{feature_name} (value: {feature_value_name}) supports the prediction of ‘{predicted_class_name}’ "
+                               f"with an importance of {importance_percentage}%, ranking #{feature_rank} overall."
+            }
+        else:
+            favor_alternative[feature_name] = {
+                "value": feature_value_name,
+                "importance": importance_percentage,
+                "rank": feature_rank,
+                "description": f"{feature_name} (value: {feature_value_name}) supports the alternative class ‘{opposite_class_name}’ "
+                               f"with an importance of {importance_percentage}%, ranking #{feature_rank} overall."
+            }
+
+    xai_explanations[f"feature_importance_in_favor_of_{predicted_class_name}"] = favor_predicted
+    xai_explanations[f"feature_importance_in_favour_of{opposite_class_name}"] = favor_alternative
+
     for idx, (feature_name, importance) in enumerate(feature_importances.items()):
-        new_feature_name = f"Importance Rank {idx + 1}: {feature_name}"
+        # Calculate absolute percentage for clarity
+        total_importance = sum(abs(val[0]) for val in feature_importances.values())
+        importance_percentage = abs(importance[0]) / total_importance * 100
+        importance_percentage = {round(importance_percentage)}
+        # Determine the direction of influence
+        influence_direction = (
+            f"the predicted class (‘{predicted_class_name}’)"
+            if importance[0] > 0 else
+            f"the alternative class (‘{opposite_class_name}’)"
+        )
+
+        # Assign importance_tuple for flexibility in storing raw data and text explanation
         importance_tuple = (
-            importance,
-            f"in favour of {predicted_class_name}" if importance[0] > 0 else f"in favour of {opposite_class_name}")
-        numbered_importances[new_feature_name] = importance_tuple
+            f"{importance_percentage} percent",  # Percentage importance
+            influence_direction  # Influence direction
+        )
+
+        # Start explanation
+        explanation_text = (
+            f"Importance Rank {idx + 1}: {feature_name} strongly influences the prediction "
+            f"toward {influence_direction} with an importance weight of {importance_percentage} percent. "
+            f"In this case, being {feature_value_name} makes the model more "
+            f"likely to predict ‘{opposite_class_name if importance[0] < 0 else predicted_class_name}’. "
+        )
+
+        # Add conditional part for the top feature
+        if idx == 0 and top_feature_against_predicted:
+            explanation_text += (
+                f"While this feature strongly suggests ‘{opposite_class_name}’, the combination of other features "
+                f"outweighs this, leading to the final prediction of ‘{predicted_class_name}’."
+            )
+
+        # Add to explanations
+        numbered_importances[feature_name] = explanation_text
+
     xai_explanations["feature_importance"] = numbered_importances
 
     # Add descriptions to feature importances
-    xai_explanations["feature_importance"]['method_description'] = (
-        "Positive values indicate attributes in favour of the current prediction and negative values against it. "
-        "While the absolute values don't have a clear interpretation, they indicate the difference in the "
-        "weight of the feature in the prediction. Do not name all the features, but the most important ones at first. "
-        "Simplify the statements about feature importances with saying in favour or against the prediction and name the current prediction."
-    )
+    xai_explanations["feature_importance"][
+        "method_description"] = "Positive values indicate attributes supporting the current " \
+                                "prediction, while negative values indicate support for the " \
+                                "alternative class. Focus on describing the most influential " \
+                                "features first, explaining whether they favor or oppose the " \
+                                "current prediction. Always reference the current prediction, " \
+                                "the feature’s specific value, and its influence on the decision."
+
     # Add descriptions to counterfactual explanations
     xai_explanations["counterfactuals"] = {"possible_counterfactuals": xai_explanations["counterfactuals"]}
     xai_explanations["counterfactuals"]['method_description'] = (
@@ -42,6 +107,87 @@ def process_xai_explanations(xai_explanations, predicted_class_name, opposite_cl
         feature_statistics_string += f"{feature_stat}\n"
     xai_explanations["feature_statistics"] = feature_statistics_string
     return xai_explanations
+
+
+def prepare_dynamic_explanations(xai_explanations, predicted_class_name, opposite_class_name, instance_dict):
+    # Helper function to generate formatted feature importance explanations
+    def format_feature_importances(feature_dict, predicted_class_name, is_positive=True):
+        return [
+            {
+                "label": f"Feature: {feature_name}",
+                "description": feature_data["description"],
+                "dependencies": ["Concept"],  # Example dependency for each feature
+                "is_optional": False,
+            }
+            for feature_name, feature_data in feature_dict.items()
+        ]
+
+    # Compute feature importance details
+    favor_predicted = {}
+    favor_alternative = {}
+    feature_importances = xai_explanations["feature_importance"][0]
+    feature_names_to_values = {k.lower().replace(" ", ""): v for k, v in instance_dict.items()}
+
+    for idx, (feature_name, importance) in enumerate(
+        sorted(feature_importances.items(), key=lambda item: abs(item[1][0]), reverse=True)
+    ):
+        feature_rank = idx + 1
+        feature_value_name = feature_names_to_values.get(feature_name.lower().replace(" ", ""), "unknown")
+        importance_percentage = round((importance[0] / sum(abs(val[0]) for val in feature_importances.values())) * 100)
+
+        if importance[0] > 0:
+            favor_predicted[feature_name] = {
+                "importance": importance_percentage,
+                "rank": feature_rank,
+                "description": f"{feature_name} (value: {feature_value_name}) supports the prediction of ‘{predicted_class_name}’ "
+                               f"with an importance of {importance_percentage}%, ranking #{feature_rank} overall."
+            }
+        else:
+            favor_alternative[feature_name] = {
+                "value": feature_value_name,
+                "importance": importance_percentage,
+                "rank": feature_rank,
+                "description": f"{feature_name} (value: {feature_value_name}) supports the alternative class ‘{opposite_class_name}’ "
+                               f"with an importance of {importance_percentage}%, ranking #{feature_rank} overall."
+            }
+
+    # Format dynamic feature importance explanations
+    feature_importance_dynamic = (
+        format_feature_importances(favor_predicted, predicted_class_name, is_positive=True)
+        + format_feature_importances(favor_alternative, opposite_class_name, is_positive=False)
+    )
+
+    # Prepare counterfactual dynamic content
+    counterfactual_dynamic = [
+        {
+            "label": "Possible Counterfactuals",
+            "explanation": xai_explanations["counterfactuals"],
+            "dependencies": ["Concept"],
+            "is_optional": False,
+        }
+    ]
+
+    # Process feature statistics into clean text
+    feature_statistics_string = "\n".join(
+        f"{feature_name}: {stat.replace('<b>', '').replace('</b>', '').replace('<br>', '')}"
+        for feature_name, stat in xai_explanations["feature_statistics"].items()
+    )
+
+    feature_statistics_dynamic = [
+        {
+            "label": "Feature Statistics Overview",
+            "description": feature_statistics_string,
+            "dependencies": [],
+            "is_optional": False,
+        }
+    ]
+
+    # Return structured dynamic content for merging
+    return {
+        "Feature Importance": feature_importance_dynamic,
+        "Counterfactual Plan": counterfactual_dynamic,
+        "Feature Statistics": feature_statistics_dynamic,
+    }
 
 
 def get_xai_explanations_as_goal_notepad(xai_explanations):

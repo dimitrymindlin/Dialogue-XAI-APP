@@ -59,6 +59,17 @@ class UserModel:
             "not explained yet": [item.label for item in self.not_explained_yet]
         }
 
+    def set_model_from_summary(self, summary):
+        """Set the user model from a summary dictionary."""
+        for label in summary["understood"]:
+            self.mark_as_understood(label)
+        for label in summary["misunderstood"]:
+            self.mark_as_misunderstood(label)
+        for label in summary["shown explanation"]:
+            self.mark_as_shown(label)
+        for label in summary["not explained yet"]:
+            self.add_not_explained_yet(label, "No description available.")
+
     def is_understood(self, label):
         """Check if an item identified by its label is marked as understood."""
         return any(item.label == label for item in self.understood)
