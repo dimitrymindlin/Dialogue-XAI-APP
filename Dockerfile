@@ -25,4 +25,4 @@ VOLUME ["/app-data"]
 
 # Running Python Application
 #CMD gunicorn -b :$PORT -c gunicorn.conf.py main:app
-CMD python -m gunicorn --timeout 0 -b :$PORT flask_app:app
+CMD python -m gunicorn --timeout 0 -b 0.0.0.0:$PORT flask_app:app
