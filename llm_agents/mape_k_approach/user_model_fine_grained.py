@@ -25,16 +25,25 @@ console_handler.setFormatter(formatter)
 # Custom Classes inheriting from Pydantic Models
 class ExplanationStep(ExplanationStepModel):
     _state: ExplanationState = PrivateAttr(default=ExplanationState.NOT_YET_EXPLAINED)
+    _explained_content_list: PrivateAttr = PrivateAttr(default=[])
 
-    def update_state(self, new_state: ExplanationState):
+    def update_state(self,
+                     new_state: ExplanationState,
+                     content_piece: str = None) -> None:
         if isinstance(new_state, ExplanationState):
             self._state = new_state
+            if content_piece:
+                self._explained_content_list.append(content_piece)
         else:
             raise ValueError(f"Invalid state: {new_state}")
 
     @property
     def state(self) -> ExplanationState:
         return self._state
+
+    @property
+    def explained_content_list(self) -> List[str]:
+        return self._explained_content_list
 
     def __repr__(self):
         return f"{self.step_name}: {self.description} | State: {self.state.value}"
@@ -63,10 +72,13 @@ class Explanation(NewExplanationModel):
         for explanation in self.explanation_steps:
             explanation.update_state(new_state)
 
-    def update_state(self, step_name: str, new_state: ExplanationState):
+    def update_state(self,
+                     step_name: str,
+                     new_state: ExplanationState,
+                     content_piece: str = None) -> None:
         exp_step = self._get_explanation_step(step_name)
         if exp_step:
-            exp_step.update_state(new_state)
+            exp_step.update_state(new_state, content_piece)
         else:
             logger.warning(f"Explanation step '{step_name}' not found in '{self.explanation_name}'.")
 
@@ -82,26 +94,28 @@ class Explanation(NewExplanationModel):
 
 
 class UserModelFineGrained:
-    def __init__(self):
+    def __init__(self, user_ml_knowledge):
         self.explanations: Dict[str, Explanation] = {}
         self.cognitive_state: Optional[str] = None
+        self.user_ml_knowledge = user_ml_knowledge
 
     def set_cognitive_state(self, cognitive_state: str):
         """Set the cognitive state of the user model."""
         self.cognitive_state = cognitive_state
 
+    def get_user_info(self):
+        """Return the user's cognitive state and ML knowledge as a string"""
+        return f"The user is in a {self.cognitive_state} cognitive state and their ML knowledge is: {self.user_ml_knowledge}"
+
     def add_explanation(self, explanation_name: str, description: str):
-        """Add a new explanation."""
-        if explanation_name not in self.explanations:
-            explanation = Explanation(
-                explanation_name=explanation_name,
-                description=description,
-                explanation_steps=[]  # Updated field name
-            )
-            self.explanations[explanation_name] = explanation
-            logger.info(f"Added explanation '{explanation_name}'.")
-        else:
-            logger.warning(f"Explanation '{explanation_name}' already exists in the model.")
+        """Add a new explanation, overriding if it already exists."""
+        explanation = Explanation(
+            explanation_name=explanation_name,
+            description=description,
+            explanation_steps=[]  # Updated field name
+        )
+        self.explanations[explanation_name] = explanation
+        logger.info(f"Added or updated explanation '{explanation_name}'.")
 
     def add_explanation_step(
             self,
@@ -132,8 +146,11 @@ class UserModelFineGrained:
             return explanation._get_explanation_step(step_name)
         return None
 
-    def update_explanation_step_state(self, exp_name: str, exp_step: str,
-                                      new_state: Union[ExplanationState, str]) -> None:
+    def update_explanation_step_state(self,
+                                      exp_name: str,
+                                      exp_step: str,
+                                      new_state: Union[ExplanationState, str],
+                                      content_piece: str = None) -> None:
         """Update the state of a specific explanation step."""
         # Convert string to ExplanationState if necessary
         if isinstance(new_state, str):
@@ -145,7 +162,7 @@ class UserModelFineGrained:
 
         explanation = self._get_explanation(exp_name)
         if explanation:
-            explanation.update_state(exp_step, new_state)
+            explanation.update_state(exp_step, new_state, content_piece)
         else:
             logger.warning(f"Explanation '{exp_name}' not found in the model.")
 
@@ -160,6 +177,13 @@ class UserModelFineGrained:
         explanation = self._get_explanation(exp_name)
         if explanation:
             explanation.update_state_of_all(ExplanationState.NOT_UNDERSTOOD)
+
+    def reset_explanation_state(self, exp_name):
+        """Get the explanation and reset all steps to "not explained" apart from Concept step"""
+        explanation = self._get_explanation(exp_name)
+        for step in explanation.explanation_steps:
+            if step.step_name != "Concept":
+                step.update_state(ExplanationState.NOT_YET_EXPLAINED)
 
     def set_model_from_summary(self, summary: Dict) -> None:
         """
@@ -239,21 +263,36 @@ class UserModelFineGrained:
             if exp_name in excluded_explanations:
                 continue
             for step in exp_object.explanation_steps:
-                summary[step.state.name][exp_name].append(step.step_name)
+                summary[step.state.name][exp_name].append((step.step_name, step.explained_content_list))
 
         if as_dict:
             # Convert defaultdict to a regular dict with regular nested dicts
             return {state: dict(exps) for state, exps in summary.items()}
 
         # Generate a string representation using list comprehensions and join
-        prompt_lines = "\n".join([
-            f"\nState: {state}\n" +
-            "\n".join([
-                f"  - Explanation: {exp_name}, Explanation Steps: [{', '.join(steps)}]"
-                for exp_name, steps in exps.items()
-            ])
-            for state, exps in summary.items()
-        ])
+        # Initialize an empty list to store all the formatted states
+        formatted_states = []
+
+        # Loop through each state and its explanations in the summary
+        for state, exps in summary.items():
+            # Initialize a list to store the explanations for the current state
+            formatted_explanations = []
+
+            # Loop through each explanation name and its steps
+            for exp_name, steps in exps.items():
+                # Format the steps as "step_name (substep1, substep2, ...)"
+                formatted_steps = ", ".join(
+                    f"{step[0]} ({', '.join(step[1])})" for step in steps
+                )
+                # Create the formatted explanation line
+                formatted_explanations.append(f"  - Explanation: {exp_name}, Explanation Steps: [{formatted_steps}]")
+
+            # Combine the state with its explanations
+            formatted_states.append(f"\nState: {state}\n" + "\n".join(formatted_explanations))
+
+        # Combine all the formatted states into the final prompt string
+        prompt_lines = "\n".join(formatted_states)
+
         return prompt_lines
 
     def get_explanation_plan(self, as_dict: bool = False) -> Union[Dict[str, Dict], str]:
@@ -356,10 +395,23 @@ class UserModelFineGrained:
             str: A string listing the explanations and steps.
         """
         explanations = [
-            f"- Use the step **{choosen_exp.step}** of the explanation **{choosen_exp.explanation_name}**: {self._get_explanation_step(choosen_exp.explanation_name, choosen_exp.step).description}"
+            f"- Use the step **{choosen_exp.step}** of the explanation **{choosen_exp.explanation_name}**: " \
+            f"{self._get_explanation_step(choosen_exp.explanation_name, choosen_exp.step).description}."
             for choosen_exp in explanation_plan
         ]
         return "\n".join(explanations)
+
+    def persist_knowledge(self):
+        # Reset all explanations that are not Concept explanations
+        for state, explanations_dict in self.get_state_summary(as_dict=True).items():
+            if state != "NOT_YET_EXPLAINED":
+                for exp_name in explanations_dict:
+                    self.reset_explanation_state(exp_name)
+
+        # Print user model after reset
+        # TODO: ONLY FOR DEBUGGING.
+        print("PERSISTED KNOWLEDGE:")
+        print(self.get_state_summary())
 
     def __repr__(self):
         return f"User_Model({self.explanations})"
