@@ -7,7 +7,8 @@ from llama_index.core import PromptTemplate
 
 from llm_agents.mape_k_approach.execute_component.execute_prompt import get_execute_prompt_template
 from llm_agents.mape_k_approach.analyze_component.analyze_prompt import get_analyze_prompt_template, AnalyzeResult
-from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt import PlanResultModel, get_plan_prompt_template
+from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import PlanResultModel, \
+    get_plan_prompt_template, ChosenExplanationModel
 from llm_agents.mape_k_approach.monitor_component.icap_modes import ICAPModes
 from llm_agents.mape_k_approach.monitor_component.monitor_prompt import get_monitor_prompt_template, MonitorResultModel
 from llm_agents.mape_k_approach.mape_k_workflow_agent import AugmentResult, \
@@ -409,8 +410,42 @@ def test_analyze_prompt(chat_history, user_message, monitor_result, last_shown_e
 
 
 @pytest.mark.parametrize(
-    "chat_history, user_message, monitor_result, last_shown_explanations, expected_plan",
+    "chat_history, user_message, monitor_result, last_shown_explanations, expected_plan, expected_step",
     [
+        # Case elicit user knowledge about feature importances
+        ([],
+         "Why not over 50k?",
+         ["signal_non_understanding"],
+         [],
+         [{"explanation_name": "FeatureImportances", "step": "Concept"},
+          {"explanation_name": "FeatureImportances", "step": "FeaturesInFavourOfUnder50k"}, ],
+         [{"explanation_name": "FeatureImportances",
+           "step_name": "Concept",
+           "communication_steps": [
+               "Elicit if user knows how ML uses features to make predictions and wait for confirmation.",
+               "Explain that features have different weight."]}]),
+
+        # Case create new explanation plan
+        ([],
+         "What are feature importances?",
+         ["signal_non_understanding"],
+         [],
+         [{"explanation_name": "FeatureImportances", "step": "Concept"}],
+         [{"explanation_name": "FeatureImportances",
+           "step_name": "Concept",
+           "communication_steps": [
+               "Elicit if user knows how ML uses features to make predictions and wait for confirmation.",
+               "Explain that features have different weight."]}]),
+
+        # Case Simple misunderstanding of a single feature
+        (["User: What are feature importances?",
+          "Agent:The model uses different features to make a prediction and assigns importance to each feature."],
+         "Sorry what?",
+         ["signal_non_understanding"],
+         [{"FeatureImportances": "Concept"}],
+         [{"explanation_name": "ScaffoldingStrategy", "step": "Reformulating"}],
+         []),
+
         # Case Concept Explanation
         (["User: Why not over 50k?",
           "Agent: The model predicts 'under 50k' because certain features strongly support this outcome. For instance, "
@@ -428,7 +463,8 @@ def test_analyze_prompt(chat_history, user_message, monitor_result, last_shown_e
           {"Counterfactuals": "ImpactMultipleFeatures"}],
          [{"explanation_name": "Features", "step": "Definition"},
           {"explanation_name": "FeaturesDefinition", "step": "MachineLearningModel"},
-          {"explanation_name": "FeaturesDefinition", "step": "Data"}]),
+          {"explanation_name": "FeaturesDefinition", "step": "Data"}],
+         []),
 
         # Case Simple understanding of counterfactual
         (["User: How can I change the prediction to the opposite class?",
@@ -436,15 +472,8 @@ def test_analyze_prompt(chat_history, user_message, monitor_result, last_shown_e
          "Okay, so investment outcome is important for the prediction.",
          ["signal_understanding"],  # Added monitor_result
          [{"Counterfactuals": "ImpactSingleFeature"}],
-         [{"explanation_name": "Counterfactuals", "step": "ImpactMultipleFeatures"}]),
-
-        # Case Simple misunderstanding of a single feature
-        (["User: What are feature importances?",
-          "Agent:The model uses different features to make a prediction and assigns importance to each feature."],
-         "Sorry what?",
-         ["signal_non_understanding"],
-         [{"FeatureImportances": "Concept"}],
-         [{"explanation_name": "ScaffoldingStrategy", "step": "Reformulating"}]),
+         [{"explanation_name": "Counterfactuals", "step": "ImpactMultipleFeatures"}],
+         []),
 
         # Case Simple misunderstanding of a single feature
         (["User: What is the most important feature?",
@@ -454,10 +483,12 @@ def test_analyze_prompt(chat_history, user_message, monitor_result, last_shown_e
          [{"FeatureImportances": "FeaturesInFavourOfOver50k"}],
          [{"explanation_name": "FeatureImportances", "step": "Concept"},
           {"explanation_name": "FeatureImportances", "step": "FeaturesInFavourOfUnder50k"},
-          {"explanation_name": "ScaffoldingStrategy", "step": "Reformulating"}]),
+          {"explanation_name": "ScaffoldingStrategy", "step": "Reformulating"}],
+         []),
     ]
 )
-def test_plan_prompt(chat_history, user_message, monitor_result, last_shown_explanations, expected_plan):
+def test_plan_prompt(chat_history, user_message, monitor_result, last_shown_explanations, expected_plan,
+                     expected_step):
     for shown_exp in last_shown_explanations:
         if isinstance(shown_exp, str):
             shown_exp = json.loads(shown_exp)
@@ -477,15 +508,17 @@ def test_plan_prompt(chat_history, user_message, monitor_result, last_shown_expl
         user_model=user_model.get_state_summary(as_dict=False),
         user_message=user_message,
         explanation_plan=user_model.get_explanation_plan(as_dict=False),
+        previous_plan=[],
+        last_explanation=[]
     ))
     plan_result = llm.structured_predict(output_cls=PlanResultModel, prompt=reasoning_prompt)
     # If the plan has new explanations, add them to the user model
-    if len(plan_result.next_explanations) > 0:
+    if len(plan_result.explanation_plan) > 0:
         user_model.add_explanations_from_plan_result(plan_result.new_explanations)
 
-    # Extract exp_name and step tuples from next_explanations
+    # Extract exp_name and step tuples from explanation_plan
     next_explanations = []
-    for exp in plan_result.next_explanations:
+    for exp in plan_result.explanation_plan:
         next_explanations.append({"explanation_name": exp.explanation_name, "step": exp.step})
 
     logger.info(f"Plan result: {plan_result}.\n")
@@ -497,55 +530,21 @@ def test_plan_prompt(chat_history, user_message, monitor_result, last_shown_expl
 
 
 @pytest.mark.parametrize(
-    "chat_history, user_message, suggested_plan, monitor_result, shown_explanations",
+    "chat_history, user_message, suggested_plan, suggested_communication_steps, monitor_result, shown_explanations",
     [
-        # Case: Simple understanding of counterfactual
-        (["User: How can I change the prediction to the opposite class?",
-          "Agent: To change the prediction to 'over 50k', you can change the 'Investment Outcome' to 'Major Gain (above 5k$)'."],
-         "Okay, so investment outcome is important for the prediction.",
-         [("Counterfactuals", "ImpactMultipleFeatures")],
-         ["signal_understanding"],
-         [("FeatureImportances", "FeaturesInFavourOfUnder50k")]),
+        # Case: Elicit user knowledge about feature importances
+        ([],
+         "Why not over 50k?",
+         [("FeatureImportances", "Concept"), ("FeatureImportances", "FeaturesInFavourOfUnder50k")],
+         ["Elicit if user knows how ML uses features to make predictions and wait for confirmation.",
+          "Explain the concept of feature importance and its role in model predictions."],
+         ["signal_non_understanding"],
+         []),
 
-        # Case: Explain concept and feature importance
-        (["User: What is the most important feature?",
-          "Agent: The most important feature is Marital Status with an importance of 35 percent. This attribute is in favour of the opposite prediction, which is over 50k."],
-         "If the most important feature is in favour of the other class, why is it still under 50k?",
-         [("ScaffoldingStrategy", "ElicitingFeedback")],
-         ["signal_partial_understanding"],
-         [("FeatureImportances", "Concept"), ("FeatureImportances", "FeaturesInFavourOfUnder50k")]),
-
-        # Case: Automatically suggesting new explanation without user asking
-        (["User: Why not over 50k?",
-          "Agent: The model predicts that this individual is likely to earn under 50k due to several key factors. "
-          "Firstly, their age of 23 and education level of 'Middle School' typically correlate with lower income levels."
-          " Additionally, their occupation as 'Admin' and a weekly working hours of 40, combined with a 'Fair' work-life"
-          " balance and no investment, suggest limited opportunities for higher earnings. These features collectively "
-          "indicate a profile that is more likely to fall below the 50k income threshold."],
-         "I see, thank you.",
-         [('CeterisParibus', 'Concept'), ('CeterisParibus', 'PossibleClassFlips')],
-         ["signal_understanding"],
-         [("FeatureImportances", "FeaturesInFavourOfOver50k"), ("FeatureImportances", "FeaturesInFavourOfUnder50k")]),
-
-        # Case: Explain concept and feature importance
-        (["User: What is the most important feature?",
-          "Agent: The most important feature is Marital Status with an importance of 35 percent. This attribute is in "
-          "favour of the opposite prediction, which is over 50k."],
-         "If the most important feature is in favour of the other class, why is it still under 50k?",
-         [("ScaffoldingStrategy", "Reformulating")],
-         ["signal_partial_understanding"],
-         [("FeatureImportances", "Concept"), ("FeatureImportances", "FeaturesInFavourOfUnder50k")]),
-
-        # Case: Simple misunderstanding of a single feature
-        (["User: What is the most important feature?",
-          "Agent: The most important feature is Marital Status with an importance of 35 percent. This attribute is in favour of the opposite prediction, which is over 50k."],
-         "If the most important feature is in favour of the other class, why is it still under 50k?",
-         [("ScaffoldingStrategy", "Repeating")],
-         ["signal_partial_understanding"],
-         [("FeatureImportances", "FeaturesInFavourOfOver50k")]),
     ]
 )
-def test_execute_prompt(chat_history, user_message, suggested_plan, monitor_result, shown_explanations):
+def test_execute_prompt(chat_history, user_message, suggested_plan, suggested_communication_steps, monitor_result,
+                        shown_explanations):
     for shown_exp in shown_explanations:
         if isinstance(shown_exp, str):
             shown_exp = json.loads(shown_exp)
@@ -556,7 +555,13 @@ def test_execute_prompt(chat_history, user_message, suggested_plan, monitor_resu
             exp_step = shown_exp[exp_name]
         user_model.update_explanation_step_state(exp_name, exp_step, ExplanationState.SHOWN)
 
+    # Turn the suggested plan into a list of ChosenExplanationModel objects
+    suggested_plan = [ChosenExplanationModel(explanation_name=exp_name, step=exp_step) for exp_name, exp_step in
+                      suggested_plan]
+
     suggested_plan_info = user_model.get_string_explanations_from_plan(suggested_plan)
+
+    suggested_communication_step = suggested_communication_steps[0]
 
     execute_prompt = PromptTemplate(get_execute_prompt_template().format(
         domain_description=domain_description,
@@ -567,7 +572,9 @@ def test_execute_prompt(chat_history, user_message, suggested_plan, monitor_resu
         user_model=user_model.get_state_summary(as_dict=False),
         user_message=user_message,
         plan_result=suggested_plan_info,
-        monitor_result=monitor_result,
+        next_exp_content=suggested_communication_step,
+        monitor_display_result=monitor_result,
+        monitor_cognitive_state="active",
     ))
 
     execute_result = llm.structured_predict(ExecuteResult, execute_prompt)
