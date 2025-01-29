@@ -4,7 +4,7 @@ import logging
 import os
 import traceback
 
-from flask import Flask, render_template
+from flask import Flask
 from flask import request, Blueprint
 from flask_cors import CORS
 import gin
@@ -40,7 +40,6 @@ gin.parse_config_file(args.config)
 # Setup the explainbot dict to run multiple bots
 bot_dict = {}
 
-
 """@bp.route('/')
 def home():
     # Load the explanation interface.
@@ -60,11 +59,14 @@ def init():
     """Load the explanation interface."""
     user_id = request.args.get("user_id")
     study_group = request.args.get("study_group")
+    ml_knowledge = request.args.get("ml_knowledge")
     if user_id is None or "":
         user_id = "TEST"
     if study_group is None or "":
         study_group = "interactive"
-    BOT = ExplainBot(study_group)
+    if ml_knowledge is None or "":
+        ml_knowledge = "low"
+    BOT = ExplainBot(study_group, ml_knowledge)
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
 
@@ -84,187 +86,6 @@ def init():
         'user_study_task_description': user_study_task_description
     }
     return result
-
-
-@bp.route('/finish', methods=['DELETE'])
-def finish():
-    """
-    Finish the experiment.
-    """
-    user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    # Remove the bot from the dict
-    try:
-        bot_dict.pop(user_id)
-    except KeyError:
-        print(f"User {user_id} sent finish again, but the Bot was not in the dict.")
-        return "200 OK"
-    print(f"User {user_id} finished the experiment. And the Bot was removed from the dict.")
-    return "200 OK"
-
-
-def get_datapoint(user_id, datapoint_type, return_probability=False):
-    """
-    Get a datapoint from the dataset based on the datapoint type.
-    """
-    if user_id is None:
-        user_id = "TEST"
-    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple(datapoint_type,
-                                                                                               return_probability=return_probability)
-    (instance_id, instance_dict, probas, ml_label, _) = current_instance_with_units
-    instance_dict["id"] = str(instance_id)
-    if return_probability:
-        instance_dict["probabilities"] = probas
-    instance_dict["ml_prediction"] = ml_label
-    return instance_dict
-
-
-@bp.route('/get_train_datapoint', methods=['GET'])
-def get_train_datapoint():
-    """
-    Get a new datapoint from the dataset.
-    """
-    user_id = request.args.get("user_id")
-    user_study_group = bot_dict[user_id].get_study_group()
-    result_dict = get_datapoint(user_id, "train")
-    bot_dict[user_id].reset_dialogue_manager()
-
-    if user_study_group == "interactive":
-        prompt = f"""
-            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{result_dict["ml_prediction"]}</b>. <br>
-            If you have questions about the prediction, select questions from the right and I will answer them.
-            """
-    else:  # chat
-        prompt = f"""
-            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{result_dict["ml_prediction"]}</b>. <br>
-            If you have questions about the prediction, <b>type them</b> in the chat and I will answer them.
-            """
-
-    if bot_dict[user_id].use_active_dialogue_manager:
-        followup = bot_dict[user_id].get_suggested_method()
-    else:
-        followup = []
-    # Create message dict to return ({isUser: false, feedback: false, text: initial_prompt, id: 1000})
-    result_dict["initial_message"] = {
-        "isUser": False,
-        "feedback": False,
-        "text": prompt,
-        "id": 1000,
-        "followup": followup
-        # [{"id": "shapAllFeatures", "question": "Would you like to see the feature contributions?"}]
-    }
-
-    if user_study_group == "static":
-        # Get the explanation report
-        static_report = bot_dict[user_id].get_explanation_report()
-        static_report["instance_type"] = bot_dict[user_id].instance_type_naming
-        result_dict["static_report"] = static_report
-    return result_dict
-
-
-@bp.route('/get_test_datapoint', methods=['GET'])
-def get_test_datapoint():
-    """
-    Get a new datapoint from the dataset.
-    """
-    user_id = request.args.get("user_id")
-    return get_datapoint(user_id, "test")
-
-
-@bp.route('/get_final_test_datapoint', methods=['GET'])
-def get_final_test_datapoint():
-    """
-    Get a final test datapoint from the dataset.
-    """
-    user_id = request.args.get("user_id")
-    return get_datapoint(user_id, "final_test")
-
-
-@bp.route('/get_intro_test_datapoint', methods=['GET'])
-def get_intro_test_datapoint():
-    """
-    Get a final test datapoint from the dataset.
-    """
-    user_id = request.args.get("user_id")
-    return get_datapoint(user_id, "intro_test")
-
-
-@bp.route("/set_user_prediction", methods=['POST'])
-def set_user_prediction():
-    """Set the user prediction."""
-    user_id = request.args.get("user_id")
-    data = json.loads(request.data)
-    user_prediction = data["user_prediction"]
-    if user_id is None:
-        user_id = "TEST"
-    bot = bot_dict[user_id]
-    bot.set_user_prediction(user_prediction)
-    return "200 OK"
-
-
-@bp.route("/get_user_correctness", methods=['GET'])
-def get_user_correctness():
-    user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    bot = bot_dict[user_id]
-    correctness_string = bot.get_user_correctness()
-    response = {"correctness_string": correctness_string}
-    return response
-
-
-@bp.route("/get_proceeding_okay", methods=['GET'])
-def get_proceeding_okay():
-    user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    bot = bot_dict[user_id]
-    proceeding_okay, follow_up_questions, response_text = bot.get_proceeding_okay()
-    # Make it a message dict
-    message = {
-        "isUser": False,
-        "feedback": True,
-        "text": response_text,
-        "id": 1000,
-        "followup": follow_up_questions,
-        "reasoning": "",
-    }
-    return {"proceeding_okay": proceeding_okay, "message": message}
-
-
-@bp.route("/get_questions", methods=['POST'])
-def get_questions():
-    """Load the questions."""
-    user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    if request.method == "POST":
-        app.logger.info("generating the questions")
-        try:
-            response = bot_dict[user_id].get_questions_attributes_featureNames()
-        except Exception as ext:
-            app.logger.info(f"Traceback getting questions: {traceback.format_exc()}")
-            app.logger.info(f"Exception getting questions: {ext}")
-            response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
-        return response
-
-
-@bp.route("/get_feature_ranges", methods=['POST'])
-def get_feature_ranges():
-    """Load the feature ranges."""
-    user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    if request.method == "POST":
-        app.logger.info("generating the feature ranges")
-        try:
-            response = bot_dict[user_id].get_feature_ranges()
-        except Exception as ext:
-            app.logger.info(f"Traceback getting feature ranges: {traceback.format_exc()}")
-            app.logger.info(f"Exception getting feature ranges: {ext}")
-            response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
-        return response
 
 
 @bp.route("/get_response_clicked", methods=['POST'])
@@ -344,6 +165,152 @@ async def get_bot_response_from_nl():
             "reasoning": reasoning
         }
         return jsonify(message_dict)
+
+
+def get_datapoint(user_id, datapoint_type, return_probability=False):
+    """
+    Get a datapoint from the dataset based on the datapoint type.
+    """
+    if user_id is None:
+        user_id = "TEST"
+    instance = bot_dict[user_id].get_next_instance_triple(datapoint_type,
+                                                          return_probability=return_probability)
+
+    instance_dict = instance.get_datapoint_as_dict_for_frontend()
+    return instance_dict
+
+
+@bp.route('/get_train_datapoint', methods=['GET'])
+def get_train_datapoint():
+    """
+    Get a new datapoint from the dataset.
+    """
+    user_id = request.args.get("user_id")
+    user_study_group = bot_dict[user_id].get_study_group()
+    result_dict = get_datapoint(user_id, "train")
+    # bot_dict[user_id].reset_dialogue_manager()
+
+    if user_study_group == "interactive":
+        prompt = f"""
+            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{result_dict["ml_prediction"]}</b>. <br>
+            If you have questions about the prediction, select questions from the right and I will answer them.
+            """
+    else:  # chat
+        prompt = f"""
+            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{result_dict["ml_prediction"]}</b>. <br>
+            If you have questions about the prediction, <b>type them</b> in the chat and I will answer them.
+            """
+
+    if bot_dict[user_id].use_active_dialogue_manager:
+        followup = bot_dict[user_id].get_suggested_method()
+    else:
+        followup = []
+    # Create message dict to return ({isUser: false, feedback: false, text: initial_prompt, id: 1000})
+    result_dict["initial_message"] = {
+        "isUser": False,
+        "feedback": False,
+        "text": prompt,
+        "id": 1000,
+        "followup": followup
+        # [{"id": "shapAllFeatures", "question": "Would you like to see the feature contributions?"}]
+    }
+
+    if user_study_group == "static":
+        # Get the explanation report
+        static_report = bot_dict[user_id].get_explanation_report()
+        static_report["instance_type"] = bot_dict[user_id].instance_type_naming
+        result_dict["static_report"] = static_report
+    return result_dict
+
+
+@bp.route('/get_test_datapoint', methods=['GET'])
+def get_test_datapoint():
+    """
+    Get a new datapoint from the dataset.
+    """
+    user_id = request.args.get("user_id")
+    return get_datapoint(user_id, "test")
+
+
+@bp.route('/get_final_test_datapoint', methods=['GET'])
+def get_final_test_datapoint():
+    """
+    Get a final test datapoint from the dataset.
+    """
+    user_id = request.args.get("user_id")
+    return get_datapoint(user_id, "final_test")
+
+
+@bp.route('/get_intro_test_datapoint', methods=['GET'])
+def get_intro_test_datapoint():
+    """
+    Get a final test datapoint from the dataset.
+    """
+    user_id = request.args.get("user_id")
+    datapoint = get_datapoint(user_id, "intro_test")
+
+    return datapoint
+
+
+@bp.route("/set_user_prediction", methods=['POST'])
+def set_user_prediction():
+    """Set the user prediction."""
+    user_id = request.args.get("user_id")
+    data = json.loads(request.data)
+    user_prediction = data["user_prediction"]
+    if user_id is None:
+        user_id = "TEST"
+    bot = bot_dict[user_id]
+    bot.set_user_prediction(user_prediction)
+    return "200 OK"
+
+
+@bp.route("/get_user_correctness", methods=['GET'])
+def get_user_correctness():
+    user_id = request.args.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
+    bot = bot_dict[user_id]
+    correctness_string = bot.get_user_correctness()
+    response = {"correctness_string": correctness_string}
+    return response
+
+
+@bp.route("/get_proceeding_okay", methods=['GET'])
+def get_proceeding_okay():
+    user_id = request.args.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
+    bot = bot_dict[user_id]
+    proceeding_okay, follow_up_questions, response_text = bot.get_proceeding_okay()
+    # Make it a message dict
+    message = {
+        "isUser": False,
+        "feedback": True,
+        "text": response_text,
+        "id": 1000,
+        "followup": follow_up_questions,
+        "reasoning": "",
+    }
+    return {"proceeding_okay": proceeding_okay, "message": message}
+
+
+@bp.route('/finish', methods=['DELETE'])
+def finish():
+    """
+    Finish the experiment.
+    """
+    user_id = request.args.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
+    # Remove the bot from the dict
+    try:
+        bot_dict.pop(user_id)
+    except KeyError:
+        print(f"User {user_id} sent finish again, but the Bot was not in the dict.")
+        return "200 OK"
+    print(f"User {user_id} finished the experiment. And the Bot was removed from the dict.")
+    return "200 OK"
 
 
 app = Flask(__name__)
