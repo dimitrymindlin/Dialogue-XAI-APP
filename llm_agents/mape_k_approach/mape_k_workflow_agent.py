@@ -23,14 +23,16 @@ from llm_agents.explanation_state import ExplanationState
 from llm_agents.mape_k_approach.execute_component.execute_prompt import get_execute_prompt_template, ExecuteResult
 from llm_agents.mape_k_approach.analyze_component.analyze_prompt import get_analyze_prompt_template, AnalyzeResult
 from llm_agents.mape_k_approach.monitor_component.icap_modes import ICAPModes
-from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt import get_plan_prompt_template, PlanResultModel, \
-    ChosenExplanationModel
+from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import get_plan_prompt_template, \
+    PlanResultModel, \
+    ChosenExplanationModel, ExplanationTarget
 from llm_agents.mape_k_approach.monitor_component.monitor_prompt import get_monitor_prompt_template, MonitorResultModel
 from llm_agents.mape_k_approach.monitor_component.understanding_displays import UnderstandingDisplays
 from llm_agents.mape_k_approach.user_model_fine_grained import UserModelFineGrained as UserModel
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 
-from llm_agents.xai_utils import extract_instance_information
+from llama_index.core.workflow.retry_policy import ConstantDelayRetryPolicy
+
 import logging
 
 load_dotenv()
@@ -82,7 +84,8 @@ async def write_log_to_csv(ctx: Context, user_model_string):
     monitor_row = monitor.reasoning + "  \n->\n (" + str(
         monitor.understanding_displays) + ", " + monitor.mode_of_engagement + ")"
 
-    plan_row = plan.reasoning + " \n->\n " + str([(exp.explanation_name, exp.step) for exp in plan.next_explanations])
+    plan_row = plan.reasoning + " \n->\n " + str([(exp.explanation_name, exp.step) for exp in plan.explanation_plan]) + \
+               " \n->\n " + str(plan.next_explanation)
 
     row = [
         user_message,
@@ -110,20 +113,6 @@ console_handler.setFormatter(logging.Formatter(fmt="%(levelname)s - %(message)s"
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 logger.setLevel(logging.INFO)
-
-
-def turn_xai_explanations_to_notepad(xai_explanations):
-    pass
-
-
-explanation_plan = ["TopFeatureImportance",
-                    "FeatureInfluences",
-                    "CeterisParibus most important feature",
-                    "CeterisParibus second most important feature",
-                    "Counterfactuals",
-                    "Anchors",
-                    "FeatureStatistics of top feature",
-                    "FeatureStatistics of second top feature", ]
 
 
 # Define custom events
@@ -154,6 +143,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             llm: LLM = None,
             feature_names="",
             domain_description="",
+            user_ml_knowledge="",
             **kwargs
     ):
         super().__init__(timeout=100.0, **kwargs)
@@ -171,10 +161,11 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         )
 
         # Mape K specific setup user understanding notepad
-        self.user_model = UserModel()
+        self.user_model = UserModel(user_ml_knowledge) # TODO: Use the knowlede!!!
         self.populator = None
         # Chat history
         self.chat_history = ""
+        self.explanation_plan = None
         self.last_shown_explanations = []  # save tuples of explanation and step
         self.visual_explanations_dict = None
 
@@ -214,8 +205,15 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         self.visual_explanations_dict = xai_visual_explanations
         self.last_shown_explanations = []
 
+    def complete_explanation_step(self, explanation_name, step_name):
+        # Delete this step from the explanation plan
+        for exp in self.explanation_plan:
+            if exp.explanation_name == explanation_name and exp.step == step_name:
+                self.explanation_plan.remove(exp)
+                break
+
     # Step to handle new user message
-    @step
+    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=2))
     async def new_user_msg(self, ctx: Context, ev: StartEvent) -> PrepEvent:
         # Get user input
         user_input = ev.input
@@ -236,7 +234,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         return PrepEvent()
 
     ### Monitor Step:  Interpret data from sensors, Monitoring low-level understanding, Interpreting user’s cognitive state
-    @step
+    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=2))
     async def monitor(self, ctx: Context, ev: PrepEvent) -> MonitorDoneEvent:
         user_message = await ctx.get("user_message")
 
@@ -254,11 +252,11 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         return MonitorDoneEvent()
 
     ### Analyze Step: Assessing user’s cognitive state in explanation context, updating level of understanding, verifying expectations
-    @step()
+    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=2))
     async def analyze(self, ctx: Context, ev: MonitorDoneEvent) -> AnalyzeDoneEvent:
         # Skip analyze step if this is the first message
-        if self.chat_history == "":
-            return AnalyzeDoneEvent()
+        """if self.chat_history == "":
+            return AnalyzeDoneEvent()"""
 
         # Get user message
         user_message = await ctx.get("user_message")
@@ -285,6 +283,8 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         analyze_result = await self.llm.astructured_predict(output_cls=AnalyzeResult, prompt=analyze_prompt)
         logger.info(f"Analyze result: {analyze_result}.\n")
 
+        # UPDATE USER MODEL
+
         # Get model changes and update user model
         for change_entry in analyze_result.model_changes:
             if isinstance(change_entry, tuple):
@@ -301,6 +301,9 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
                 raise ValueError(f"Invalid change entry: {change_entry}")
             self.user_model.update_explanation_step_state(exp, step, change)
 
+        # Set cognitive state in user model
+        self.user_model.cognitive_state = monitor_result.mode_of_engagement
+
         await ctx.set("analyze_result", analyze_result)
 
         # Update user model
@@ -308,13 +311,14 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         return AnalyzeDoneEvent()
 
     ### Plan Step: General adaptation plans • Choosing explanation strategy and moves
-    @step()
+    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=2))
     async def plan(self, ctx: Context, ev: AnalyzeDoneEvent) -> PlanDoneEvent:
         # Get user message
         user_message = await ctx.get("user_message")
 
         monitor_result: MonitorResultModel = await ctx.get("monitor_result")
 
+        las_exp = self.last_shown_explanations[-1] if len(self.last_shown_explanations) > 0 else None
         # Plan the next steps
         plan_prompt = PromptTemplate(get_plan_prompt_template().format(
             domain_description=self.domain_description,
@@ -326,20 +330,26 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             chat_history=self.chat_history,
             user_model=self.user_model.get_state_summary(as_dict=False),
             user_message=user_message,
-            explanation_plan=self.user_model.get_explanation_plan(as_dict=False)
+            explanation_plan=self.user_model.get_explanation_plan(as_dict=False),
+            previous_plan=self.explanation_plan,
+            last_explanation=las_exp
         ))
 
         plan_result = await self.llm.astructured_predict(PlanResultModel, plan_prompt)
-        # If the plan has new explanations, add them to the user model
-        if len(plan_result.new_explanations) > 0:
-            self.user_model.add_explanations_from_plan_result(plan_result.new_explanations)
+
+        # Update Explanation Plan
+        if len(plan_result.explanation_plan) > 0:
+            self.explanation_plan = plan_result.explanation_plan
+
+        if plan_result.next_explanation is not None:
+            self.user_model.add_explanations_from_plan_result(plan_result.next_explanation)
 
         logger.info(f"Plan result: {plan_result}.\n")
         await ctx.set("plan_result", plan_result)
         return PlanDoneEvent()
 
     ### Execute Step: Determining realization of explanation moves, Performing selected action
-    @step()
+    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=2))
     async def execute(self, ctx: Context, ev: PlanDoneEvent) -> StopEvent:
         def replace_plot_placeholders(execute_result):
             """
@@ -392,11 +402,14 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             raise ValueError("Plan result is None.")
 
         # Check the types of elements in the list
-        if not all(isinstance(exp, ChosenExplanationModel) for exp in plan_result.next_explanations):
+        if not all(isinstance(exp, ChosenExplanationModel) for exp in plan_result.explanation_plan):
             raise ValueError(
                 f"Invalid plan result: Expected a list of ChosenExplanationModel, got {type(plan_result.next_explanations)}.")
 
-        xai_explanations_from_plan = self.user_model.get_string_explanations_from_plan(plan_result.next_explanations)
+        explanation_target: ExplanationTarget = plan_result.next_explanation
+        next_explanation = explanation_target.communication_goals[0]
+
+        xai_explanations_from_plan = self.user_model.get_string_explanations_from_plan(plan_result.explanation_plan)
         monitor_result: MonitorResultModel = await ctx.get("monitor_result")
 
         # Execute the plan
@@ -409,6 +422,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             user_model=self.user_model.get_state_summary(as_dict=False),
             user_message=user_message,
             plan_result=xai_explanations_from_plan,
+            next_exp_content=next_explanation.goal,
             monitor_display_result=monitor_result.understanding_displays,
             monitor_cognitive_state=monitor_result.mode_of_engagement,
         ))
@@ -420,14 +434,29 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         # Check if result has placeholders and replace them
         replace_plot_placeholders(execute_result)
 
-        # Get explanation from plan and update user model
+        # Update Explanandum state and User Model
+        # 1. Update user model
+        exp = explanation_target.explanation_name
+        exp_step = explanation_target.step_name
+        exp_step_content = next_explanation.goal
+        extended_exp_step_content = exp_step_content + "->" + execute_result.summary_sentence
+        self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.SHOWN.value, extended_exp_step_content)
+
+        # 2. Update current explanation and explanation plan
+        explanation_target.communication_goals.pop(0)
+        if len(explanation_target.communication_goals) == 0:
+            self.complete_explanation_step(exp, exp_step)
+
+        self.last_shown_explanations.append((exp, exp_step, extended_exp_step_content))
+
+        """# Get explanation from plan and update user model
         self.last_shown_explanations = []  # Reset and fill with new plan
         suggested_explanations = plan_result.next_explanations
         for suggestion in suggested_explanations:
             exp = suggestion.explanation_name
             exp_step = suggestion.step
             self.last_shown_explanations.append((exp, exp_step))
-            self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.SHOWN.value)
+            self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.SHOWN.value)"""
 
         # Log new user model
         logger.info(f"User model after execute: {self.user_model.get_state_summary(as_dict=False)}.\n")
