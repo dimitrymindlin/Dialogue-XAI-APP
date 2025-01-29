@@ -73,9 +73,9 @@ class XAIAgent(XAIBaseAgent):
             ]
         )
 
-    def initialize_new_datapoint(self, instance_information, xai_explanations, predicted_class_name):
+    def initialize_new_datapoint(self, instance_information: InstanceDatapoint, xai_explanations, predicted_class_name):
         self.xai_explanations = process_xai_explanations(xai_explanations)
-        self.instance = extract_instance_information(instance_information)
+        self.instance = instance_information.instance_as_dict
         self.memory = ConversationBufferMemory(memory_key="chat_history")  # Reset chat history
         self.predicted_class_name = predicted_class_name
 
