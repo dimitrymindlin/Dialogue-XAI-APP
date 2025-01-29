@@ -7,9 +7,10 @@ from langchain_community.chat_models import ChatOpenAI
 from langchain_community.adapters import openai as lc_openai
 from langchain_core.prompts import ChatPromptTemplate
 
+from create_experiment_data.instance_datapoint import InstanceDatapoint
 from llm_agents.base_agent import XAIBaseAgent
 from llm_agents.output_parsers import get_response_output_parser
-from llm_agents.xai_utils import process_xai_explanations, extract_instance_information
+from llm_agents.xai_utils import process_xai_explanations
 from parsing.llm_intent_recognition.prompts.explanations_prompt_clean import openai_user_prompt
 
 LLM_MODEL = os.getenv('OPENAI_MODEL_NAME')

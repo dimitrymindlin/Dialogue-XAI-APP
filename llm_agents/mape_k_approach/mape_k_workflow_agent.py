@@ -16,6 +16,8 @@ from llama_index.core.workflow import (
 import os
 from llama_index.llms.openai import OpenAI
 from pydantic import BaseModel
+
+from create_experiment_data.instance_datapoint import InstanceDatapoint
 from llm_agents.base_agent import XAIBaseAgent
 from llm_agents.explanation_state import ExplanationState
 from llm_agents.mape_k_approach.execute_component.execute_prompt import get_execute_prompt_template, ExecuteResult
@@ -178,12 +180,16 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
 
     # Method to initialize a new datapoint
     def initialize_new_datapoint(self,
-                                 instance_information,
+                                 instance: InstanceDatapoint,
                                  xai_explanations,
                                  xai_visual_explanations,
                                  predicted_class_name,
                                  opposite_class_name):
-        self.instance = extract_instance_information(instance_information)
+        # If the user_model is not empty, store understood and not understood concept information in the user model
+        # and reset the rest to not_explained
+        self.user_model.persist_knowledge()
+
+        self.instance = instance.displayable_features
         self.predicted_class_name = predicted_class_name
         self.opposite_class_name = opposite_class_name
 
