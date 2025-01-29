@@ -34,7 +34,7 @@ llvmlite==0.39.0
 MarkupSafe==2.1.1
 matplotlib==3.5.1
 networkx==2.7.1
-nltk==3.7
+nltk==3.9.1
 numba==0.56.0
 numpy==1.21.6
 openpyxl==3.0.9
