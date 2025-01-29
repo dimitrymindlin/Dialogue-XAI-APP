@@ -3,6 +3,40 @@ from typing import List
 from pydantic import BaseModel, Field
 
 
+class CommunicationGoal(BaseModel):
+    """
+    Data model for an explanation step for the current ExplanationTarget.
+    """
+    goal: str = Field(...,
+                      description="Each goal should focus on a specific aspect, which can be a determining if the user already understands a concept, or an explanation that answers the user’s question step by step. The step should be expressed as a concise heading, such as “Elicit if the user knows Machine Learning” or “Explain the importance of feature importance in XAI.”")
+
+
+class ExplanationTarget(BaseModel):
+    """
+    Data model for the explanandum (the current explanation target).
+    """
+    reasoning: str = Field(..., description="The reasoning behind the choice of the current explanandum.")
+    explanation_name: str = Field(..., description="The name of the current explanation concept.")
+    step_name: str = Field(..., description="Step name that is the current explanandum.")
+    communication_goals: List[CommunicationGoal] = Field(...,
+                                                         description="List of atomic goals while communicating the complete explanation to the user, breaking down each ExplanationTarget into multiple CommunicationGoal,"
+                                                                     "including eliciting information and providing"
+                                                                     "information. Each atomic goal should be short to communicate to not overwhelm the user."
+                                                                     "Begins with assessing the user’s familiarity "
+                                                                     "with key concepts, if it is not evident by the question that the user knows the concept, like he is directly asking for an explanation type, either directly through questions or "
+                                                                     "implicitly by observing their query, chat history and user model")
+
+    def __str__(self):
+        communication_goals_str = "\n".join(
+            f"- {comm_goal.goal}" for comm_goal in self.communication_goals
+        )
+        return (
+            f"Explanation Name: {self.explanation_name}\n"
+            f"Step Name: {self.step_name}\n"
+            f"Communication Goals:\n{communication_goals_str}"
+        )
+
+
 class ExplanationStepModel(BaseModel):
     """
     Data model for an explanation step in the explanation plan.
