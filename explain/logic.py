@@ -35,10 +35,8 @@ from explain.explanations.diverse_instances import DiverseInstances
 from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
-# from parsing.llm_intent_recognition.llm_pipeline_setup.ollama_pipeline.ollama_pipeline import LLMSinglePrompt REMOVED FOR PRODUCTION
 
-from parsing.llm_intent_recognition.llm_pipeline_setup.openai_pipeline.openai_pipeline import \
-    LLMSinglePromptWithMemoryAndSystemMessage
+# from parsing.llm_intent_recognition.llm_pipeline_setup.ollama_pipeline.ollama_pipeline import LLMSinglePrompt REMOVED FOR PRODUCTION
 
 app = Flask(__name__)
 
@@ -161,9 +159,7 @@ class ExplainBot:
 
         # Initialize completion + parsing modules
         self.intent_recognition_model = None
-        if self.use_intent_recognition == "openAI":
-            self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
-        elif self.use_intent_recognition == "t5":
+        if self.use_intent_recognition == "t5":
             pass
             """app.logger.info(f"Loading parsing model {parsing_model_name}...")
             self.decoder = Decoder(parsing_model_name,

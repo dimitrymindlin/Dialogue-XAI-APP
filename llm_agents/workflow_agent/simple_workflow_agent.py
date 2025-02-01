@@ -13,7 +13,7 @@ from llama_index.core.workflow import (
 from llama_index.llms.openai import OpenAI
 
 from llm_agents.base_agent import XAIBaseAgent
-from llm_agents.query_engine_tools import build_query_engine_tools
+from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 
 from llm_agents.xai_utils import process_xai_explanations, extract_instance_information
 from llm_agents.xai_prompts import get_single_answer_prompt_template, get_augment_user_question_prompt_template
@@ -33,6 +33,7 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
             llm: LLM = None,
             feature_names="",
             domain_description="",
+            user_ml_knowledge="",
             **kwargs
     ):
         super().__init__(**kwargs)
@@ -41,13 +42,10 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
         self.xai_explanations = None
         self.predicted_class_name = None
         self.instance = None
+        self.user_ml_knowledge = user_ml_knowledge
         self.llm = llm or OpenAI()
-        self.agent = OpenAIAgent.from_tools(
-            tools=build_query_engine_tools(),
-            llm=self.llm,
-            verbose=True,
-            system_prompt="You are an AI assistant specialized in answering queries about research documents.",
-        )
+
+        self.agent = OpenAIAgent.from_tools(llm=self.llm)
 
         # Initialize the output parsers
         self.analysis_output_parser = get_analysis_output_parser()
@@ -60,6 +58,7 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
     def initialize_new_datapoint(self,
                                  instance_information,
                                  xai_explanations,
+                                 xai_visual_explanations,
                                  predicted_class_name,
                                  opposite_class_name):
         self.xai_explanations = process_xai_explanations(xai_explanations, predicted_class_name, opposite_class_name)
@@ -67,6 +66,25 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
         self.predicted_class_name = predicted_class_name
         self.opposite_class_name = opposite_class_name
         self.agent.memory.reset()
+
+        # Set user model
+        self.populator = XAIExplanationPopulator(
+            template_dir=".",
+            template_file="llm_agents/mape_k_approach/plan_component/explanations_model.yaml",
+            xai_explanations=xai_explanations,
+            predicted_class_name=predicted_class_name,
+            opposite_class_name=opposite_class_name,
+            instance_dict=self.instance
+        )
+        # Populate the YAML
+        self.populator.populate_yaml()
+        # Validate substitutions
+        self.populator.validate_substitutions()
+        # Optionally, retrieve as a dictionary
+        populated_yaml_dict = self.populator.get_populated_yaml(as_dict=True)
+        print(populated_yaml_dict)
+        self.visual_explanations_dict = xai_visual_explanations
+        self.last_shown_explanations = []
 
     # Step to handle new user message
     @step
@@ -122,7 +140,8 @@ class SimpleXAIWorkflowAgent(Workflow, XAIBaseAgent):
         ]
 
         # Call the LLM for analysis
-        response = await self.llm.achat(messages)
+        #response = await self.llm.achat(messages)
+        response = await self.agent.achat(message=user_message, chat_history=messages[:-1])
 
         # Parse the response
         response_content = response.message.content

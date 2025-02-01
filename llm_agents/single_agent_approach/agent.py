@@ -9,6 +9,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from create_experiment_data.instance_datapoint import InstanceDatapoint
 from llm_agents.base_agent import XAIBaseAgent
+from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 from llm_agents.output_parsers import get_response_output_parser
 from llm_agents.xai_utils import process_xai_explanations
 from parsing.llm_intent_recognition.prompts.explanations_prompt_clean import openai_user_prompt
@@ -73,11 +74,32 @@ class XAIAgent(XAIBaseAgent):
             ]
         )
 
-    def initialize_new_datapoint(self, instance_information: InstanceDatapoint, xai_explanations, predicted_class_name):
-        self.xai_explanations = process_xai_explanations(xai_explanations)
-        self.instance = instance_information.instance_as_dict
+    def initialize_new_datapoint(self, instance: InstanceDatapoint,
+                                 xai_explanations,
+                                 xai_visual_explanations,
+                                 predicted_class_name,
+                                 opposite_class_name):
+
+        self.instance = instance.displayable_features
+        # Reset history but save summary
         self.memory = ConversationBufferMemory(memory_key="chat_history")  # Reset chat history
         self.predicted_class_name = predicted_class_name
+        self.opposite_class_name = opposite_class_name
+
+        self.populator = XAIExplanationPopulator(
+            template_dir=".",
+            template_file="llm_agents/mape_k_approach/plan_component/explanations_model.yaml",
+            xai_explanations=xai_explanations,
+            predicted_class_name=predicted_class_name,
+            opposite_class_name=opposite_class_name,
+            instance_dict=self.instance
+        )
+        self.populator.populate_yaml()
+        # Validate substitutions
+        self.populator.validate_substitutions()
+        # Optionally, retrieve as a dictionary
+        populated_yaml_dict = self.populator.get_populated_yaml(as_dict=True)
+
 
     def call_user_question_function(self, question):
         # Retrieve chat history
