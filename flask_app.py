@@ -318,6 +318,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('PG_VEC_CONNECTION_STRING
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 #db.init_app(app)
 
+# Create cache folder in root if it doesn't exist
+if not os.path.exists("cache"):
+    os.makedirs("cache")
+
 if __name__ != '__main__':
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO)
