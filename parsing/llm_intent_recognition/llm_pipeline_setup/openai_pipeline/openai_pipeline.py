@@ -78,7 +78,7 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
             {"role": "system", "content": formatted_messages[0].content},
             {"role": "user", "content": formatted_messages[1].content},
         ]
-        response_format = { "type": "json_object" }
+        response_format = {"type": "json_object"}
 
         # Wrapper to use Langsmith client
         response = lc_openai.chat.completions.create(
@@ -299,23 +299,6 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     plt.show()
-
-
-class LLMBase:
-    def __init__(self):
-        self.memory = ConversationBufferMemory(memory_key="chat_history")
-        self.llm_model = LLM_MODEL  # Assume LLM_MODEL is defined elsewhere
-
-    def llm_call(self, messages):
-        response_format = ResponseFormat(type="json_object")
-        response = lc_openai.chat.completions.create(
-            messages=messages, model=self.llm_model, temperature=0, response_format=response_format
-        )
-        try:
-            content = response.choices[0].message['content']
-        except KeyError:
-            content = response.choices[0].message.content
-        return json.loads(content)
 
 
 if __name__ == "__main__":
