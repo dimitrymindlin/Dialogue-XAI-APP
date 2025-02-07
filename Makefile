@@ -2,10 +2,13 @@
 .PHONY: build run
 
 build:
-	docker build -t dialogue-xai-app .
+	docker buildx build --platform linux/amd64 -t dialogue-llm-app --load .
 
 remove:
-	docker rm -f dialogue-xai-app || true
+	docker rm -f dialogue-llm-app || true
 
 run: remove
-	docker run -d --name dialogue-xai-app -p 4000:4000 dialogue-xai-app
+	docker run -d --name dialogue-llm-app -e PORT=4001 -p 4001:4001 dialogue-llm-app
+
+build-push:
+	docker buildx build --platform linux/amd64 --no-cache -t dimidockmin/dimidockmin/dialogue-llm-app --push .
