@@ -35,6 +35,8 @@ from llama_index.core.workflow.retry_policy import ConstantDelayRetryPolicy
 
 import logging
 
+from llm_agents.utils.postprocess_message import replace_plot_placeholders
+
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
 os.environ["OPENAI_ORGANIZATION"] = os.getenv('OPENAI_ORGANIZATION_ID')
@@ -161,7 +163,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         )
 
         # Mape K specific setup user understanding notepad
-        self.user_model = UserModel(user_ml_knowledge) # TODO: Use the knowlede!!!
+        self.user_model = UserModel(user_ml_knowledge)  # TODO: Use the knowlede!!!
         self.populator = None
         # Chat history
         self.chat_history = ""
@@ -170,7 +172,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         self.visual_explanations_dict = None
 
     # Method to initialize a new datapoint
-    def initialize_new_datapoint(self,
+    async def initialize_new_datapoint(self,
                                  instance: InstanceDatapoint,
                                  xai_explanations,
                                  xai_visual_explanations,
@@ -351,47 +353,6 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
     ### Execute Step: Determining realization of explanation moves, Performing selected action
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=2))
     async def execute(self, ctx: Context, ev: PlanDoneEvent) -> StopEvent:
-        def replace_plot_placeholders(execute_result):
-            """
-            Replaces all plot placeholders in the execute_result.response with their corresponding plots.
-
-            Args:
-                execute_result: An object containing the response string with potential plot placeholders.
-
-            Returns:
-                None. The execute_result.response is modified in place.
-            """
-            response = execute_result.response
-
-            # Define a regex pattern to find all placeholders within curly braces
-            pattern = re.compile(r'##([^#]+)##')
-
-            # Find all unique plot names in the response
-            plot_names = re.findall(pattern, response)
-
-            if not plot_names:
-                # No placeholders found; no action needed
-                return
-
-            # Iterate over each plot name and attempt to replace its placeholder
-            for plot_name in set(plot_names):  # Using set to avoid redundant replacements
-                placeholder = f'##{plot_name}##'
-                try:
-                    # Retrieve the corresponding plot from the dictionary
-                    plot = self.visual_explanations_dict[plot_name]
-                    # Replace all instances of the current placeholder with the plot
-                    response = response.replace(placeholder, plot)
-                except KeyError:
-                    # Log an error if the plot name is not found in the dictionary
-                    available_plots = ', '.join(self.visual_explanations_dict.keys())
-                    logger.error(
-                        f"Could not find plot with name '{plot_name}' in visual explanations dictionary. "
-                        f"Available plots: {available_plots}"
-                    )
-
-            # Update the execute_result.response with the replaced content
-            execute_result.response = response
-
         # Get user message
         user_message = await ctx.get("user_message")
 
@@ -432,7 +393,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         logger.info(f"Execute result: {execute_result}.")
 
         # Check if result has placeholders and replace them
-        replace_plot_placeholders(execute_result)
+        execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
 
         # Update Explanandum state and User Model
         # 1. Update user model
@@ -440,7 +401,8 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         exp_step = explanation_target.step_name
         exp_step_content = next_explanation.goal
         extended_exp_step_content = exp_step_content + "->" + execute_result.summary_sentence
-        self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.SHOWN.value, extended_exp_step_content)
+        self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.SHOWN.value,
+                                                      extended_exp_step_content)
 
         # 2. Update current explanation and explanation plan
         explanation_target.communication_goals.pop(0)

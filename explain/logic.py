@@ -35,6 +35,7 @@ from explain.explanations.diverse_instances import DiverseInstances
 from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
+from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant
 
 # from parsing.llm_intent_recognition.llm_pipeline_setup.ollama_pipeline.ollama_pipeline import LLMSinglePrompt REMOVED FOR PRODUCTION
 
@@ -216,6 +217,8 @@ class ExplainBot:
                                                                     store_to_conversation=False)
 
         if use_llm_agent is not False:
+            if self.use_llm_agent == "o1":
+                from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant as Agent
             if self.use_llm_agent == "simple":
                 from llm_agents.workflow_agent.simple_workflow_agent import SimpleXAIWorkflowAgent as Agent
             elif self.use_llm_agent == "mape_k":
@@ -293,7 +296,7 @@ class ExplainBot:
     def get_proceeding_okay(self):
         return self.dialogue_manager.get_proceeding_okay()
 
-    def get_next_instance_triple(self, instance_type, return_probability=False):
+    async def get_next_instance_triple(self, instance_type, return_probability=False):
         """
         Returns the next instance in the data_instances list if possible.
         param instance_type: type of instance to return, can be train, test or final_test
@@ -302,7 +305,7 @@ class ExplainBot:
         self.current_instance = experiment_helper.get_next_instance(
             instance_type=instance_type,
             return_probability=return_probability)
-        # TODO: Update agent with new instance
+        # Update agent with new instance
         if self.use_llm_agent:
             xai_report = self.get_explanation_report(as_text=True)
             # Get visual explanations
