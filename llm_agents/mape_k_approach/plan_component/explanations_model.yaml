@@ -9,18 +9,18 @@ xai_explanations:
         dependencies: [ ]
         is_optional: false
 
+      - step_name: "ImpactMultipleFeatures"
+        description: >
+          {{counterfactuals.possible_counterfactuals}}
+        dependencies:
+          - "Concept"
+        is_optional: false
+
       - step_name: "ImpactSingleFeature"
         description: >
           Understanding how individual features impact the model prediction. If the counterfactuals do not provide
           examples with a single feature change, check the ceteris paribus explanation.
           {{counterfactuals.single_feature_cf}}
-        dependencies:
-          - "Concept"
-        is_optional: false
-
-      - step_name: "ImpactMultipleFeatures"
-        description: >
-          {{counterfactuals.possible_counterfactuals}}
         dependencies:
           - "Concept"
         is_optional: false
@@ -51,6 +51,17 @@ xai_explanations:
         dependencies: [ ]
         is_optional: false
 
+      - step_name: "FeatureInfluencesPlot"
+        description: >
+          A plot showing the feature importances and influences on the model's decision-making, blue bars show the
+          contribution towards the model prediction, and red bars show the contribution toward the opposite prediction.
+          The plot only shows the bars without further explanations, so consider explaining additional details if not
+          already provided beforehand. The plot will be places in the message as an image where the palceholder 
+          ##FeatureInfluencesPlot## is located.
+        dependencies:
+          - "Concept"
+        is_optional: false
+
       - step_name: "FeaturesInFavourOfOver50k"
         description: >
           {{feature_importance.features_in_favour_of_over_50k}}
@@ -61,17 +72,6 @@ xai_explanations:
       - step_name: "FeaturesInFavourOfUnder50k"
         description: >
           {{feature_importance.features_in_favour_of_under_50k}}
-        dependencies:
-          - "Concept"
-        is_optional: false
-
-      - step_name: "FeatureInfluencesPlot"
-        description: >
-          A plot showing the feature importances and influences on the model's decision-making, blue bars show the
-          contribution towards the model prediction, and red bars show the contribution toward the opposite prediction.
-          The plot only shows the bars without further explanations, so consider explaining additional details if not
-          already provided beforehand. The plot will be places in the message as an image where the palceholder 
-          ##FeatureInfluencesPlot## is located.
         dependencies:
           - "Concept"
         is_optional: false

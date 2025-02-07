@@ -75,8 +75,9 @@ class PlanResultModel(BaseModel):
     new_explanations: List[NewExplanationModel] = Field(...,
                                                         description="List of new explanations to be added to the explanation plan. Each new explanation is a dict with an explanation_name, a description, and a list of steps called 'explanations'. Each step is a dict with a 'step_name', 'description' and 'dependencies' and 'is_optional' keys.")
     explanation_plan: List[ChosenExplanationModel] = Field(...,
-                                                           description="List of explanations or scaffolding with dicts with keys `(explanation_name, step)`, indicating the next steps to explain to the user.")
-    next_explanation: ExplanationTarget = Field(..., description="The next explanation target.")
+                                                           description="Mandatory List of explanations or scaffolding with dicts with keys `(explanation_name, step)`, indicating the next steps to explain to the user. Cannot be empty list, at least contains the next explanations.")
+    next_explanation: ExplanationTarget = Field(...,
+                                                description="The next explanation target, must be element from the explanation_plan.")
 
 
 def get_plan_prompt_template():
@@ -127,7 +128,8 @@ You have three primary tasks:
     - Ensure that communication_goals are tailored to the user's current state and adapt frequently to provide immediate, relevant information. If a previous explanation plan and last explanation are given, decide if the previous communication_goal is still relevant or if the next one should be taken.
     
 **Guidelines**:
-1. **Deciding when to Update the Explanation Plan if an explanation_plan is given**:
+1. **Creating an Explanation Plan or deciding when to update the Plan if an one is given**:
+    - **Initial Plan**: If no explanation_plan is given, generate a new one based on the user's latest input.
     - **Significant Changes**: Update the explanation_plan if the user demonstrates a major misunderstanding, requests a new overarching concept, or if their queries indicate a need for restructuring the explanation flow.
     - **Minor Adjustments**: Do not modify the explanation_plan for minor misunderstandings or clarifications. Instead, handle these through communication_goals. Delete already explained and understood concepts from the explanation_plan if this can be justified by the UserModel and the user's latest input.
     - If no plan is given, generate a new explanation_plan based on the user's latest input, planning ahead which order of explanations would be most beneficial for the user.
