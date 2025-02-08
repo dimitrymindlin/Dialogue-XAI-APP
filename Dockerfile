@@ -1,5 +1,5 @@
 # Docker file adapted from this tutorial https://github.com/bennzhang/docker-demo-with-simple-python-app
-FROM python:3.9.7
+FROM python:3.10.0
 
 # Creating Application Source Code Directory
 RUN mkdir -p /usr/src/app
@@ -9,7 +9,7 @@ WORKDIR /usr/src/app
 
 # Installing python dependencies
 COPY requirements.txt /usr/src/app/
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --retries=2 torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
 # Copying src code to Container
 COPY . /usr/src/app
 
