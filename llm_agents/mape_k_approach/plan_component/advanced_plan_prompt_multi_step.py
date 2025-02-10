@@ -105,8 +105,7 @@ In the explanation collection above, the scaffolding strategies can be used to b
 {chat_history}\n
 
 <<User Message>>:
-"{user_message}". The user indicates {understanding_display} and seems to be in a {cognitive_state} cognitive state of 
-engagement.\n
+"{user_message}". The user indicates {understanding_display}.\n
 
 <<Explanation Plan>>:
 {previous_plan}\n
