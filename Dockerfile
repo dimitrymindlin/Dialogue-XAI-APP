@@ -1,28 +1,36 @@
-# Docker file adapted from this tutorial https://github.com/bennzhang/docker-demo-with-simple-python-app
-FROM python:3.10.0
+# Use Python 3.10 image
+FROM python:3.10-slim
 
-# Creating Application Source Code Directory
-RUN mkdir -p /usr/src/app
-
-# Setting Home Directory for containers
 WORKDIR /usr/src/app
 
-# Installing python dependencies
-COPY requirements.txt /usr/src/app/
-RUN pip install --no-cache-dir --retries=2 torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-# Copying src code to Container
-COPY . /usr/src/app
+# Install build tools
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    python3-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Application Environment variables
-#ENV APP_ENV development
-ENV PORT 4001
+# Upgrade pip
+RUN pip install --upgrade pip
 
-# Exposing Ports
-EXPOSE $PORT
+# Install Cython to ensure C-level compatibility for Pandas
+RUN pip install --no-cache-dir cython
 
-# Setting Persistent data
+# Fix NumPy and Pandas with force-reinstall
+RUN pip install --no-cache-dir --force-reinstall "numpy<2.0" "pandas<2.0" "scikit-learn>=1.1.0,<1.3.0" "scipy>=1.7.3,<1.10.0" "llvmlite>=0.39.0"
+
+# Install all dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Set and expose port
+ENV PORT=5000
+EXPOSE ${PORT}
+
 VOLUME ["/app-data"]
 
-# Running Python Application
-#CMD gunicorn -b :$PORT -c gunicorn.conf.py main:app
-CMD python -m gunicorn --timeout 0 -b :$PORT flask_app:app
+# Start with Gunicorn
+CMD ["gunicorn", "--timeout", "0", "-b", "0.0.0.0:5000", "flask_app:app", "--log-level", "debug"]

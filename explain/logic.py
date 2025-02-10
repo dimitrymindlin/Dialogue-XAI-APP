@@ -833,7 +833,7 @@ class ExplainBot:
         elif self.use_intent_recognition:
             # Get the question_id and feature_name from the user input
             question_id, feature_name, reasoning = self.dialogue_manager.update_state(user_input)
-            if feature_name is not "" and feature_name is not None:
+            if feature_name != "" and feature_name is not None:
                 feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
                 # remove whitespace between words
                 feature_name = feature_name.replace(" ", "")

@@ -2,20 +2,37 @@
 
 # Build locally for Mac M1 (ARM64)
 build:
-	docker buildx build --platform linux/arm64 -t dialogue-llm-app --load .
+	docker buildx build --platform linux/arm64 \
+		--build-arg BUILDPLATFORM=linux/arm64 \
+		--build-arg TARGETPLATFORM=linux/arm64 \
+		-t dialogue-llm-app \
+		--no-cache --load .
 
 # Build locally for x86 (optional)
 build-amd64:
-	docker buildx build --platform linux/amd64 -t dialogue-llm-app --load .
+	docker buildx build --platform linux/amd64 \
+		--build-arg BUILDPLATFORM=linux/amd64 \
+		--build-arg TARGETPLATFORM=linux/amd64 \
+		-t dialogue-llm-app \
+		--no-cache --load .
 
 # Remove existing container
 remove:
 	docker rm -f dialogue-llm-app || true
 
-# Run locally on Mac M1 (ARM64)
+# Run locally
 run: remove
-	docker run -d --name dialogue-llm-app -e PORT=4001 -p 4001:4001 dialogue-llm-app
+	docker run -d --name dialogue-llm-app \
+		-e PORT=4001 \
+		-p 4001:4001 \
+		--memory=4g \
+		--cpus=2 \
+		dialogue-llm-app
 
-# Build and push a multi-arch image (ARM64 + AMD64) to Docker Hub
+# Build and push multi-arch image
 build-push:
-	docker buildx build --platform linux/arm64,linux/amd64 --no-cache -t dimidockmin/dialogue-llm-app --push .
+	docker buildx build \
+		--platform linux/arm64,linux/amd64 \
+		--no-cache \
+		-t dimidockmin/dialogue-llm-app \
+		--push .
