@@ -266,6 +266,9 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         # Monitor the user's understanding
         monitor_result: MonitorResultModel = await ctx.get("monitor_result", None)
 
+        self.user_model.cognitive_state = monitor_result.mode_of_engagement
+        self.user_model.current_understanding_signals = monitor_result.understanding_displays
+
         # Analyze the user's understanding
         analyze_prompt = PromptTemplate(get_analyze_prompt_template().format(
             domain_description=self.domain_description,
@@ -277,8 +280,6 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             user_model=self.user_model.get_state_summary(as_dict=False),
             last_shown_explanations=self.last_shown_explanations,
             user_message=user_message,
-            monitor_display_result=monitor_result.understanding_displays,
-            monitor_cognitive_state=monitor_result.mode_of_engagement,
             explanation_plan=self.user_model.get_explanation_plan(as_dict=False)
         ))
 
@@ -324,8 +325,6 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         # Plan the next steps
         plan_prompt = PromptTemplate(get_plan_prompt_template().format(
             domain_description=self.domain_description,
-            understanding_display=monitor_result.understanding_displays,
-            cognitive_state=monitor_result.mode_of_engagement,
             feature_names=self.feature_names,
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
@@ -371,7 +370,6 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         next_explanation = explanation_target.communication_goals[0]
 
         xai_explanations_from_plan = self.user_model.get_string_explanations_from_plan(plan_result.explanation_plan)
-        monitor_result: MonitorResultModel = await ctx.get("monitor_result")
 
         # Execute the plan
         execute_prompt = PromptTemplate(get_execute_prompt_template().format(
@@ -384,8 +382,6 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             user_message=user_message,
             plan_result=xai_explanations_from_plan,
             next_exp_content=next_explanation.goal,
-            monitor_display_result=monitor_result.understanding_displays,
-            monitor_cognitive_state=monitor_result.mode_of_engagement,
         ))
 
         execute_result = await self.llm.astructured_predict(ExecuteResult, execute_prompt)

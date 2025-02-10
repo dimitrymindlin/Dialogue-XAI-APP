@@ -97,6 +97,7 @@ class UserModelFineGrained:
     def __init__(self, user_ml_knowledge):
         self.explanations: Dict[str, Explanation] = {}
         self.cognitive_state: Optional[str] = None
+        self.current_understanding_signals: List[str] = []
         self.user_ml_knowledge = user_ml_knowledge
 
     def set_cognitive_state(self, cognitive_state: str):
@@ -105,7 +106,7 @@ class UserModelFineGrained:
 
     def get_user_info(self):
         """Return the user's cognitive state and ML knowledge as a string"""
-        return f"The user is in a {self.cognitive_state} cognitive state and their ML knowledge is: {self.user_ml_knowledge}"
+        return f"The user is in a {self.cognitive_state} cognitive state and their ML knowledge is: {self.user_ml_knowledge}. With the last message they signalled {self.current_understanding_signals}."
 
     def add_explanation(self, explanation_name: str, description: str):
         """Add a new explanation, overriding if it already exists."""
@@ -246,8 +247,8 @@ class UserModelFineGrained:
 
     def get_state_summary(self, as_dict: bool = False) -> Union[Dict[str, Dict[str, List[str]]], str]:
         """
-        Return the user model as a collection of explanation states
-        and which explanations and steps are in there, either as a dictionary
+        Return the user model including the cognitive state, ml knowledge, as well
+        as a collection of explanation states and which explanations and steps are in there, either as a dictionary
         or a string representation suitable for LLM prompts.
 
         Args:
@@ -292,6 +293,9 @@ class UserModelFineGrained:
 
         # Combine all the formatted states into the final prompt string
         prompt_lines = "\n".join(formatted_states)
+
+        # Prepend the cognitive state and ml knowledge to the prompt
+        prompt_lines = f"{self.get_user_info()}\n\n" + prompt_lines
 
         return prompt_lines
 
@@ -341,44 +345,6 @@ class UserModelFineGrained:
                 f"      - Dependent on Step: {', '.join(step['dependencies']) if step['dependencies'] else 'None'}\n"
                 f"      - Optional: {'Yes' if step['is_optional'] else 'No'}"
                 for step in details["steps"]
-            ])
-            for exp_name, details in explanation_plan.items()
-        ])
-        return plan_str
-
-    def get_explanation_plan_short(self, as_dict: bool = False) -> Union[Dict[str, Dict[str, List[str]]], str]:
-        """
-        Return a concise explanation plan for all explanations, including descriptions and step name,
-        either as a dictionary or a string representation.
-
-        Args:
-            as_dict (bool): If True, return the explanation plan as a dictionary.
-                            Otherwise, return a formatted string.
-
-        Returns:
-            Union[Dict[str, Dict[str, List[str]]], str]: The short explanation plan in the desired format.
-        """
-        excluded_explanations = {"ScaffoldingStrategy"}
-
-        # Construct the explanation_plan dictionary using comprehensions
-        explanation_plan = {
-            exp_name: {
-                "description": exp_object.description,
-                "steps": [step.step_name for step in exp_object.explanation_steps]
-            }
-            for exp_name, exp_object in self.explanations.items()
-            if exp_name not in excluded_explanations
-        }
-
-        if as_dict:
-            return explanation_plan
-
-        # Generate a string representation using list comprehensions
-        plan_str = "\n\n".join([
-            f"Explanation: {exp_name}\n"
-            f"  Description: {details['description']}\n"
-            f"  Steps:\n" + "\n".join([
-                f"    - StepName: {step_name}" for step_name in details["steps"]
             ])
             for exp_name, details in explanation_plan.items()
         ])
