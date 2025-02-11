@@ -3,9 +3,20 @@ import asyncio
 from dotenv import load_dotenv
 from openai import OpenAI
 
+import csv
+
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 from create_experiment_data.instance_datapoint import InstanceDatapoint
 from llm_agents.utils.postprocess_message import replace_plot_placeholders
+
+
+def log_interaction(user_question, assistant_answer, log_file='o1_interaction_log.csv'):
+    file_exists = os.path.isfile(log_file)
+    with open(log_file, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        if not file_exists:
+            writer.writerow(['User Question', 'Assistant Answer'])  # Write header if file is new
+        writer.writerow([user_question, assistant_answer])
 
 
 def get_system_propmpt(explanation_collection, instance, prediction, previous_knowledge):
@@ -115,11 +126,11 @@ class XAITutorAssistant:
         return summary
 
     async def initialize_new_datapoint(self,
-                                 instance: InstanceDatapoint,
-                                 xai_explanations,
-                                 xai_visual_explanations,
-                                 predicted_class_name,
-                                 opposite_class_name):
+                                       instance: InstanceDatapoint,
+                                       xai_explanations,
+                                       xai_visual_explanations,
+                                       predicted_class_name,
+                                       opposite_class_name):
         # If the user_model is not empty, store understood and not understood concept information in the user model
         # and reset the rest to not_explained
         if self.data_point_counter > 0:
@@ -191,5 +202,8 @@ class XAITutorAssistant:
 
         # Postprocess the assistant's response.
         assistant_message = replace_plot_placeholders(assistant_message, self.visual_explanations_dict)
+
+        # Log the interaction
+        log_interaction(user_question, assistant_message)
 
         return "", assistant_message
