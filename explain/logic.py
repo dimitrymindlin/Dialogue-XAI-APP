@@ -263,7 +263,7 @@ class ExplainBot:
 
     def set_user_prediction(self, user_prediction):
         true_label = self.get_current_prediction()
-        current_id = self.current_instance.id
+        current_id = self.current_instance.instance_id
         reversed_dict = {value: key for key, value in self.conversation.class_names.items()}
         true_label_as_int = reversed_dict[true_label]
         try:
