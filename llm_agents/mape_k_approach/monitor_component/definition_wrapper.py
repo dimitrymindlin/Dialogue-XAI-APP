@@ -1,18 +1,18 @@
 import json
 
 
-class UnderstandingDisplays:
+class DefinitionWrapper:
     def __init__(self, json_file_path):
         """
-        Initializes the UnderstandingDisplayWrapper with data from a JSON file.
-        :param json_file_path: Path to the JSON file describing understanding displays.
+        Initializes the Wrapper with data from a JSON file.
+        :param json_file_path: Path to the JSON file describing the concepts.
         """
         with open(json_file_path, 'r') as file:
             self.displays = json.load(file)
 
-    def get_displays_as_text(self):
+    def as_text(self):
         """
-        Provides a textual summary of all the possible displays and their descriptions, along with examples.
+        Provides a textual summary of all the possible concepts and their descriptions, along with examples.
         :return: A string summary suitable for use in an LLM prompt.
         """
         summary = []

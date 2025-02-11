@@ -9,11 +9,11 @@ from llm_agents.mape_k_approach.execute_component.execute_prompt import get_exec
 from llm_agents.mape_k_approach.analyze_component.analyze_prompt import get_analyze_prompt_template, AnalyzeResult
 from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import PlanResultModel, \
     get_plan_prompt_template, ChosenExplanationModel
-from llm_agents.mape_k_approach.monitor_component.icap_modes import ICAPModes
+from llm_agents.mape_k_approach.monitor_component.definition_wrapper import ICAPModes
 from llm_agents.mape_k_approach.monitor_component.monitor_prompt import get_monitor_prompt_template, MonitorResultModel
 from llm_agents.mape_k_approach.mape_k_workflow_agent import AugmentResult, \
     ExecuteResult
-from llm_agents.mape_k_approach.monitor_component.understanding_displays import UnderstandingDisplays
+from llm_agents.mape_k_approach.monitor_component.understanding_displays import DefinitionWrapper
 from llm_agents.mape_k_approach.user_model_fine_grained import UserModelFineGrained, ExplanationState
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 from llm_agents.xai_prompts import get_augment_user_question_prompt_template
@@ -60,7 +60,7 @@ feature_names = ['Age', 'EducationLevel', 'MaritalStatus', 'Occupation', 'Weekly
                  'InvestmentOutcome']
 predicted_class_name = 'under 50k'
 opposite_class_name = 'over 50k'
-understanding_displays = UnderstandingDisplays("monitor_component/understanding_displays_definition.json")
+understanding_displays = DefinitionWrapper("monitor_component/understanding_displays_definition.json")
 engagement_modes = ICAPModes("monitor_component/icap_modes_definition.json")
 
 xai_explanations = {'model_prediction': 'under 50k', 'instance_type': 'Person', 'feature_importance': (
@@ -238,7 +238,7 @@ def test_monitor_prompt(chat_history, user_message, expected_displays, expected_
     monitor_prompt = PromptTemplate(get_monitor_prompt_template().format(
         chat_history=chat_history,
         user_message=user_message,
-        understanding_displays=understanding_displays.get_displays_as_text(),
+        understanding_displays=understanding_displays.as_text(),
         modes_of_engagement=engagement_modes.get_modes_as_text()
     ))
 
@@ -392,7 +392,7 @@ def test_analyze_prompt(chat_history, user_message, monitor_result, last_shown_e
         instance=instance,
         predicted_class_name=predicted_class_name,
         chat_history=chat_history,
-        understanding_displays=understanding_displays.get_displays_as_text(),
+        understanding_displays=understanding_displays.as_text(),
         user_model=user_model.get_state_summary(as_dict=False),
         last_shown_explanations=last_shown_explanations,
         user_message=user_message,

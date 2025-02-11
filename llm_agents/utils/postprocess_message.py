@@ -24,7 +24,7 @@ def replace_plot_placeholders(response, visual_explanations_dict):
 
     if not plot_names:
         # No placeholders found; no action needed
-        return
+        return response
 
     # Iterate over each plot name and attempt to replace its placeholder
     for plot_name in set(plot_names):  # Using set to avoid redundant replacements

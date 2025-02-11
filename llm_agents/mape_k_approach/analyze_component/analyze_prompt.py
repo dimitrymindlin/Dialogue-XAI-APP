@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class AnalyzeResult(BaseModel):
     reasoning: str = Field(..., description="The reasoning behind the classification of the user message.")
-    model_changes: list = Field(..., description="List of changes to the user model with dicts with keys `(explanation_name, step, state)` where `state` is one of the possible states and `step` indicates the step in the explanation plan that was provided to the user.")
+    model_changes: list = Field(..., description="List of changes to the user model with dicts with keys `(explanation_name, step, state)` where `state` is one of the possible states and `step` indicates the step in the explanation plan that was provided to the user. Default is empty list.")
 
 
 def get_analyze_prompt_template():
@@ -16,9 +16,6 @@ You are an AI assistant that helps answer user questions via Explainable AI (XAI
 - **Model Features:** {feature_names}
 - **Current Local Instance of Interest:** {instance}
 - **Predicted Class by AI Model:** {predicted_class_name}
-
-<<Possible Understanding Display Labels>>:
-{understanding_displays}
 
 <<Explanation Plan>>:
 {explanation_plan}

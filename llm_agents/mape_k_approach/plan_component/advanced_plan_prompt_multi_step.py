@@ -105,7 +105,7 @@ In the explanation collection above, the scaffolding strategies can be used to b
 {chat_history}\n
 
 <<User Message>>:
-"{user_message}". The user indicates {understanding_display}.\n
+"{user_message}".\n
 
 <<Explanation Plan>>:
 {previous_plan}\n

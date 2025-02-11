@@ -1,5 +1,4 @@
 import csv
-import re
 import copy
 
 from dotenv import load_dotenv
@@ -22,12 +21,11 @@ from llm_agents.base_agent import XAIBaseAgent
 from llm_agents.explanation_state import ExplanationState
 from llm_agents.mape_k_approach.execute_component.execute_prompt import get_execute_prompt_template, ExecuteResult
 from llm_agents.mape_k_approach.analyze_component.analyze_prompt import get_analyze_prompt_template, AnalyzeResult
-from llm_agents.mape_k_approach.monitor_component.icap_modes import ICAPModes
+from llm_agents.mape_k_approach.monitor_component.definition_wrapper import DefinitionWrapper
 from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import get_plan_prompt_template, \
     PlanResultModel, \
     ChosenExplanationModel, ExplanationTarget
 from llm_agents.mape_k_approach.monitor_component.monitor_prompt import get_monitor_prompt_template, MonitorResultModel
-from llm_agents.mape_k_approach.monitor_component.understanding_displays import UnderstandingDisplays
 from llm_agents.mape_k_approach.user_model_fine_grained import UserModelFineGrained as UserModel
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 
@@ -41,6 +39,7 @@ load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
 os.environ["OPENAI_ORGANIZATION"] = os.getenv('OPENAI_ORGANIZATION_ID')
 LLM_MODEL_NAME = os.getenv('OPENAI_MODEL_NAME')
+OPENAI_MINI_MODEL_NAME = os.getenv('OPENAI_MINI_MODEL_NAME')
 # Create a logger specific to the current module
 
 logger = logging.getLogger(__name__)
@@ -156,10 +155,14 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         self.predicted_class_name = None
         self.instance = None
         self.llm = llm or OpenAI(model=LLM_MODEL_NAME)
-        self.understanding_displays = UnderstandingDisplays(
+        self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
+        self.understanding_displays = DefinitionWrapper(
             os.path.join(base_dir, "monitor_component", "understanding_displays_definition.json"))
-        self.modes_of_engagement = ICAPModes(
+        self.modes_of_engagement = DefinitionWrapper(
             os.path.join(base_dir, "monitor_component", "icap_modes_definition.json")
+        )
+        self.explanation_questions = DefinitionWrapper(
+            os.path.join(base_dir, "monitor_component", "explanation_questions_definition.json")
         )
 
         # Mape K specific setup user understanding notepad
@@ -173,11 +176,11 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
 
     # Method to initialize a new datapoint
     async def initialize_new_datapoint(self,
-                                 instance: InstanceDatapoint,
-                                 xai_explanations,
-                                 xai_visual_explanations,
-                                 predicted_class_name,
-                                 opposite_class_name):
+                                       instance: InstanceDatapoint,
+                                       xai_explanations,
+                                       xai_visual_explanations,
+                                       predicted_class_name,
+                                       opposite_class_name):
         # If the user_model is not empty, store understood and not understood concept information in the user model
         # and reset the rest to not_explained
         self.user_model.persist_knowledge()
@@ -243,10 +246,11 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         monitor_prompt = PromptTemplate(get_monitor_prompt_template().format(
             chat_history=self.chat_history,
             user_message=user_message,
-            understanding_displays=self.understanding_displays.get_displays_as_text(),
-            modes_of_engagement=self.modes_of_engagement.get_modes_as_text(),
+            understanding_displays=self.understanding_displays.as_text(),
+            modes_of_engagement=self.modes_of_engagement.as_text(),
+            explanation_questions=self.explanation_questions.as_text(),
         ))
-        monitor_result = await self.llm.astructured_predict(MonitorResultModel, monitor_prompt)
+        monitor_result = await self.mini_llm.astructured_predict(MonitorResultModel, monitor_prompt)
 
         logger.info(f"Monitor result: {monitor_result}.\n")
         await ctx.set("monitor_result", monitor_result)
@@ -276,19 +280,17 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             chat_history=self.chat_history,
-            understanding_displays=self.understanding_displays.get_displays_as_text(),
+            understanding_displays=self.understanding_displays.as_text(),
             user_model=self.user_model.get_state_summary(as_dict=False),
             last_shown_explanations=self.last_shown_explanations,
             user_message=user_message,
-            explanation_plan=self.user_model.get_explanation_plan(as_dict=False)
+            explanation_plan=self.user_model.get_explanation_plan(as_dict=False),
         ))
 
         analyze_result = await self.llm.astructured_predict(output_cls=AnalyzeResult, prompt=analyze_prompt)
         logger.info(f"Analyze result: {analyze_result}.\n")
 
         # UPDATE USER MODEL
-
-        # Get model changes and update user model
         for change_entry in analyze_result.model_changes:
             if isinstance(change_entry, tuple):
                 exp, change, step = change_entry
@@ -318,8 +320,6 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
     async def plan(self, ctx: Context, ev: AnalyzeDoneEvent) -> PlanDoneEvent:
         # Get user message
         user_message = await ctx.get("user_message")
-
-        monitor_result: MonitorResultModel = await ctx.get("monitor_result")
 
         las_exp = self.last_shown_explanations[-1] if len(self.last_shown_explanations) > 0 else None
         # Plan the next steps
@@ -396,7 +396,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         exp = explanation_target.explanation_name
         exp_step = explanation_target.step_name
         exp_step_content = next_explanation.goal
-        extended_exp_step_content = exp_step_content + "->" + execute_result.summary_sentence
+        extended_exp_step_content = "{Step:" + exp_step_content + "; Delivered Message: " + execute_result.summary_sentence + "}"
         self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.SHOWN.value,
                                                       extended_exp_step_content)
 
