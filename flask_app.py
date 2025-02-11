@@ -166,13 +166,13 @@ async def get_bot_response_from_nl():
         return jsonify(message_dict)
 
 
-def get_datapoint(user_id, datapoint_type, return_probability=False):
+async def get_datapoint(user_id, datapoint_type, return_probability=False):
     """
     Get a datapoint from the dataset based on the datapoint type.
     """
     if user_id is None:
         user_id = "TEST"
-    instance = bot_dict[user_id].get_next_instance_triple(datapoint_type,
+    instance = await bot_dict[user_id].get_next_instance_triple(datapoint_type,
                                                           return_probability=return_probability)
 
     instance_dict = instance.get_datapoint_as_dict_for_frontend()
@@ -180,13 +180,13 @@ def get_datapoint(user_id, datapoint_type, return_probability=False):
 
 
 @bp.route('/get_train_datapoint', methods=['GET'])
-def get_train_datapoint():
+async def get_train_datapoint():
     """
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
     user_study_group = bot_dict[user_id].get_study_group()
-    result_dict = get_datapoint(user_id, "train")
+    result_dict = await get_datapoint(user_id, "train")
     # bot_dict[user_id].reset_dialogue_manager()
 
     if user_study_group == "interactive":
@@ -241,12 +241,12 @@ def get_final_test_datapoint():
 
 
 @bp.route('/get_intro_test_datapoint', methods=['GET'])
-def get_intro_test_datapoint():
+async def get_intro_test_datapoint():
     """
     Get a final test datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
-    datapoint = get_datapoint(user_id, "intro_test")
+    datapoint = await get_datapoint(user_id, "intro_test")
 
     return datapoint
 

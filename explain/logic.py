@@ -223,6 +223,8 @@ class ExplainBot:
                 from llm_agents.workflow_agent.simple_workflow_agent import SimpleXAIWorkflowAgent as Agent
             elif self.use_llm_agent == "mape_k":
                 from llm_agents.mape_k_approach.mape_k_workflow_agent import MapeKXAIWorkflowAgent as Agent
+            elif self.use_llm_agent == "mape_k_2":
+                from llm_agents.mape_k_2_components.mape_k_workflow_agent import MapeK2Component as Agent
             self.agent = Agent(feature_names=self.feature_ordering,
                                domain_description=self.conversation.describe.get_dataset_description(),
                                user_ml_knowledge=self.ml_knowledge,
@@ -312,9 +314,9 @@ class ExplainBot:
             visual_exp_dict = {}
             visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeatures")[0]
             opposite_class_name = self.conversation.class_names[1 - self.get_current_prediction(as_int=True)]
-            self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
-                                                self.get_current_prediction(),
-                                                opposite_class_name=opposite_class_name)
+            await self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
+                                                      self.get_current_prediction(),
+                                                      opposite_class_name=opposite_class_name)
         return self.current_instance
 
     def get_study_group(self):
