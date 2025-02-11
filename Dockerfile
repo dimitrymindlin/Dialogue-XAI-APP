@@ -1,36 +1,51 @@
-# Use Python 3.10 image
-FROM python:3.10-slim
+# Use a stable Python image
+FROM python:3.9.7
 
+# Creating Application Source Code Directory
+RUN mkdir -p /usr/src/app
+
+# Setting Home Directory for the container
 WORKDIR /usr/src/app
 
-# Install build tools
+# Upgrade pip to avoid dependency resolution issues
+RUN pip install --upgrade pip
+
+# Install system dependencies required for building some Python packages
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
-    git \
+    libffi-dev \
+    libpq-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    gcc \
+    g++ \
+    cmake \
+    make \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip
-RUN pip install --upgrade pip
+# Copy the requirements file first to leverage Docker caching
+COPY requirements.txt /usr/src/app/
 
-# Install Cython to ensure C-level compatibility for Pandas
-RUN pip install --no-cache-dir cython
+# Install dependencies with pre-built wheels to avoid compilation issues
+RUN pip install --no-cache-dir --prefer-binary spacy blis
 
-# Fix NumPy and Pandas with force-reinstall
-RUN pip install --no-cache-dir --force-reinstall "numpy<2.0" "pandas<2.0" "scikit-learn>=1.1.0,<1.3.0" "scipy>=1.7.3,<1.10.0" "llvmlite>=0.39.0"
-
-# Install all dependencies
-COPY requirements.txt .
+# Install remaining dependencies from requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy the rest of the application code into the container
+COPY . /usr/src/app
 
-# Set and expose port
-ENV PORT=5000
-EXPOSE ${PORT}
+# Application Environment variables
+ENV PORT 4001
 
+# Exposing Ports
+EXPOSE $PORT
+
+# Setting Persistent data
 VOLUME ["/app-data"]
 
-# Start with Gunicorn
-CMD ["gunicorn", "--timeout", "0", "-b", "0.0.0.0:5000", "flask_app:app", "--log-level", "debug"]
+# Run the Python application with Gunicorn
+CMD ["gunicorn", "--timeout", "0", "-b", "0.0.0.0:4000", "flask_app:app"]
