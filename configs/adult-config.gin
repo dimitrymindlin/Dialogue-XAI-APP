@@ -56,6 +56,9 @@ CeterisParibus.cache_location = "./cache/adult-ceteris-paribus.pkl"
 # Tabular Anchor Params
 TabularAnchor.cache_location = "./cache/adult-anchor-tabular.pkl"
 
+# Shap Global Params
+ShapGlobalExplainer.cache_location = "./cache/adult-shap-global.pkl"
+
 # Conversation params
 Conversation.class_names = {0: "under 50k", 1: "over 50k"}
 Conversation.question_bank_path =  "./data/question_bank.csv"

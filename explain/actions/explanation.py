@@ -123,6 +123,7 @@ def explain_global_feature_importances(conversation, as_plot=True):
         html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
                       f'<span>This is a general trend and might change for individual instances.</span>'
         return html_string, 1
+    return explanation, 1
 
 
 def explain_feature_importances_as_plot(conversation,

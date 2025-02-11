@@ -32,6 +32,7 @@ from explain.explanations.ceteris_paribus import CeterisParibus
 from explain.explanations.dice_explainer import TabularDice
 from explain.explanations.diverse_instances import DiverseInstances
 from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
+from explain.explanations.shap_global_explainer import ShapGlobalExplainer
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
 # from parsing.llm_intent_recognition.llm_pipeline_setup.ollama_pipeline.ollama_pipeline import LLMSinglePrompt REMOVED FOR PRODUCTION
@@ -476,14 +477,15 @@ class ExplainBot:
         ceteris_paribus_explainer.get_explanations(ids=diverse_instance_ids,
                                                    data=test_data)
 
-        """# Load global explanation via shap explainer
+        # Load global explanation via shap explainer
+        # Create background_data from x and y dfs
+        background_data = pd.concat([background_ds_x, background_ds_y], axis=1)
         shap_explainer = ShapGlobalExplainer(model=model,
-                                             data=data,
+                                             data=background_ds_x,
                                              class_names=self.conversation.class_names)
 
         shap_explainer.get_explanations()
         self.conversation.add_var('global_shap', shap_explainer, 'explanation')
-        """
 
         # Load FeatureStatisticsExplainer with background data
         feature_statistics_explainer = FeatureStatisticsExplainer(background_ds_x,
