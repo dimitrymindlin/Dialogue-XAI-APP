@@ -98,6 +98,7 @@ class UserModelFineGrained:
         self.explanations: Dict[str, Explanation] = {}
         self.cognitive_state: Optional[str] = None
         self.current_understanding_signals: List[str] = []
+        self.current_explanation_request: List[str] = []
         self.user_ml_knowledge = user_ml_knowledge
 
     def set_cognitive_state(self, cognitive_state: str):
@@ -106,7 +107,12 @@ class UserModelFineGrained:
 
     def get_user_info(self):
         """Return the user's cognitive state and ML knowledge as a string"""
-        return f"The user is in a {self.cognitive_state} cognitive state and their ML knowledge is: {self.user_ml_knowledge}. With the last message they signalled {self.current_understanding_signals}."
+        info = f"The user is in a {self.cognitive_state} cognitive state and their ML knowledge is: {self.user_ml_knowledge}. With the last message they signalled {self.current_understanding_signals}"
+        if len(self.current_explanation_request) > 0:
+            info += f" and showed the following explanation requests {self.current_explanation_request}."
+        else:
+            info += "."
+        return info
 
     def add_explanation(self, explanation_name: str, description: str):
         """Add a new explanation, overriding if it already exists."""
