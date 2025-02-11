@@ -28,3 +28,6 @@ flask_app.py: The main Flask application that serves the Dialog Xai App. Starts 
 - `data` folder has datasets and model training scripts.
 - `global_config` defines which config file to use in configs folder. Configs folder has example configs. Current working dataset, model and config are `adult`.
 - `llm_agents/mape_k_approach/mape_k_workflow_agent.py` is the current main focus. This agent makes use of MAPE-K model to answer user questions while monitoring and scaffolding the user's understanding of the model. 
+
+### Training the model
+# TODO
