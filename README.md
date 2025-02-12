@@ -1,5 +1,13 @@
 # Readme for the Dialog Xai App Experiments
 
+## INSTALLING DEPENDENCIES
+for local m1 macbook pro, run the following command in your environment:
+- ```pip install --prefer-binary h5py```
+- ```pip install -r requirements.txt```
+
+for docker build, use MAKEFILE (MAKE BUILD, MAKE RUN)
+
+## General
 This repository contains the code for the Dialog Xai App Experiments backend. The experiments are based on the Dialog Xai App, which is a web-based application that allows users to interact with a dialog system and get explanations for an ML models predictions. The experiments are designed to evaluate the effectiveness of different explanation strategies in improving user's model understanding.
 
 ## Setup
@@ -8,8 +16,8 @@ To run the experiments, you will need to set up the Dialog Xai App and the exper
 
 ### Dialog Xai App
 
-1. Install requirements: ```pip install -r requirements.txt```
-2. Start backend: ```python -m gunicorn --timeout 0 -b 0.0.0.0:5000 flask_app:app```
+1. Install requirements as described above
+2. Start backend: Locally through flask_app.py or through docker (Make Run)
 3. Start frontend in dialogue_xai_frontend repo.
 
 ## Project structure
