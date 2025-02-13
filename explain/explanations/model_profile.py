@@ -76,8 +76,8 @@ class PdpExplanation:
 
         cat_profiles = self.explainer.model_profile(type='partial', variable_type='categorical', N=800,
                                                     variables=self.categorical_features)
-        """num_profiles = self.explainer.model_profile(type='accumulated', variable_type='numerical',
-                                                    variables=self.numerical_features)"""
+        num_profiles = self.explainer.model_profile(type='accumulated', variable_type='numerical',
+                                                    variables=self.numerical_features)
 
         # Replace the feature values in `_x_` with the original names from `categorical_mapping`
         if self.categorical_mapping:
@@ -94,7 +94,8 @@ class PdpExplanation:
                             lambda x: feature_mapping[int(x)] if int(x) < len(feature_mapping) else x
                         )
 
-        # cat_profiles.plot()
+        """cat_profiles.plot()
+        num_profiles.plot()"""
 
         # TODO: This was plotted and analyzed by hand. Find a way to automatically analyze the graphs ... LLM prompt?
 
@@ -105,9 +106,9 @@ class PdpExplanation:
 
             "EducationLevel": "<p>On Average, the most important value of <strong>EducationLevel</strong> is <strong>Bachelor’s Degree</strong>, which is most often linked to higher income.</p> <p><strong>Associate’s Degree</strong> and <strong>High School Graduate</strong> are also linked to higher income, but to a lesser extent, while <strong>Primary Education</strong> and <strong>Middle School</strong> are linked to lower income.</p> ",
 
-            "Occupation": "<p>On Average, the most important values of <strong>Occupation</strong> are <strong>Professional</strong> and <strong>White-Collar</strong> jobs, which are most often linked to higher income.</p> <p><strong>Admin</strong> and <strong>Sales</strong> jobs are also linked to higher income, but less strongly, while <strong>Blue-Collar</strong> and <strong>Service</strong> jobs are more often linked to lower income.</p>",
+            "Occupation": "<p>On Average, the most important values of <strong>Occupation</strong> are <strong>Professional</strong> and <strong>White-Collar</strong> jobs, which are most often linked to higher income.</p> <p><strong>Sales</strong> and <strong>Military</strong> jobs are also linked to slightly higher income, but less strong, while <strong>Blue-Collar</strong> and <strong>Service</strong> jobs are more often slightly linked to lower income.</p>",
 
-            "WorkLifeBalance": "<p>On Average, the differences in <strong>WorkLifeBalance</strong> do not seem to have a strong effect on income, as all categories (<strong>Good, Fair, Poor</strong>) show similar results.</p> <p>This suggests that WorkLifeBalance does not play a major role in determining income in this dataset.</p>",
+            "WorkLifeBalance": "<p>On Average, the differences in <strong>WorkLifeBalance</strong> do not seem to have an effect on income, as all categories (<strong>Good, Fair, Poor</strong>) show no difference and impact.</p> <p>This suggests that WorkLifeBalance does not play a role in determining income in this dataset.</p>",
 
             "Age": "<p>On Average, the most important age range for higher income is between <strong>40–50 years</strong>, where people are most likely to earn more.</p> <p>Before 40, income levels tend to increase with age, while after 50, they remain more stable.</p>",
 
