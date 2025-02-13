@@ -260,10 +260,7 @@ class ExplainBot:
         return feature_statistics_explainer.get_feature_ranges()
 
     def set_user_prediction(self, experiment_phase, datapoint_count, user_prediction):
-        true_label = self.get_current_prediction()
-        current_id = self.current_instance.instance_id
         reversed_dict = {value: key for key, value in self.conversation.class_names.items()}
-        true_label_as_int = reversed_dict[true_label]
         try:
             user_prediction_as_int = reversed_dict[user_prediction]
         except KeyError:
@@ -271,11 +268,14 @@ class ExplainBot:
             # for "I don't know" option
 
         # Make 2d dict with self.current_instance_type as first key and current_id as second key
-        if self.current_instance_type not in self.user_prediction_dict:
-            self.user_prediction_dict[self.current_instance_type] = {}
 
-        self.user_prediction_dict[self.current_instance_type][current_id] = (user_prediction_as_int, true_label_as_int)
-        return user_prediction_as_int == true_label_as_int, true_label
+        self.user_prediction_dict[experiment_phase][datapoint_count]['user_prediction'] = user_prediction_as_int
+
+        # Check if user was correct
+        correct_pred = self.user_prediction_dict[experiment_phase][datapoint_count]['true_label']
+        correct_pred_string = self.conversation.class_names[correct_pred]
+        user_correct = user_prediction_as_int == correct_pred
+        return user_correct, correct_pred_string
 
     def get_user_correctness(self, train=False):
         # Check self.user_prediction_dict for correctness
@@ -297,7 +297,7 @@ class ExplainBot:
     def get_proceeding_okay(self):
         return self.dialogue_manager.get_proceeding_okay()
 
-    def get_next_instance(self, instance_type, return_probability=False):
+    def get_next_instance(self, instance_type, datapoint_count, return_probability=False):
         """
         Returns the next instance in the data_instances list if possible.
         param instance_type: type of instance to return, can be train, test or final_test
@@ -305,6 +305,7 @@ class ExplainBot:
         experiment_helper = self.conversation.get_var('experiment_helper').contents
         self.current_instance = experiment_helper.get_next_instance(
             instance_type=instance_type,
+            datapoint_count=datapoint_count,
             return_probability=return_probability)
         # TODO: Update agent with new instance
         if self.use_llm_agent:
@@ -313,13 +314,17 @@ class ExplainBot:
             visual_exp_dict = {}
             visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeatures")[0]
             opposite_class_name = self.conversation.class_names[1 - self.get_current_prediction(as_int=True)]
-            await self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
-                                                      self.get_current_prediction(),
-                                                      opposite_class_name=opposite_class_name)
+            self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
+                                                self.get_current_prediction(),
+                                                opposite_class_name=opposite_class_name)
 
         # Update user_prediction_dict with current instance's correct prediction
-        true_label = self.get_current_prediction()  # TODO: Set prediction here for instance type and datapoint count
-        return self.current_instance, counter
+        true_label = self.get_current_prediction(as_int=True)
+        try:
+            self.user_prediction_dict[instance_type][self.current_instance.counter] = {"true_label": true_label}
+        except KeyError:
+            self.user_prediction_dict[instance_type] = {self.current_instance.counter: {"true_label": true_label}}
+        return self.current_instance
 
     def get_study_group(self):
         return self.study_group
