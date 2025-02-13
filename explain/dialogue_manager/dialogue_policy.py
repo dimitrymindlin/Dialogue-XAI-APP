@@ -97,7 +97,7 @@ class DialoguePolicy:
 
     def get_suggested_followups(self):
         current_state = self.model.state
-        return [{'id': trigger, 'question': DialoguePolicy.questions[trigger], 'feature': None} for trigger in
+        return [{'id': trigger, 'question': DialoguePolicy.questions[trigger], 'feature_id': None} for trigger in
                 DialoguePolicy.followups.get(current_state, [])]
 
     def get_last_explanation(self):

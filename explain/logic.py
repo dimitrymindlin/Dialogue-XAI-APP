@@ -25,6 +25,7 @@ from data.response_templates.template_manager import TemplateManager
 from create_experiment_data.test_instances import TestInstances
 from explain.action import run_action, run_action_new, compute_explanation_report
 from explain.actions.explanation import explain_cfe_by_given_features
+from explain.actions.static_followup_options import get_mapping
 from explain.conversation import Conversation
 from explain.dialogue_manager.manager import DialogueManager
 from explain.explanation import MegaExplainer
@@ -85,7 +86,8 @@ class ExplainBot:
                  use_selection: bool = False,
                  use_intent_recognition: bool = False,
                  use_active_dialogue_manager: bool = False,
-                 use_llm_agent=False):
+                 use_llm_agent=False,
+                 use_static_followup=False):
         """The init routine.
 
         Arguments:
@@ -151,6 +153,9 @@ class ExplainBot:
         self.use_intent_recognition = use_intent_recognition
         self.use_active_dialogue_manager = use_active_dialogue_manager
         self.use_llm_agent = use_llm_agent
+        self.use_static_followup = use_static_followup
+        if self.use_static_followup:
+            self.static_followup_mapping = get_mapping()
 
         # A variable used to help file uploads
         self.manual_var_filename = None
@@ -270,6 +275,7 @@ class ExplainBot:
             self.user_prediction_dict[self.current_instance_type] = {}
 
         self.user_prediction_dict[self.current_instance_type][current_id] = (user_prediction_as_int, true_label_as_int)
+        return user_prediction_as_int == true_label_as_int, true_label
 
     def get_user_correctness(self, train=False):
         # Check self.user_prediction_dict for correctness
@@ -423,7 +429,8 @@ class ExplainBot:
 
         # Load local FI explanations
         app.logger.info("...loading MegaExplainer...")
-        mega_explainer = MegaExplainer(prediction_fn=pred_f,
+        mega_explainer = MegaExplainer(model=model,
+                                       prediction_fn=pred_f,
                                        data=background_ds_x,
                                        cat_features=categorical_f,
                                        class_names=self.conversation.class_names,
@@ -431,8 +438,13 @@ class ExplainBot:
 
         # Load diverse instances (explanations)
         app.logger.info("...loading DiverseInstances...")
-        diverse_instances_explainer = DiverseInstances(
-            lime_explainer=mega_explainer.mega_explainer.explanation_methods['lime_0.75'])
+        submodular_pick = False
+
+        if submodular_pick:
+            lime_for_submodular = mega_explainer.mega_explainer.explanation_methods['lime_0.75']
+        else:
+            lime_for_submodular = None
+        diverse_instances_explainer = DiverseInstances(lime_explainer=lime_for_submodular)
         diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=test_data,
                                                                                     model=model,
                                                                                     y_values=test_data_y,
@@ -634,6 +646,14 @@ class ExplainBot:
 
     def get_suggested_method(self):
         return self.dialogue_manager.get_suggested_explanations()
+
+    def get_static_followup(self, question_id) -> List[Dict[str, Any]]:
+        # return example [{"id": "shapAllFeatures", "question": "Would you like to see the feature contributions?", "feature_id": None}]
+        try:
+            method_id, question = self.static_followup_mapping[question_id]
+            return [{"question_id": method_id, "question": question, "feature_id": ""}]
+        except (KeyError, TypeError):
+            return []
 
     def set_num_prompts(self, num_prompts):
         """Updates the number of prompts to a new number"""

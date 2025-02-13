@@ -249,18 +249,19 @@ def get_bot_response():
 
         if bot_dict[user_id].use_active_dialogue_manager:
             followup = bot_dict[user_id].get_suggested_method()
+        elif bot_dict[user_id].use_static_followup:
+            followup = bot_dict[user_id].get_static_followup(question_id)
         else:
             followup = []
         message_dict = {
             "isUser": False,
             "feedback": True,
             "text": response[0],
-            "id": question_id,
+            "question_id": question_id,
             "feature_id": feature_id,
             "followup": followup,
             "reasoning": response[3]
         }
-
         return jsonify(message_dict)
 
 
@@ -294,7 +295,7 @@ async def get_bot_response_from_nl():
             "isUser": False,
             "feedback": True,
             "text": response,
-            "id": question_id,
+            "question_id": question_id,
             "feature_id": feature_id,
             "followup": followup,
             "reasoning": reasoning

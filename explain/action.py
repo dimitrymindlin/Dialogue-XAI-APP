@@ -11,6 +11,8 @@ from explain.actions.explanation import explain_local_feature_importances, expla
     explain_ceteris_paribus, explain_pdp
 from explain.actions.filter import filter_operation
 from explain.actions.prediction_likelihood import predict_likelihood
+from explain.actions.static_followup_options import explainConceptOfFeatureImportance, explainConceptOfLocalImportance, \
+    explainWhyFeaturesAreConsideredAndOthersNot
 from explain.conversation import Conversation
 from explain.actions.get_action_functions import get_all_action_functions_map
 
@@ -158,7 +160,17 @@ def run_action_new(conversation: Conversation,
         explanation = explanation + f"<br> This is a general trend, but it may vary for a specific {instance_type_naming}."
         return explanation
 
+    if question_id == "followupWhyThisFeatureImportant":
+        explanation = explainConceptOfFeatureImportance()
+        return explanation
 
+    if question_id == "followupWhyFeatureImportancesChange":
+        explanation = explainConceptOfLocalImportance(instance_type_naming)
+        return explanation
+
+    if question_id == "followupWhyAreTheseFeaturesConsidered":
+        explanation = explainWhyFeaturesAreConsideredAndOthersNot()
+        return explanation
 
     if question_id == "whyExplanation":
         return "To understand why the model made the prediction, I can tell you about" \
@@ -200,7 +212,7 @@ def run_action_new(conversation: Conversation,
         parse_op = "top 3"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
                                                         template_manager=template_manager)
-        answer = f"Here are the 3 <b>most</b> important attributes for predicting <b>{current_prediction_str}</b>: <br><br>"
+        answer = f"Here are the 3 <b>most</b> important attributes for predicting <b>{current_prediction_str}</b> for the current {instance_type_naming}: <br><br>"
         return answer + explanation[0]
 
     if question_id == "mostImportantFeature":
@@ -225,7 +237,7 @@ def run_action_new(conversation: Conversation,
     if question_id == "least3Features":
         # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the instance?
         parse_op = "least 3"
-        answer = f"Here are the <b>least</b> important attributes for predicting <b>{current_prediction_str}</b>: <br><br>"
+        answer = f"Here are the <b>least</b> important attributes for predicting <b>{current_prediction_str}</b> for the current {instance_type_naming}: <br><br>"
         explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
                                                         template_manager=template_manager)
         return answer + explanation[0]
