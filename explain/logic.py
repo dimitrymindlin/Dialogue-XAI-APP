@@ -350,28 +350,25 @@ class ExplainBot:
         return self.feature_units_mapping
 
     def get_feature_names(self):
-        # Fetch data and mappings
         template_manager = self.conversation.get_var("template_manager").contents
-        feature_display_name_map = template_manager.feature_display_names.feature_name_to_display_name
-        reverse_mapping = {v: k for k, v in feature_display_name_map.items()}
+        feature_display_names = template_manager.feature_display_names.feature_name_to_display_name
+        feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
         original_feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
 
-        # Generate display names with fallback to original names
-        feature_display_names = [feature_display_name_map.get(name, name) for name in original_feature_names]
+        # Sort
+        feature_names_ordering = [feature.replace(" ", "") for feature in
+                                  self.feature_ordering]  # From display names to feature names
+        if self.feature_ordering is not None:
+            # Sort feature names by feature_ordering
+            feature_names = sorted(feature_names, key=lambda k: feature_names_ordering)
+        else:
+            feature_names = sorted(feature_names)
 
-        # Sort display names based on feature ordering, or alphabetically if no ordering is provided
-        feature_display_names.sort(
-            key=(lambda name: self.feature_ordering.index(
-                name) if self.feature_ordering and name in self.feature_ordering else name)
-        )
-
-        # Create the feature mapping using reverse mapping for ID and original name
+        # Map feature names to their original IDs and display names, if available
         feature_names_id_mapping = [
-            {
-                'id': original_feature_names.index(reverse_mapping[display_name]),
-                'feature_name': reverse_mapping[display_name]
-            }
-            for display_name in feature_display_names if display_name in reverse_mapping
+            {'id': original_feature_names.index(feature_name),
+             'feature_name': feature_display_names.get(feature_name, feature_name)}
+            for feature_name in feature_names
         ]
 
         return feature_names_id_mapping
