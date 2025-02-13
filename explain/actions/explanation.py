@@ -240,6 +240,15 @@ def explain_cfe(conversation, data, parse_op, regen):
     return short_summary, desired_class
 
 
+def explain_pdp(conversation, feature_name):
+    pdp_explainer = conversation.get_var('pdp').contents
+    try:
+        exp = pdp_explainer.get_explanation(feature_name)
+    except KeyError:
+        exp = "Sorry, something went wrong."
+    return exp
+
+
 def explain_cfe_by_given_features(conversation,
                                   data,
                                   feature_names_list,

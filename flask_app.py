@@ -109,13 +109,8 @@ def get_datapoint(user_id, datapoint_type, return_probability=False):
     """
     if user_id is None:
         user_id = "TEST"
-    current_instance_with_units, instance_counter = bot_dict[user_id].get_next_instance_triple(datapoint_type,
-                                                                                               return_probability=return_probability)
-    (instance_id, instance_dict, probas, ml_label, _) = current_instance_with_units
-    instance_dict["id"] = str(instance_id)
-    if return_probability:
-        instance_dict["probabilities"] = probas
-    instance_dict["ml_prediction"] = ml_label
+    instance = bot_dict[user_id].get_next_instance(datapoint_type,return_probability=return_probability)
+    instance_dict = instance.get_datapoint_as_dict_for_frontend()
     return instance_dict
 
 

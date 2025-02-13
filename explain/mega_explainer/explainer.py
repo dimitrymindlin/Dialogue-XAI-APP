@@ -62,17 +62,19 @@ class Explainer:
     """
 
     def __init__(self,
+                 model,
                  explanation_dataset: np.ndarray,
-                 explanation_model: Any,
+                 predict_fn: Any,
                  feature_names: list[str],
                  discrete_features: list[int],
-                 use_selection: bool = True):
+                 use_selection: bool = True,
+                 use_tree_shap: bool = False):
         """
         Init.
 
         Args:
             explanation_dataset: background data, given as numpy array
-            explanation_model: the callable black box model. the model should be callable via
+            predict_fn: the callable black box model. the model should be callable via
                                explanation_model(data) to generate prediction probabilities
             feature_names: the feature names
             discrete_features: The indices of the discrete features in the dataset. Note, in the
@@ -80,6 +82,7 @@ class Explainer:
                                However, in this mega_explainer sub folder, we adopt the term
                                `discrete features` to describe these features.
             use_selection: Whether to use the explanation selection. If false, uses lime.
+            use_tree_shap: Whether to use tree shap or kernel shap. If true, uses tree shap.
         """
         if isinstance(explanation_dataset, pd.DataFrame):
             # Creating a copy of the explanation dataset... For large datasets, this may be an
@@ -92,35 +95,42 @@ class Explainer:
             message = f"Data must be pd.DataFrame or np.ndarray, not {arr_type}"
             assert isinstance(explanation_dataset, np.ndarray), message
 
+        self.model = model  # sklearn model or pipeline
         self.data = explanation_dataset
-        self.model = explanation_model
+        self.predict_fn = predict_fn
         self.feature_names = feature_names
+        self.use_tree_shap = use_tree_shap
 
         # We store a dictionary containing all the explanation methods we are going to compare
         # in order to figure out "the best" explanation. These methods are initialized and
         # stored here
 
         lime_template = partial(Lime,
-                                model=self.model,
+                                model=self.predict_fn,
                                 data=self.data,
                                 feature_names=self.feature_names,
                                 discrete_features=discrete_features)
 
         # Generate explanations with many lime kernels
-        if use_selection:
-            kernel_widths = [0.25, 0.50, 0.75, 1.0]
+        if self.use_tree_shap:
+            # Use tree shap for exact shap values
+            shap_explainer = SHAPExplainer(self.model, self.data, method='tree')
+            available_explanations = {"shap": shap_explainer}
         else:
-            kernel_widths = [0.75]
+            # Use kernel shap for approximate shap values and select the best kernel width
+            shap_explainer = SHAPExplainer(self.model, self.predict_fn, self.data)
+            if use_selection:
+                kernel_widths = [0.25, 0.50, 0.75, 1.0]
+            else:
+                kernel_widths = [0.75]
 
-        available_explanations = {}
-        for width in kernel_widths:
-            name = f"lime_{round(width, 3)}"
-            available_explanations[name] = lime_template(kernel_width=width)
-
-        # add shap
-        if use_selection:
-            shap_explainer = SHAPExplainer(self.model, self.data)
-            available_explanations["shap"] = shap_explainer
+            available_explanations = {}
+            for width in kernel_widths:
+                name = f"lime_{round(width, 3)}"
+                available_explanations[name] = lime_template(kernel_width=width)
+            # add shap
+            if use_selection:
+                available_explanations["shap"] = shap_explainer
 
         self.explanation_methods = available_explanations
 
@@ -202,9 +212,9 @@ class Explainer:
         x_perturbed = self.perturbation_method.get_perturbed_inputs(**perturb_args)
 
         # TODO(satya): Could you make these lines more readable?
-        y = self._arr([i[label] for i in self._arr(self.model(x.reshape(1, -1)))])
+        y = self._arr([i[label] for i in self._arr(self.predict_fn(x.reshape(1, -1)))])
         # Model expects numpy arrays for german dataset. (Dimi)
-        y_perturbed = self._arr([i[label] for i in self._arr(self.model(x_perturbed.float().numpy()))])
+        y_perturbed = self._arr([i[label] for i in self._arr(self.predict_fn(x_perturbed.float().numpy()))])
 
         # Return abs mean
         return np.mean(np.abs(y - y_perturbed), axis=0)
@@ -259,12 +269,12 @@ class Explainer:
 
         if explain_only_most_likely:
             # Get the prediction scores for most likely class
-            predictions = self.model(formatted_data)[0]
+            predictions = self.predict_fn(formatted_data)[0]
             num_classes = predictions.shape[-1]
             class_indices = [np.argmax(predictions)]
         else:
             # Get the prediction scores for all classes
-            predictions = self.model(formatted_data)[0]
+            predictions = self.predict_fn(formatted_data)[0]
             num_classes = predictions.shape[-1]
             class_indices = list(range(num_classes))
 
@@ -278,18 +288,27 @@ class Explainer:
             explanations[class_index], scores[class_index], fidelity_scores_topk[class_index] = {}, {}, {}
 
             # Explanation logic adapted for multi-class
-            for method in self.explanation_methods.keys():
+            if len(self.explanation_methods.keys()) > 1:
+                for method in self.explanation_methods.keys():
+                    cur_explainer = self.explanation_methods[method]
+                    cur_expl, score = cur_explainer.get_explanation(formatted_data, label=class_index)
+
+                    explanations[class_index][method] = cur_expl.squeeze(0)
+                    scores[class_index][method] = score
+                    fidelity_scores_topk[class_index][method] = self._compute_faithfulness_auc(formatted_data,
+                                                                                               explanations[class_index][
+                                                                                                   method],
+                                                                                               class_index,
+                                                                                               k,
+                                                                                               metric="topk")
+            else:
+                # If only one explanation method is available, use it
+                method = list(self.explanation_methods.keys())[0]
                 cur_explainer = self.explanation_methods[method]
                 cur_expl, score = cur_explainer.get_explanation(formatted_data, label=class_index)
 
                 explanations[class_index][method] = cur_expl.squeeze(0)
                 scores[class_index][method] = score
-                fidelity_scores_topk[class_index][method] = self._compute_faithfulness_auc(formatted_data,
-                                                                                           explanations[class_index][
-                                                                                               method],
-                                                                                           class_index,
-                                                                                           k,
-                                                                                           metric="topk")
 
         # Iterate over each explanation method and compute fidelity scores of topk
         # and non-topk features per the method
@@ -298,38 +317,50 @@ class Explainer:
             return fidelity_scores_topk
 
         # Initialize dictionary to store the best explanation for each class
-        best_explanations_per_class = {}
+        if len(self.explanation_methods.keys()) > 1:
+            best_explanations_per_class = {}
 
-        for class_index in explanations.keys():
-            class_fidelity_scores = {method: fidelity_scores_topk[class_index][method] for method in
-                                     fidelity_scores_topk[class_index]}
-            if len(class_fidelity_scores) >= 2:
-                top2_methods = heapq.nlargest(2, class_fidelity_scores, key=class_fidelity_scores.get)
+            for class_index in explanations.keys():
+                class_fidelity_scores = {method: fidelity_scores_topk[class_index][method] for method in
+                                         fidelity_scores_topk[class_index]}
+                if len(class_fidelity_scores) >= 2:
+                    top2_methods = heapq.nlargest(2, class_fidelity_scores, key=class_fidelity_scores.get)
 
-                diff = abs(class_fidelity_scores[top2_methods[0]] - class_fidelity_scores[top2_methods[1]])
-                if diff > epsilon:
-                    best_method = top2_methods[0]
+                    diff = abs(class_fidelity_scores[top2_methods[0]] - class_fidelity_scores[top2_methods[1]])
+                    if diff > epsilon:
+                        best_method = top2_methods[0]
+                    else:
+                        # Adapt the stability computation for multi-class context if necessary
+                        highest_fidelity = self.compute_stability(formatted_data,
+                                                                  explanations[class_index][top2_methods[0]],
+                                                                  self.explanation_methods[top2_methods[0]], class_index, k)
+                        second_highest_fidelity = self.compute_stability(formatted_data,
+                                                                         explanations[class_index][top2_methods[1]],
+                                                                         self.explanation_methods[top2_methods[1]],
+                                                                         class_index, k)
+
+                        best_method = top2_methods[0] if highest_fidelity > second_highest_fidelity else top2_methods[1]
                 else:
-                    # Adapt the stability computation for multi-class context if necessary
-                    highest_fidelity = self.compute_stability(formatted_data,
-                                                              explanations[class_index][top2_methods[0]],
-                                                              self.explanation_methods[top2_methods[0]], class_index, k)
-                    second_highest_fidelity = self.compute_stability(formatted_data,
-                                                                     explanations[class_index][top2_methods[1]],
-                                                                     self.explanation_methods[top2_methods[1]],
-                                                                     class_index, k)
-
-                    best_method = top2_methods[0] if highest_fidelity > second_highest_fidelity else top2_methods[1]
-            else:
-                # Default to a specific method if not enough data is available for comparison
-                best_method = "lime_0.75"
-            # Store the best explanation for the class
-            best_explanations_per_class[class_index] = {
-                'explanation': explanations[class_index][best_method].numpy(),
-                'method': best_method,
-                'score': scores[class_index][best_method],
-                'agree': diff <= epsilon if 'diff' in locals() else True
-            }
+                    # Default to a specific method if not enough data is available for comparison
+                    best_method = "lime_0.75"
+                # Store the best explanation for the class
+                best_explanations_per_class[class_index] = {
+                    'explanation': explanations[class_index][best_method].numpy(),
+                    'method': best_method,
+                    'score': scores[class_index][best_method],
+                    'agree': diff <= epsilon if 'diff' in locals() else True
+                }
+        else:
+            # If only one explanation method is available, use it
+            best_explanations_per_class = {}
+            for class_index in explanations.keys():
+                best_method = list(self.explanation_methods.keys())[0]
+                best_explanations_per_class[class_index] = {
+                    'explanation': explanations[class_index][best_method].numpy(),
+                    'method': best_method,
+                    'score': scores[class_index][best_method],
+                    'agree': True
+                }
 
         # Format return
         # TODO(satya,dylan): figure out a way to get a score metric using fidelity

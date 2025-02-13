@@ -141,13 +141,15 @@ class MegaExplainer(Explanation):
     """
 
     def __init__(self,
+                 model,
                  prediction_fn: Callable[[np.ndarray], np.ndarray],
                  data: pd.DataFrame,
                  cat_features: Union[list[int], list[str]],
                  cache_location: str = "./cache/mega-explainer-tabular.pkl",
                  class_names: list[str] = None,
                  use_selection: bool = True,
-                 categorical_mapping: dict = None):
+                 categorical_mapping: dict = None,
+                 use_tree_shap: bool = False):
         """Init.
 
         Args:
@@ -166,11 +168,13 @@ class MegaExplainer(Explanation):
         cat_features = self.get_cat_features(data, cat_features)
 
         # Initialize the explanation selection
-        self.mega_explainer = Explainer(explanation_dataset=self.data.to_numpy(),
-                                        explanation_model=self.prediction_fn,
+        self.mega_explainer = Explainer(model,
+                                        explanation_dataset=self.data.to_numpy(),
+                                        predict_fn=self.prediction_fn,
                                         feature_names=data.columns,
                                         discrete_features=cat_features,
-                                        use_selection=use_selection)
+                                        use_selection=use_selection,
+                                        use_tree_shap=use_tree_shap)
         self.categorical_mapping = categorical_mapping
 
     @staticmethod
@@ -469,7 +473,7 @@ class MegaExplainer(Explanation):
                                           filtering_text=filtering_text,
                                           template_manager=template_manager)
 
-        #follow_up_questions = self.get_follow_up_questions(data, sig_coefs)
+        # follow_up_questions = self.get_follow_up_questions(data, sig_coefs)
 
         return response
 

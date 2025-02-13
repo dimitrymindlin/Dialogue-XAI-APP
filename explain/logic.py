@@ -20,6 +20,7 @@ from flask import Flask
 import gin
 
 from create_experiment_data.experiment_helper import ExperimentHelper
+from create_experiment_data.instance_datapoint import InstanceDatapoint
 from data.response_templates.template_manager import TemplateManager
 from create_experiment_data.test_instances import TestInstances
 from explain.action import run_action, run_action_new, compute_explanation_report
@@ -35,7 +36,6 @@ from explain.explanations.feature_statistics_explainer import FeatureStatisticsE
 from explain.explanations.shap_global_explainer import ShapGlobalExplainer
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
-# from parsing.llm_intent_recognition.llm_pipeline_setup.ollama_pipeline.ollama_pipeline import LLMSinglePrompt REMOVED FOR PRODUCTION
 
 from parsing.llm_intent_recognition.llm_pipeline_setup.openai_pipeline.openai_pipeline import \
     LLMSinglePromptWithMemoryAndSystemMessage
@@ -176,7 +176,7 @@ class ExplainBot:
         self.train_instance_counter = 0
         self.test_instance_counter = 0
         self.user_prediction_dict = {}
-        self.current_instance = None
+        self.current_instance: InstanceDatapoint = None
         self.current_instance_type = "train"  # Or test
 
         # Initialize parser + prompts as None
@@ -254,9 +254,9 @@ class ExplainBot:
         feature_statistics_explainer = self.conversation.get_var('feature_statistics_explainer').contents
         return feature_statistics_explainer.get_feature_ranges()
 
-    def set_user_prediction(self, user_prediction):
+    def set_user_prediction(self, experiment_phase, datapoint_count, user_prediction):
         true_label = self.get_current_prediction()
-        current_id = self.current_instance[0]
+        current_id = self.current_instance.instance_id
         reversed_dict = {value: key for key, value in self.conversation.class_names.items()}
         true_label_as_int = reversed_dict[true_label]
         try:
@@ -264,7 +264,7 @@ class ExplainBot:
         except KeyError:
             user_prediction_as_int = int(1000)
             # for "I don't know" option
-        print(f"User prediction: {user_prediction_as_int}, True label: {true_label_as_int}")
+
         # Make 2d dict with self.current_instance_type as first key and current_id as second key
         if self.current_instance_type not in self.user_prediction_dict:
             self.user_prediction_dict[self.current_instance_type] = {}
@@ -291,35 +291,40 @@ class ExplainBot:
     def get_proceeding_okay(self):
         return self.dialogue_manager.get_proceeding_okay()
 
-    def get_next_instance_triple(self, instance_type, return_probability=False):
+    def get_next_instance(self, instance_type, return_probability=False):
         """
         Returns the next instance in the data_instances list if possible.
         param instance_type: type of instance to return, can be train, test or final_test
         """
         experiment_helper = self.conversation.get_var('experiment_helper').contents
-        self.current_instance, counter, self.current_instance_type = experiment_helper.get_next_instance(
+        self.current_instance = experiment_helper.get_next_instance(
             instance_type=instance_type,
             return_probability=return_probability)
         # TODO: Update agent with new instance
         if self.use_llm_agent:
             xai_report = self.get_explanation_report(as_text=True)
-            self.agent.initialize_new_datapoint(self.current_instance, xai_report, self.get_current_prediction())
+            # Get visual explanations
+            visual_exp_dict = {}
+            visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeatures")[0]
+            opposite_class_name = self.conversation.class_names[1 - self.get_current_prediction(as_int=True)]
+            await self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
+                                                      self.get_current_prediction(),
+                                                      opposite_class_name=opposite_class_name)
+
+        # Update user_prediction_dict with current instance's correct prediction
+        true_label = self.get_current_prediction()  # TODO: Set prediction here for instance type and datapoint count
         return self.current_instance, counter
 
     def get_study_group(self):
         return self.study_group
 
-    def get_current_prediction(self):
+    def get_current_prediction(self, as_int=False):
         """
         Returns the current prediction.
         """
-        # Can be either [2], then argmax, or [3] then its a string
-        if isinstance(self.current_instance[2], np.ndarray):
-            current_prediction = np.argmax(self.current_instance[2])
-            prediction_string = self.conversation.class_names[current_prediction]
-        else:
-            prediction_string = self.current_instance[3]  # This is the prediction string
-        return prediction_string
+        if as_int:
+            return self.current_instance.model_predicted_label
+        return self.current_instance.model_predicted_label_string
 
     def get_feature_tooltips(self):
         """
@@ -334,23 +339,28 @@ class ExplainBot:
         return self.feature_units_mapping
 
     def get_feature_names(self):
+        # Fetch data and mappings
         template_manager = self.conversation.get_var("template_manager").contents
-        feature_display_names = template_manager.feature_display_names.feature_name_to_display_name
-        feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
+        feature_display_name_map = template_manager.feature_display_names.feature_name_to_display_name
+        reverse_mapping = {v: k for k, v in feature_display_name_map.items()}
         original_feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
 
-        # Sort
-        if self.feature_ordering is not None:
-            # Sort feature names by feature_ordering
-            feature_names = sorted(feature_names, key=lambda k: self.feature_ordering.index(k))
-        else:
-            feature_names = sorted(feature_names)
+        # Generate display names with fallback to original names
+        feature_display_names = [feature_display_name_map.get(name, name) for name in original_feature_names]
 
-        # Map feature names to their original IDs and display names, if available
+        # Sort display names based on feature ordering, or alphabetically if no ordering is provided
+        feature_display_names.sort(
+            key=(lambda name: self.feature_ordering.index(
+                name) if self.feature_ordering and name in self.feature_ordering else name)
+        )
+
+        # Create the feature mapping using reverse mapping for ID and original name
         feature_names_id_mapping = [
-            {'id': original_feature_names.index(feature_name),
-             'feature_name': feature_display_names.get(feature_name, feature_name)}
-            for feature_name in feature_names
+            {
+                'id': original_feature_names.index(reverse_mapping[display_name]),
+                'feature_name': reverse_mapping[display_name]
+            }
+            for display_name in feature_display_names if display_name in reverse_mapping
         ]
 
         return feature_names_id_mapping
@@ -757,7 +767,7 @@ class ExplainBot:
             returned_item = run_action(
                 user_session_conversation, parse_tree, parsed_text)
         else:
-            instance_id = self.current_instance[0]
+            instance_id = self.current_instance.instance_id
             returned_item = run_action_new(user_session_conversation, int(text), instance_id)
 
         # username = user_session_conversation.username
@@ -778,7 +788,7 @@ class ExplainBot:
         return final_result
 
     def update_state_new(self,
-                         question_id: int = None,
+                         question_id: str = None,
                          feature_id: int = None) -> tuple[str, int, Optional[int]]:
         """The main experiment driver.
 
@@ -792,7 +802,7 @@ class ExplainBot:
                     output: The response to the user input.
                 """
 
-        instance_id = self.current_instance[0]
+        instance_id = self.current_instance.instance_id
         question_id, feature_name, reasoning = self.dialogue_manager.update_state(None, question_id, feature_id)
 
         if question_id is None:
@@ -823,10 +833,11 @@ class ExplainBot:
         feature_id = None
         if self.use_llm_agent:
             reasoning, response = await self.agent.answer_user_question(user_input)
+            return response, None, None, reasoning
         elif self.use_intent_recognition:
             # Get the question_id and feature_name from the user input
             question_id, feature_name, reasoning = self.dialogue_manager.update_state(user_input)
-            if feature_name is not "" and feature_name is not None:
+            if feature_name != "" and feature_name is not None:
                 feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
                 # remove whitespace between words
                 feature_name = feature_name.replace(" ", "")
@@ -847,15 +858,13 @@ class ExplainBot:
 
     def get_feature_importances_for_current_instance(self):
         mega_explainer = self.conversation.get_var('mega_explainer').contents
-        instance = self.current_instance[1]
-        data = pd.DataFrame(instance, index=[self.current_instance[0]])
+        data = pd.DataFrame(self.current_instance.instance_as_dict, index=[self.current_instance.instance_id])
         feature_importance_dict = mega_explainer.get_feature_importances(data, [], False)[0]
         # Turn display names into feature names
         feature_importance_dict = {self.get_feature_display_name_dict().get(k, k): v for k, v in
                                    feature_importance_dict.items()}
         # Extract the feature importances for the current instance from outer dict with current class as key
-        current_prediction_class = self.current_instance[4]
-        feature_importance_dict = feature_importance_dict[current_prediction_class]
+        feature_importance_dict = feature_importance_dict[self.current_instance.model_predicted_label_string]
         return feature_importance_dict
 
     def reset_dialogue_manager(self):
@@ -868,7 +877,7 @@ class ExplainBot:
 
     def get_explanation_report(self, as_text=False):
         """Returns the explanation report."""
-        instance_id = self.current_instance[0]
+        instance_id = self.current_instance.instance_id
         report = compute_explanation_report(self.conversation, instance_id,
                                             instance_type_naming=self.instance_type_naming,
                                             feature_display_name_mapping=self.get_feature_display_name_dict(),

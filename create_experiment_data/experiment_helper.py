@@ -6,6 +6,9 @@ import numpy as np
 import pandas as pd
 import copy
 
+from create_experiment_data.instance_datapoint import InstanceDatapoint
+
+
 @gin.configurable
 class ExperimentHelper:
     def __init__(self, conversation,
@@ -54,30 +57,28 @@ class ExperimentHelper:
                     value = int(value)
                 instance[key] = str(value)
 
-    def _make_displayable_instance(self, instance, return_probabilities=False):
+    def _make_displayable_instance(self, instance,
+                                   return_probabilities=False):
         # Round instance features
-        instance = copy.deepcopy(instance)
-        self._round_instance_features(instance[1])
-        self.template_manager.apply_categorical_mapping(instance[1])
+        instance_features = copy.deepcopy(instance.instance_as_dict)
+        instance_features = self.template_manager.apply_categorical_mapping(instance_features)
+        self._round_instance_features(instance_features)
+
+        # Turn instace features to display names
+        instance.displayable_features = instance_features  # Copy categorical feature values first
+        instance.displayable_features = self.template_manager.replace_feature_names_by_display_names(
+            instance.displayable_features)  # then add display names
+
         # Order instance features and values according to the feature ordering
         if self.feature_ordering is not None:
             # Order instance features according to the feature ordering
-            instance_features = instance[1]
-            instance_features = {feature: instance_features[feature] for feature in self.feature_ordering}
-            instance = (instance[0], instance_features, instance[2], instance[3], instance[4])
+            instance.displayable_features = {feature: instance.displayable_features[feature] for feature in
+                                             self.feature_ordering}
         else:  # alphabetically order features
-            instance = (instance[0], dict(sorted(instance[1].items())), instance[2], instance[3], instance[4])
+            instance.displayable_features = dict(sorted(instance.displayable_features.items()))
+
         # Make sure all values are strings
-        self._convert_values_to_string(instance[1])
-        # Make display feature names for the instance keys
-        new_instance = self.template_manager.replace_feature_names_by_display_names(instance[1])
-        # If not return probability and probabilities are not none, turn to class label
-        if not return_probabilities and instance[2] is not None:
-            ml_prediction = np.argmax(instance[2])
-            display_ml_prediction = self.conversation.class_names[ml_prediction]
-            instance = (instance[0], new_instance, display_ml_prediction, instance[3], instance[4])
-        else:
-            instance = (instance[0], new_instance, instance[2], instance[3], instance[4])
+        self._convert_values_to_string(instance.displayable_features)
         return instance
 
     def get_next_instance(self, instance_type, return_probability=False):
@@ -107,15 +108,25 @@ class ExperimentHelper:
                 self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance[1], index=[0])))
             instance = (instance[0], instance[1], instance[2], instance[3], predicted_label_index)
 
+        # Turn instance dict in class
+        instance = InstanceDatapoint(instance_id=instance[0],
+                                     instance_as_dict=instance[1],
+                                     class_probabilities=instance[2],
+                                     model_predicted_label_string=instance[3],
+                                     model_predicted_label=predicted_label_index)
+
         self.current_instance_type = instance_type
         instance = self._make_displayable_instance(instance)
 
         if old_instance and not instance_type in ["final_test", "intro_test"]:
-            for key, value in instance[1].items():
-                if value != old_instance[1][key]:
-                    instance[1][key] = {"old": old_instance[1][key], "current": value}
+            for key, value in instance.instance_as_dict.items():
+                if value != old_instance.instance_as_dict[key]:
+                    instance.instance_as_dict[key] = {"old": old_instance.instance_as_dict[key], "current": value}
+
+        instance.counter = counter
+        instance.instance_type = self.current_instance_type
         self.current_instance = instance
-        return self.current_instance, counter, self.current_instance_type
+        return instance
 
     def _prepare_instance_data(self, instance):
         # Simplified example of preparing a data instance
@@ -195,8 +206,7 @@ class ExperimentHelper:
         original_instance_id = original_instance.index[0]
         final_cfs_df = cfes[original_instance_id].cf_examples_list[0].final_cfs_df
         # drop y column
-        if final_cfs_df is not None:
-            final_cfs_df = final_cfs_df.drop(columns=["y"])
+        final_cfs_df = final_cfs_df.drop(columns=["y"])
         return final_cfs_df
 
     def get_similar_instance(self,
