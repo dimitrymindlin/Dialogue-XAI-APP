@@ -72,11 +72,12 @@ class DiverseInstances:
         balanced_class_0 = np.random.choice(class_0_indices, min_length, replace=False)
         balanced_class_1 = np.random.choice(class_1_indices, min_length, replace=False)
 
-        # Combine the lists
-        combined_instances = np.concatenate((balanced_class_0, balanced_class_1))
+        # Step 5: Shuffle each class list
+        np.random.shuffle(balanced_class_0)
+        np.random.shuffle(balanced_class_1)
 
-        # Step 5: Shuffle and select the final set of instances
-        np.random.shuffle(combined_instances)
+        # Combine the lists (ensured that the final list has the desired length and class balance)
+        combined_instances = np.concatenate((balanced_class_0, balanced_class_1))
         final_instances = combined_instances[:instance_amount].tolist()
 
         return final_instances
