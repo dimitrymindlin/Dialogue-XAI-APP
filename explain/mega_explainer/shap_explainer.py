@@ -12,7 +12,8 @@ class SHAPExplainer(BaseExplainer):
     def __init__(self,
                  model,
                  data: torch.FloatTensor,
-                 link: str = 'identity'):
+                 link: str = 'identity',
+                 method='kernel'):
         """Init.
 
         Args:
@@ -23,11 +24,19 @@ class SHAPExplainer(BaseExplainer):
         super().__init__(model)
 
         # Store the data
-        self.data = shap.kmeans(data, 25)
+        self.method = method
+
+        if self.method == 'tree':
+            self.data = data
+        else:
+            self.data = shap.kmeans(data, 25)
 
         # Use the SHAP kernel explainer in all cases. We can consider supporting
         # domain specific methods in the future.
-        self.explainer = shap.KernelExplainer(self.model, self.data, link=link)
+        if method == 'tree':
+            self.explainer = shap.TreeExplainer(model.named_steps["model"])
+        else:
+            self.explainer = shap.KernelExplainer(self.model, self.data, link=link)
 
     def get_explanation(self, data_x: np.ndarray, label) -> torch.FloatTensor:
         """Gets the SHAP explanation.
@@ -43,7 +52,10 @@ class SHAPExplainer(BaseExplainer):
         """
 
         # Compute the shapley values on the **single** instance
-        shap_vals = self.explainer.shap_values(data_x[0], nsamples=10_000, silent=True)
+        if self.method == 'tree':
+            shap_vals = self.explainer.shap_values(self.model[:-1].transform(data_x))
+        else:
+            shap_vals = self.explainer.shap_values(data_x[0], nsamples=10_000, silent=True)
 
         # Ensure that we select the correct label, if shap values are
         # computed on output prob. distribution

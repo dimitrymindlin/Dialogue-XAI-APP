@@ -74,7 +74,7 @@ class DialogueManager:
             # Direct mapping, update state machine
             self.interacted_explanations.add(question_id)
             if self.active_mode:
-                self.dialogue_policy.model.trigger(question_id)
+                self.dialogue_policy.predict_fn.trigger(question_id)
                 self.mark_as_explained(question_id, feature_id)
             single_reasoning_string = "Clicked on question"
             return question_id, feature_id, single_reasoning_string
@@ -100,7 +100,7 @@ class DialogueManager:
 
         # Update the state machine
         if self.active_mode:
-            self.dialogue_policy.model.trigger(method_name)
+            self.dialogue_policy.predict_fn.trigger(method_name)
             self.interacted_explanations.add(method_name)
             self.mark_as_explained(method_name, feature_name)
         return method_name, feature_name, single_reasoning_string
