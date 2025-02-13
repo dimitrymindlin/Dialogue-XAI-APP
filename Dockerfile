@@ -39,7 +39,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /usr/src/app
 
 # Application Environment variables
-ENV PORT 4001
+ENV PORT 4000
 
 # Exposing Ports
 EXPOSE $PORT
