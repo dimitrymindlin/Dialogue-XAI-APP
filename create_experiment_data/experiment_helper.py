@@ -24,7 +24,6 @@ class ExperimentHelper:
         self.instances = {"train": [], "test": {}}
         self.current_instance = None
         self.current_instance_type = None
-        self.instance_counters = {"train": 0, "test": 0, "final_test": 0, "intro_test": 0}
         self.feature_ordering = feature_ordering
         self.actionable_features = actionable_features
 
@@ -81,21 +80,23 @@ class ExperimentHelper:
         self._convert_values_to_string(instance.displayable_features)
         return instance
 
-    def get_next_instance(self, instance_type, return_probability=False):
+    def get_next_instance(self, instance_type, datapoint_count, return_probability=False):
         old_instance = None
         load_instance_methods = {"train": self._load_data_instances, "test": self._load_test_instances}
         get_instance_methods = {
-            "train": lambda: self._get_training_instance(return_probability),
-            "test": lambda: self._get_test_instance(self.current_instance[0] if self.current_instance else None),
-            "final_test": self._get_final_test_instance,
-            "intro_test": self._get_intro_test_instance
+            "train": lambda: self._get_training_instance(return_probability, datapoint_count),
+            "test": lambda: self._get_test_instance(
+                self.current_instance.instance_id if self.current_instance else None,
+                datapoint_count),
+            "final-test": lambda: self._get_final_test_instance(datapoint_count),
+            "intro-test": lambda: self._get_intro_test_instance(datapoint_count)
         }
 
         if not self.instances.get(instance_type, []):
             load_instance_methods.get(instance_type, lambda: None)()
 
         if instance_type != "train":
-            instance_id, instance, counter = get_instance_methods[instance_type]()
+            instance_id, instance = get_instance_methods[instance_type]()
             old_instance = self.current_instance
             predicted_label_index = np.argmax(
                 self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance, index=[0])))
@@ -103,12 +104,13 @@ class ExperimentHelper:
             probability = None
             instance = (instance_id, instance, probability, model_predicted_label, predicted_label_index)
         else:  # "train"
-            instance, counter, probability = get_instance_methods[instance_type]()
+            instance = get_instance_methods[instance_type]()
             predicted_label_index = np.argmax(
                 self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance[1], index=[0])))
-            instance = (instance[0], instance[1], instance[2], instance[3], predicted_label_index)
+            model_predicted_label = self.conversation.class_names[predicted_label_index]
+            instance = (instance[0], instance[1], instance[2], model_predicted_label, predicted_label_index)
 
-        # Turn instance dict in class
+        # Turn instance dict in InstanceDatapoint object
         instance = InstanceDatapoint(instance_id=instance[0],
                                      instance_as_dict=instance[1],
                                      class_probabilities=instance[2],
@@ -116,14 +118,15 @@ class ExperimentHelper:
                                      model_predicted_label=predicted_label_index)
 
         self.current_instance_type = instance_type
-        instance = self._make_displayable_instance(instance)
 
-        if old_instance and not instance_type in ["final_test", "intro_test"]:
+        if old_instance and not instance_type in ["final-test", "intro-test"]:
             for key, value in instance.instance_as_dict.items():
                 if value != old_instance.instance_as_dict[key]:
                     instance.instance_as_dict[key] = {"old": old_instance.instance_as_dict[key], "current": value}
 
-        instance.counter = counter
+        instance = self._make_displayable_instance(instance)
+
+        instance.counter = datapoint_count
         instance.instance_type = self.current_instance_type
         self.current_instance = instance
         return instance
@@ -139,38 +142,33 @@ class ExperimentHelper:
         # Example process for test instances
         return {comp: pd.DataFrame(data).to_dict('records')[0] for comp, data in instances_dict.items()}
 
-    def _get_training_instance(self, return_probability, instance_type="train"):
+    def _get_training_instance(self, return_probability, datapoint_count, instance_type="train"):
         if not self.instances[instance_type]:
-            return None, self.instance_counters[instance_type]
-        self.current_instance = self.instances[instance_type][self.instance_counters[instance_type]]
-        # Increment the counter for the next call.
-        self.instance_counters[instance_type] += 1
-        return self.current_instance, self.instance_counters[instance_type], self.current_instance[2]
+            return None
+        self.current_instance = self.instances[instance_type][datapoint_count]
+        return self.current_instance
 
-    def _get_test_instance(self, train_instance_id, instance_type="test"):
+    def _get_test_instance(self, train_instance_id, datapoint_count, instance_type="test"):
         if not self.instances[instance_type]:
-            return None, self.instance_counters[instance_type]
+            return None
 
-        instance_key = "least_complex_instance" if self.instance_counters[
-                                                       instance_type] % 2 == 0 else "easy_counterfactual_instance"
+        instance_key = "least_complex_instance" if datapoint_count % 2 == 0 else "easy_counterfactual_instance"
         test_instances_dict = self.instances[instance_type][train_instance_id]
         instance = test_instances_dict[instance_key]
-        self.instance_counters[instance_type] += 1
-        return train_instance_id, instance, self.instance_counters[instance_type]
+        return train_instance_id, instance
 
-    def _get_final_test_instance(self, instance_type="final_test"):
+    def _get_final_test_instance(self, datapoint_count, instance_type="final-test"):
         if not self.instances["test"]:
-            return None, self.instance_counters["test"]
+            return None
 
         instance_key = "most_complex_instance"
         # Get final test instance based on train instance id
-        train_instance_id = self.instances["train"][self.instance_counters[instance_type]][0]
+        train_instance_id = self.instances["train"][datapoint_count][0]
         test_instances_dict = self.instances["test"][train_instance_id]
         instance = test_instances_dict[instance_key]
-        self.instance_counters[instance_type] += 1
-        return train_instance_id, instance, self.instance_counters[instance_type]
+        return train_instance_id, instance
 
-    def _get_intro_test_instance(self, instance_type="intro_test"):
+    def _get_intro_test_instance(self, datapoint_count, instance_type="intro-test"):
         if not self.instances["test"]:
             # Load test instances if not already loaded
             self._load_test_instances()
@@ -180,11 +178,10 @@ class ExperimentHelper:
 
         instance_key = "most_complex_instance"  # (Dimi) Same as final test for now...
         # Get intro test instance based on train instance id
-        train_instance_id = self.instances["train"][self.instance_counters[instance_type]][0]
+        train_instance_id = self.instances["train"][datapoint_count][0]
         test_instances_dict = self.instances["test"][train_instance_id]
         instance = test_instances_dict[instance_key]
-        self.instance_counters[instance_type] += 1
-        return train_instance_id, instance, self.instance_counters[instance_type]
+        return train_instance_id, instance
 
     def _round_instance_features(self, features):
         for feature, value in features.items():
