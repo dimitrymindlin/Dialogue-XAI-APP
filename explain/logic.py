@@ -33,7 +33,7 @@ from explain.explanations.ceteris_paribus import CeterisParibus
 from explain.explanations.dice_explainer import TabularDice
 from explain.explanations.diverse_instances import DiverseInstances
 from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
-from explain.explanations.shap_global_explainer import ShapGlobalExplainer
+from explain.explanations.model_profile import PdpExplanation
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
 
@@ -489,13 +489,23 @@ class ExplainBot:
 
         # Load global explanation via shap explainer
         # Create background_data from x and y dfs
-        background_data = pd.concat([background_ds_x, background_ds_y], axis=1)
-        shap_explainer = ShapGlobalExplainer(model=model,
+        """shap_explainer = ShapGlobalExplainer(model=model,
                                              data=background_ds_x,
                                              class_names=self.conversation.class_names)
 
         shap_explainer.get_explanations()
-        self.conversation.add_var('global_shap', shap_explainer, 'explanation')
+        self.conversation.add_var('global_shap', shap_explainer, 'explanation')"""
+
+        pdp_explainer = PdpExplanation(model=model,
+                                       background_data=background_ds_x,
+                                       ys=background_ds_y,
+                                       feature_names=list(test_data.columns),
+                                       categorical_features=self.categorical_features,
+                                       numerical_features=self.numerical_features,
+                                       categorical_mapping=self.categorical_mapping
+                                       )
+        pdp_explainer.get_explanations()
+        self.conversation.add_var('pdp', pdp_explainer, 'explanation')
 
         # Load FeatureStatisticsExplainer with background data
         feature_statistics_explainer = FeatureStatisticsExplainer(background_ds_x,

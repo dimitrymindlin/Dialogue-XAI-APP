@@ -8,7 +8,7 @@ import numpy as np
 from flask import Flask
 from explain.actions.explanation import explain_local_feature_importances, explain_cfe, explain_cfe_by_given_features, \
     explain_anchor_changeable_attributes_without_effect, explain_feature_statistic, explain_feature_importances_as_plot, \
-    explain_ceteris_paribus
+    explain_ceteris_paribus, explain_pdp
 from explain.actions.filter import filter_operation
 from explain.actions.prediction_likelihood import predict_likelihood
 from explain.conversation import Conversation
@@ -152,6 +152,13 @@ def run_action_new(conversation: Conversation,
                "<li>the <b>distribution</b> of a single feature,</li>" \
                "<li>or if the prediction changes by <b>altering a specific feature</b>.</li>" \
                "</ul>"
+
+    if question_id == "globalPdp":
+        explanation = explain_pdp(conversation, feature_name)
+        explanation = explanation + f"<br> This is a general trend, but it may vary for a specific {instance_type_naming}."
+        return explanation
+
+
 
     if question_id == "whyExplanation":
         return "To understand why the model made the prediction, I can tell you about" \
