@@ -105,9 +105,19 @@ class DiverseInstances:
             # Generate diverse instances
             if submodular_pick:
                 print(f"Using submodular pick to find {self.instance_amount} diverse instances.")
-                diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, self.instance_amount)
+                diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values,
+                                                                                 int(self.instance_amount / 10))
+                if self.dataset_name == "adult":
+                    filter_by_additional_feature = True
+                else:
+                    filter_by_additional_feature = False
+                diverse_instances_pandas_indices = self.filter_instances_by_class(data,
+                                                                                  model,
+                                                                                  diverse_instances,
+                                                                                  self.instance_amount,
+                                                                                  filter_by_additional_feature=filter_by_additional_feature)
                 # Get pandas index for the diverse instances
-                diverse_instances_pandas_indices = [data.index[i] for i in diverse_instances]
+                diverse_instances_pandas_indices = [data.index[i] for i in diverse_instances_pandas_indices]
             else:
                 # Get random instances
                 dynamic_seed = int(time.time()) % 10000

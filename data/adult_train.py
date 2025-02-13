@@ -251,14 +251,20 @@ def map_country_col(data):
 def map_occupation_col(data):
     # Mapping of professions to their respective subgroups
     occupation_map = {
-        "Adm-clerical": "Admin", "Armed-Forces": "Military",
-        "Craft-repair": "Blue-Collar", "Exec-managerial": "White-Collar",
-        "Farming-fishing": "Blue-Collar", "Handlers-cleaners":
-            "Blue-Collar", "Machine-op-inspct": "Blue-Collar", "Other-service":
-            "Service", "Priv-house-serv": "Service", "Prof-specialty":
-            "Professional", "Protective-serv": "Other", "Sales":
-            "Sales", "Tech-support": "Other", "Transport-moving":
-            "Blue-Collar",
+        "Adm-clerical": "Admin",
+        "Armed-Forces": "Military",
+        "Craft-repair": "Blue-Collar",
+        "Exec-managerial": "White-Collar",
+        "Farming-fishing": "Blue-Collar",
+        "Handlers-cleaners": "Blue-Collar",
+        "Machine-op-inspct": "Blue-Collar",
+        "Other-service": "Service",
+        "Priv-house-serv": "Service",
+        "Prof-specialty": "Professional",
+        "Protective-serv": "Service",
+        "Sales":"Sales",
+        "Tech-support": "Service",
+        "Transport-moving": "Blue-Collar",
     }
 
     # Apply mapping to the occupation column
@@ -369,7 +375,7 @@ def main():
     # print("Best Parameters:", best_params)
 
     # Save the best model
-    #pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
+    pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
 
 
 if __name__ == "__main__":

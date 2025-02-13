@@ -23,6 +23,7 @@ ExplainBot.actionable_features = ["InvestmentOutcome", "EducationLevel", "Occupa
 ExplainBot.feature_ordering = ['Age', 'EducationLevel', 'MaritalStatus', 'Occupation', 'WeeklyWorkingHours', 'WorkLifeBalance', 'InvestmentOutcome']
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
+ExplainBot.use_static_followup = True
 ExplainBot.use_llm_agent = False
 
 # Experiment Helper
@@ -34,7 +35,8 @@ Explanation.max_cache_size = 1_000_000
 
 # MegaExplainer Params
 MegaExplainer.cache_location = "./cache/adult-mega-explainer-tabular.pkl"
-MegaExplainer.use_selection = True
+MegaExplainer.use_selection = False
+MegaExplainer.use_tree_shap = True
 
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/adult-dice-tabular.pkl"
@@ -52,6 +54,7 @@ TestInstances.instance_amount = 20
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/adult-ceteris-paribus.pkl"
+PdpExplanation.cache_location = "./cache/adult-pdp.pkl"
 
 # Tabular Anchor Params
 TabularAnchor.cache_location = "./cache/adult-anchor-tabular.pkl"
@@ -77,7 +80,7 @@ ExplainBot.feature_tooltip_mapping = {
     "weekly working hours": "The total number of hours the individual works in a typical week.",
     "marital status": "The individual's marital status, indicating whether they are Married or Single. This simplification may encompass a broader range of legal statuses.",
     "work life balance": "A self-reported assessment of the individual's work-life balance, ranging from poor to excellent. This subjective measure reflects the individual's satisfaction with their ability to balance work and personal life.",
-    "occupation": "The general category of the individual's occupation, such as Admin, Blue-Collar, Military, Professional, Sales, Service or White-Collar",
+    "occupation": "The category of the individual's occupation, such as Admin (Administrative and clerical roles, such as office clerks and secretaries), Military (Personnel serving in the armed forces), Blue-Collar (Manual labor occupations, including craft workers, machine operators, farmers, handlers, cleaners, and transportation workers), White-Collar (Executive and managerial positions involving strategic planning and oversight), Professional (Specialized professions requiring advanced education, like doctors, lawyers, engineers, and educators), Sales (Roles related to selling products or services, such as sales representatives and retail personnel), Service (Occupations providing services to individuals or communities, including protective services (e.g., law enforcement officers, firefighters), technical support, and other service-oriented roles)",
     "workclass": "The work class of the person: Government, Private Sector, Self-Employed / Entrepreneurial, Unemployed and Other.",
     "investment outcome": "The result of the individual's investment activities, categorized as: No investment, Loss, or Gain. This reflects whether the individual has investments and if so, whether they have made a profit or a loss."
 }
