@@ -48,4 +48,4 @@ EXPOSE $PORT
 VOLUME ["/app-data"]
 
 # Run the Python application with Gunicorn
-CMD ["gunicorn", "--timeout", "0", "-b", "0.0.0.0:4000", "flask_app:app"]
+CMD ["gunicorn", "--timeout", "0", "-b", "0.0.0.0:4001", "flask_app:app"]
