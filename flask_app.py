@@ -103,13 +103,15 @@ def finish():
     return "200 OK"
 
 
-def get_datapoint(user_id, datapoint_type, return_probability=False):
+def get_datapoint(user_id, datapoint_type, datapoint_count, return_probability=False):
     """
     Get a datapoint from the dataset based on the datapoint type.
     """
     if user_id is None:
         user_id = "TEST"
-    instance = bot_dict[user_id].get_next_instance(datapoint_type,return_probability=return_probability)
+    instance = bot_dict[user_id].get_next_instance(datapoint_type,
+                                                   int(datapoint_count),
+                                                   return_probability=return_probability)
     instance_dict = instance.get_datapoint_as_dict_for_frontend()
     return instance_dict
 
@@ -120,45 +122,11 @@ def get_train_datapoint():
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
+    datapoint_count = request.args.get("datapoint_count")
     user_study_group = bot_dict[user_id].get_study_group()
-    result_dict = get_datapoint(user_id, "train")
-    bot_dict[user_id].reset_dialogue_manager()
-
-    if user_study_group == "interactive":
-        prompt = f"""
-            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{result_dict["ml_prediction"]}</b>. <br>
-            If you have questions about the prediction, select questions from the right and I will answer them.
-            """
-    else:  # chat
-        prompt = f"""
-            The model predicts that the current {bot_dict[user_id].instance_type_naming} is <b>{result_dict["ml_prediction"]}</b>. <br>
-            If you have questions about the prediction, <b>type them</b> in the chat and I will answer them.
-            """
-
+    result_dict = get_datapoint(user_id, "train", datapoint_count)
     if bot_dict[user_id].use_active_dialogue_manager:
-        followup = bot_dict[user_id].get_suggested_method()
-    else:
-        followup = []
-    # Create message dict to return type
-    # TChatMessage = {
-    #     text: string;
-    #     isUser: boolean;
-    #     feedback: boolean;
-    #     question_id: string;
-    #     feature_id: number;
-    #     followup: (TGeneralQuestion | TFeatureQuestion)[];
-    #     reasoning: string;
-    # };
-    """result_dict["initial_message"] = {
-        "isUser": False,
-        "feedback": False,
-        "text": prompt,
-        "question_id": "init",
-        "feature_id": 0,
-        "followup": followup,
-        # [{"id": "shapAllFeatures", "question": "Would you like to see the feature contributions?", "feature_id": None}]
-        "reasoning": ""
-    }"""
+        bot_dict[user_id].reset_dialogue_manager()
 
     if user_study_group == "static":
         # Get the explanation report
@@ -174,7 +142,8 @@ def get_test_datapoint():
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
-    return get_datapoint(user_id, "test")
+    datapoint_count = request.args.get("datapoint_count")
+    return get_datapoint(user_id, "test", datapoint_count)
 
 
 @bp.route('/get_final_test_datapoint', methods=['GET'])
@@ -183,7 +152,8 @@ def get_final_test_datapoint():
     Get a final test datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
-    return get_datapoint(user_id, "final_test")
+    datapoint_count = request.args.get("datapoint_count")
+    return get_datapoint(user_id, "final-test", datapoint_count)
 
 
 @bp.route('/get_intro_test_datapoint', methods=['GET'])
@@ -192,7 +162,8 @@ def get_intro_test_datapoint():
     Get a final test datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
-    return get_datapoint(user_id, "intro_test")
+    datapoint_count = request.args.get("datapoint_count")
+    return get_datapoint(user_id, "intro-test", datapoint_count)
 
 
 @bp.route("/set_user_prediction", methods=['POST'])
@@ -206,12 +177,15 @@ def set_user_prediction():
     if user_id is None:
         user_id = "TEST"  # Default user_id for testing
     bot = bot_dict[user_id]
+    if experiment_phase == "teaching":  # Called differently in the frontend
+        experiment_phase = "train"
+
     user_correct, correct_prediction_string = bot.set_user_prediction(experiment_phase,
                                                                       datapoint_count,
                                                                       user_prediction)
 
     # If not in teaching phase, return 200 OK
-    if bot.current_instance_type != "train":
+    if experiment_phase != "train":
         return jsonify({"message": "OK"}), 200
     else:
         # Create initial message depending on the user study group and whether the user was correct
@@ -219,19 +193,23 @@ def set_user_prediction():
         if user_study_group == "interactive":
             if user_correct:
                 prompt = f"""
-                    Correct! The model predicted <b>{correct_prediction_string}</b> for the current {bot.instance_type_naming}. <br>
-                    If you want to verify if your reasoning aligns with the model, <b>select questions</b> from the right.
+                    <b>Correct!</b> The model predicted <b>{correct_prediction_string}</b> for the current {bot.instance_type_naming}. <br>
+                    The model <b>starts with a 75% chance that the person earns below $50K</b>, based on general trends and then considers
+                    the individual's attributes to make a prediction. <br>
+                    If you want to <b>verify if your reasoning</b> aligns with the model, <b>select questions</b> from the right.
                     """
             else:
                 prompt = f"""
                     Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}.
-                    To <b>understand its reasoning</b> and improve your predictions, <b>select questions</b> from the right.
+                    The model <b>starts with a 75% chance that the person earns below $50K</b>, based on general trends and then considers
+                    the individual's attributes to make a prediction. <br>
+                    To <b>understand the model's reasoning</b> and improve your future predictions, <b>select questions</b> from the right.
                     """
         else:  # chat
             if user_correct:
                 prompt = f"""
-                    Correct! The model predicted <b>{correct_prediction_string}</b>. <br>
-                    If you want to verify if your reasoning aligns with the model, select questions from the right, <b>type your questions</b> in the chat and I will answer them."""
+                    <b>Correct!</b> The model predicted <b>{correct_prediction_string}</b>. <br>
+                    If you want to <b>verify if your reasoning</b> aligns with the model, <b>type your questions</b> about the model prediction in the chat."""
             else:
                 prompt = f"""
                 Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. <br>
@@ -327,7 +305,6 @@ async def get_bot_response_from_nl():
         app.logger.info("generating the bot response for nl input")
         try:
             data = json.loads(request.data)
-            # print(data["message"])
             response, question_id, feature_id, reasoning = await bot_dict[user_id].update_state_from_nl(
                 user_input=data["message"])
             if bot_dict[user_id].use_active_dialogue_manager:
@@ -364,7 +341,6 @@ if __name__ != '__main__':
     stream_handler.setLevel(logging.INFO)
     app.logger.addHandler(stream_handler)
     app.logger.setLevel(logging.INFO)
-
 
 if __name__ == "__main__":
     # clean up storage file on restart
