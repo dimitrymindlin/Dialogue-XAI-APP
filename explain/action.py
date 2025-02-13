@@ -8,7 +8,7 @@ import numpy as np
 from flask import Flask
 from explain.actions.explanation import explain_local_feature_importances, explain_cfe, explain_cfe_by_given_features, \
     explain_anchor_changeable_attributes_without_effect, explain_feature_statistic, explain_feature_importances_as_plot, \
-    explain_ceteris_paribus, explain_pdp
+    explain_ceteris_paribus, explain_pdp, explain_model_confidence
 from explain.actions.filter import filter_operation
 from explain.actions.prediction_likelihood import predict_likelihood
 from explain.actions.static_followup_options import explainConceptOfFeatureImportance, explainConceptOfLocalImportance, \
@@ -104,7 +104,7 @@ def run_action_new(conversation: Conversation,
     parse_op = f"ID {instance_id}"
     model_prediction_probas, _ = predict_likelihood(conversation, as_text=False)
     current_prediction_str = conversation.get_class_name_from_label(np.argmax(model_prediction_probas))
-    opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction_probas))
+    opposite_class_str = conversation.get_class_name_from_label(np.argmin(model_prediction_probas))
     current_prediction_id = conversation.temp_dataset.contents['y'][instance_id]
     template_manager = conversation.get_var('template_manager').contents
 
@@ -186,7 +186,7 @@ def run_action_new(conversation: Conversation,
     if question_id == "counterfactualAnyChange":
         # How should this instance change to get a different prediction?
         explanation, _ = explain_cfe(conversation, data, parse_op, regen)
-        explanation = f"Here are possible scenarios that would change the prediction to <b>{opposite_class}</b>:<br> <br>" + \
+        explanation = f"Here are possible scenarios that would change the prediction to <b>{opposite_class_str}</b>:<br> <br>" + \
                       explanation + "<br>There might be other possible changes. These are examples."
         return explanation
     if question_id == "counterfactualSpecificFeatureChange":
@@ -199,8 +199,8 @@ def run_action_new(conversation: Conversation,
         explanation, success = explain_anchor_changeable_attributes_without_effect(conversation, data, parse_op, regen,
                                                                                    template_manager)
         if success:
-            result_text = f"Keeping these conditions: <br>"
-            result_text = result_text + explanation + "<br>the prediction will most likely stay the same."
+            result_text = f"The model is pretty confident that people with the following attributes: <br>"
+            result_text = result_text + explanation + f"<br> are usually predicted as {current_prediction_str}."
             return result_text
         else:
             return "I'm sorry, I couldn't find a group of attributes that guarantees the current prediction."
@@ -210,10 +210,17 @@ def run_action_new(conversation: Conversation,
     if question_id == "top3Features":
         # 23;Which are the most important attributes for the outcome of the instance?
         parse_op = "top 3"
-        explanation = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=True,
+        explanation = explain_local_feature_importances(conversation, data, parse_op, regen,
+                                                        current_prediction_str,
+                                                        as_text=True,
                                                         template_manager=template_manager)
-        answer = f"Here are the 3 <b>most</b> important attributes for predicting <b>{current_prediction_str}</b> for the current {instance_type_naming}: <br><br>"
+        answer = f"Here are the 3 <b>most</b> important attributes for the current prediction:<br>"
         return answer + explanation[0]
+
+    if question_id == "modelConfidence":
+        # How confident is the model in its prediction?
+        model_confidence_exp = explain_model_confidence(model_prediction_probas, current_prediction_str)
+        return model_confidence_exp
 
     if question_id == "mostImportantFeature":
         # 23;Which are the most important attributes for the outcome of the instance?
@@ -226,13 +233,14 @@ def run_action_new(conversation: Conversation,
 
     if question_id == "shapAllFeatures":
         explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction_str,
+                                                          opposite_class_str,
                                                           current_prediction_id)
         return explanation
     if question_id == "ceterisParibus":
-        explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming, opposite_class,
+        explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming, opposite_class_str,
                                               as_text=True)
-        if opposite_class not in explanation and not explanation.startswith("No"):
-            explanation = explanation + opposite_class + "."
+        if opposite_class_str not in explanation and not explanation.startswith("No"):
+            explanation = explanation + opposite_class_str + "."
         return explanation
     if question_id == "least3Features":
         # 27;What features are used the least for prediction of the current instance?; What attributes are used the least for prediction of the instance?
