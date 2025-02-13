@@ -139,15 +139,26 @@ def get_train_datapoint():
         followup = bot_dict[user_id].get_suggested_method()
     else:
         followup = []
-    # Create message dict to return ({isUser: false, feedback: false, text: initial_prompt, id: 1000})
-    result_dict["initial_message"] = {
+    # Create message dict to return type
+    # TChatMessage = {
+    #     text: string;
+    #     isUser: boolean;
+    #     feedback: boolean;
+    #     question_id: string;
+    #     feature_id: number;
+    #     followup: (TGeneralQuestion | TFeatureQuestion)[];
+    #     reasoning: string;
+    # };
+    """result_dict["initial_message"] = {
         "isUser": False,
         "feedback": False,
         "text": prompt,
-        "id": 1000,
-        "followup": followup
-        # [{"id": "shapAllFeatures", "question": "Would you like to see the feature contributions?"}]
-    }
+        "question_id": "init",
+        "feature_id": 0,
+        "followup": followup,
+        # [{"id": "shapAllFeatures", "question": "Would you like to see the feature contributions?", "feature_id": None}]
+        "reasoning": ""
+    }"""
 
     if user_study_group == "static":
         # Get the explanation report
@@ -186,15 +197,56 @@ def get_intro_test_datapoint():
 
 @bp.route("/set_user_prediction", methods=['POST'])
 def set_user_prediction():
-    """Set the user prediction."""
-    user_id = request.args.get("user_id")
-    data = json.loads(request.data)
-    user_prediction = data["user_prediction"]
+    """Set the user prediction and get the initial message if in teaching phase."""
+    data = request.get_json()  # Get JSON data from request body
+    user_id = data.get("user_id")
+    experiment_phase = data.get("experiment_phase")
+    datapoint_count = data.get("datapoint_count")
+    user_prediction = data.get("user_prediction")
     if user_id is None:
-        user_id = "TEST"
+        user_id = "TEST"  # Default user_id for testing
     bot = bot_dict[user_id]
-    bot.set_user_prediction(user_prediction)
-    return "200 OK"
+    user_correct, correct_prediction_string = bot.set_user_prediction(experiment_phase,
+                                                                      datapoint_count,
+                                                                      user_prediction)
+
+    # If not in teaching phase, return 200 OK
+    if bot.current_instance_type != "train":
+        return jsonify({"message": "OK"}), 200
+    else:
+        # Create initial message depending on the user study group and whether the user was correct
+        user_study_group = bot.get_study_group()
+        if user_study_group == "interactive":
+            if user_correct:
+                prompt = f"""
+                    Correct! The model predicted <b>{correct_prediction_string}</b> for the current {bot.instance_type_naming}. <br>
+                    If you want to verify if your reasoning aligns with the model, <b>select questions</b> from the right.
+                    """
+            else:
+                prompt = f"""
+                    Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}.
+                    To <b>understand its reasoning</b> and improve your predictions, <b>select questions</b> from the right.
+                    """
+        else:  # chat
+            if user_correct:
+                prompt = f"""
+                    Correct! The model predicted <b>{correct_prediction_string}</b>. <br>
+                    If you want to verify if your reasoning aligns with the model, select questions from the right, <b>type your questions</b> in the chat and I will answer them."""
+            else:
+                prompt = f"""
+                Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. <br>
+                To understand its reasoning and improve your predictions, <b>type your questions</b> in the chat, and I will answer them."""
+
+        message = {
+            "isUser": False,
+            "feedback": False,
+            "text": prompt,
+            "question_id": "init",
+            "feature_id": 0,
+            "followup": [],
+            "reasoning": ""
+        }
+        return jsonify({"initial_message": message}), 200
 
 
 @bp.route("/get_user_correctness", methods=['GET'])
