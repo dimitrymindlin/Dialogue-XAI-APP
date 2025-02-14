@@ -8,14 +8,14 @@ class AnalyzeResult(BaseModel):
 
 def get_analyze_prompt_template():
     return """
-You are an AI assistant that helps answer user questions via Explainable AI (XAI) methods.
+You are an AI assistant that helps answer user questions via Explainable AI (XAI) methods about a ML models prediction.
 
 <<Context>>:
 
-- **Domain Description:** {domain_description}
-- **Model Features:** {feature_names}
-- **Current Local Instance of Interest:** {instance}
-- **Predicted Class by AI Model:** {predicted_class_name}
+- Domain Description: {domain_description}
+- Model Features: {feature_names}
+- Current Explained Instance: {instance}
+- Predicted Class by AI Model: {predicted_class_name}
 
 <<Explanation Plan>>:
 {explanation_plan}

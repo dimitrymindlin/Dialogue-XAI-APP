@@ -398,7 +398,7 @@ def test_analyze_prompt(chat_history, user_message, monitor_result, last_shown_e
         user_message=user_message,
         monitor_display_result=monitor_result.__str__(),
         monitor_cognitive_state="constructive",
-        explanation_plan=user_model.get_explanation_plan(as_dict=False),
+        explanation_plan=user_model.get_complete_explanation_collection(as_dict=False),
     ))
 
     response = llm.structured_predict(output_cls=AnalyzeResult, prompt=analyze_prompt)
@@ -507,7 +507,7 @@ def test_plan_prompt(chat_history, user_message, monitor_result, last_shown_expl
         chat_history=chat_history,
         user_model=user_model.get_state_summary(as_dict=False),
         user_message=user_message,
-        explanation_plan=user_model.get_explanation_plan(as_dict=False),
+        explanation_plan=user_model.get_complete_explanation_collection(as_dict=False),
         previous_plan=[],
         last_explanation=[]
     ))

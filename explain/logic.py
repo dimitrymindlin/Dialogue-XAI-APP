@@ -906,7 +906,8 @@ class ExplainBot:
     def get_explanation_report(self, as_text=False):
         """Returns the explanation report."""
         instance_id = self.current_instance.instance_id
-        report = compute_explanation_report(self.conversation, instance_id,
+        report = compute_explanation_report(self.conversation,
+                                            instance_id,
                                             instance_type_naming=self.instance_type_naming,
                                             feature_display_name_mapping=self.get_feature_display_name_dict(),
                                             as_text=as_text)

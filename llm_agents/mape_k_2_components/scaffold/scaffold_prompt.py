@@ -89,7 +89,7 @@ Your tasks in planning are:
 - Current Instance of Interest: {instance}
 - Predicted Class by AI Model: {predicted_class_name}
 - User Model: {user_model}
-- Explanation Collection: {explanation_plan}
+- Explanation Collection: {explanation_collection}
 - Chat History: {chat_history}
 - User Message: "{user_message}"
 - Previous Explanation Plan: {previous_plan}

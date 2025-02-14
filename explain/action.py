@@ -277,13 +277,20 @@ def compute_explanation_report(conversation,
     opposite_class = conversation.get_class_name_from_label(np.argmin(model_prediction_probas))
     template_manager = conversation.get_var('template_manager').contents
 
+
+    feature_importances_run = run_action_new(conversation, "top3Features", instance_id, build_temp_dataset=False,
+                                            instance_type_naming=instance_type_naming)
     # Get already sorted feature importances
     if not as_text:
         feature_importances = explain_feature_importances_as_plot(conversation, data, parse_op, regen,
                                                                   current_prediction_str,
                                                                   current_prediction_id)
     else:
-        feature_importances = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False,
+        feature_importances = explain_local_feature_importances(conversation,
+                                                                data,
+                                                                parse_op,
+                                                                regen,
+                                                                as_text=False,
                                                                 template_manager=template_manager)
     """# Turn list of values into int
     feature_importances = {key: round(float(value[0]), ndigits=3) for key, value in feature_importances.items()}

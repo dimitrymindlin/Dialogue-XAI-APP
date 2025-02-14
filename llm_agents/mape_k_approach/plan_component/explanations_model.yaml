@@ -7,14 +7,12 @@ xai_explanations:
           Counterfactual explanations show examples of feature changes that would flip the model prediction. 
           The counterfactual method tries to find minimal counterfactuals first, only changing one attribute.
         dependencies: [ ]
-        is_optional: false
 
       - step_name: "ImpactMultipleFeatures"
         description: >
           {{counterfactuals.possible_counterfactuals}}
         dependencies:
           - "Concept"
-        is_optional: false
 
       - step_name: "ImpactSingleFeature"
         description: >
@@ -23,21 +21,6 @@ xai_explanations:
           {{counterfactuals.single_feature_cf}}
         dependencies:
           - "Concept"
-        is_optional: false
-
-      - step_name: "Diagnostic Query"
-        description: >
-          What is the smallest change to flip the prediction?
-        dependencies:
-          - "Impact of Multiple Features"
-        is_optional: true
-
-      - step_name: "Wrong Assumptions"
-        description: >
-          Counterfactuals are not exhaustive, meaning that there might be other ways to flip the prediction.
-        dependencies:
-          - "Impact of Multiple Features"
-        is_optional: true
 
   - explanation_name: "FeatureImportances"
     description: "Understanding the importance and influence of features in the model's decision-making."
@@ -49,7 +32,6 @@ xai_explanations:
           identifying which features are most influential in driving the model's decisions. The combination of features
           and their influences shows the full picture of how the prediction came to be.
         dependencies: [ ]
-        is_optional: false
 
       - step_name: "FeatureInfluencesPlot"
         description: >
@@ -60,35 +42,30 @@ xai_explanations:
           ##FeatureInfluencesPlot## is located.
         dependencies:
           - "Concept"
-        is_optional: false
 
       - step_name: "FeaturesInFavourOfOver50k"
         description: >
           {{feature_importance.features_in_favour_of_over_50k}}
         dependencies:
           - "Concept"
-        is_optional: false
 
       - step_name: "FeaturesInFavourOfUnder50k"
         description: >
           {{feature_importance.features_in_favour_of_under_50k}}
         dependencies:
           - "Concept"
-        is_optional: false
 
       - step_name: "Diagnostic Query"
         description: >
           What is the most important feature in favor of current prediction?
         dependencies:
           - "Most Important Features"
-        is_optional: true
 
       - step_name: "Wrong Assumptions"
         description: >
           Feature importances and influences are correlation based and do not lead to causal statements.
         dependencies:
           - "Most Important Features"
-        is_optional: true
 
   - explanation_name: "FeatureStatistics"
     description: "An overview of the statistical distribution of features used in the model, such as minimum and maximum
@@ -100,13 +77,11 @@ xai_explanations:
           and the value each feature can have. This information can highlight data imbalances, possible value ranges, and
           categorical possible values.
         dependencies: [ ]
-        is_optional: false
 
       - step_name: "Feature Statistics"
         description: >
           {{feature_statistics.most_important_features_text}}
         dependencies: [ "Feature Statistics Overview" ]
-        is_optional: false
 
   - explanation_name: "CeterisParibus"
     description: "Understanding the model's decision-making by observing how the model's prediction changes when only one
@@ -117,7 +92,6 @@ xai_explanations:
           Ceteris Paribus explanations show how the model's prediction changes when only one feature is changed, while keeping
           all other features constant. This helps in understanding the impact of individual features on the model's decision-making.
         dependencies: [ ]
-        is_optional: false
 
       - step_name: "PossibleClassFlips"
         description: >
@@ -133,19 +107,11 @@ xai_explanations:
           - "Concept"
         is_optional: false
 
-      - step_name: "Diagnostic Query"
-        description: >
-          Are there individual features that are so important, they can flip the prediction?
-        dependencies:
-          - "Single Feature Ceteris Paribus"
-        is_optional: true
-
       - step_name: "Wrong Assumptions"
         description: >
           Ceteris Paribus explanations are local and do not provide a global understanding of the model's decision-making.
         dependencies:
           - "Single Feature Ceteris Paribus"
-        is_optional: true
 
   - explanation_name: "ScaffoldingStrategy"
     description: "A strategy for improving understanding by simplifying, repeating, and eliciting feedback."
@@ -154,13 +120,11 @@ xai_explanations:
         description: >
           Reformulating the explanation in a simpler way.
         dependencies: [ ]
-        is_optional: true
 
       - step_name: "Repeating"
         description: >
           Repeating the explanation slightly differently to reinforce understanding.
         dependencies: [ ]
-        is_optional: true
 
       - step_name: "ElicitingFeedback"
         description: >
@@ -169,4 +133,3 @@ xai_explanations:
           requires to check the conversation history and user question to understand the context and ask a relevant question.
           The question should test the understanding and help to identify the areas that need further clarification.
         dependencies: [ ]
-        is_optional: true

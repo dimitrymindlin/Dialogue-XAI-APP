@@ -72,10 +72,10 @@ async def write_log_to_csv(ctx: Context, user_model_string):
     monitor = await ctx.get("monitor_result")
     scaffolding = await ctx.get("scaffolding_result")
     monitor_row = monitor.reasoning + "  \n->\n (" + str(
-        monitor.understanding_displays) + ", " + monitor.mode_of_engagement + ")"
+        monitor.explicit_understanding_displays) + ", " + monitor.mode_of_engagement + ")"
 
     scaffolding_row = scaffolding.plan_reasoning + " \n->\n " + str(
-        [(exp.explanation_name, exp.step) for exp in scaffolding.explanation_plan]) + \
+        [(exp.explanation_name, exp.step) for exp in scaffolding.explanation_collection]) + \
                       " \n->\n " + str(scaffolding.next_explanation)
 
     row = [
@@ -228,7 +228,7 @@ class MapeK2Component(Workflow, XAIBaseAgent):
             understanding_displays=self.understanding_displays.as_text(),
             modes_of_engagement=self.modes_of_engagement.as_text(),
             explanation_questions=self.explanation_questions.as_text(),
-            explanation_plan=self.user_model.get_explanation_plan(as_dict=False),
+            explanation_plan=self.user_model.get_complete_explanation_collection(as_dict=False),
             chat_history=self.chat_history,
             user_model=self.user_model.get_state_summary(as_dict=False),
             last_shown_explanations=self.last_shown_explanations,
@@ -264,7 +264,7 @@ class MapeK2Component(Workflow, XAIBaseAgent):
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             user_model=self.user_model.get_state_summary(as_dict=False),
-            explanation_plan=self.user_model.get_explanation_plan(as_dict=False),
+            explanation_plan=self.user_model.get_complete_explanation_collection(as_dict=False),
             chat_history=self.chat_history,
             user_message=user_message,
             previous_plan=self.explanation_plan if self.explanation_plan else "",

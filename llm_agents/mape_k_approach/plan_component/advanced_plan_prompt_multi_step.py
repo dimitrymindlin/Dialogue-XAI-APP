@@ -86,20 +86,20 @@ You are an explainer specialist who plans the explanation strategy in a dialogue
 
 1. **Define New Explanations**
 2. **Maintain the General Explanation Plan**
-3. **Generate the Next Explanation**
+3. **Generate the Next Explanation to show the user**
     
 <<Context>>:
 - Domain Description: {domain_description}
 - Model Features: {feature_names}
-- Current local Instance of interest: {instance}
+- Current Explained Instance:: {instance}
 - Predicted Class by AI Model: {predicted_class_name}\n
 
 <<User Model>>:
 {user_model}\n
 
 <<Explanation Collection>>:
-{explanation_plan}
-In the explanation collection above, the scaffolding strategies can be used to better grasp the user's understanding. When planning to use ScaffoldingStrategy, this should be the only step in the explanation plan.
+{explanation_collection}
+In the explanation collection above, the scaffolding strategies can be used to better grasp the user's understanding. When planning to use ScaffoldingStrategy, this should be the only step in the next explanation step.
 
 <<Chat History>>:
 {chat_history}\n
@@ -109,7 +109,7 @@ In the explanation collection above, the scaffolding strategies can be used to b
 
 <<Explanation Plan>>:
 {previous_plan}\n
-Note: The explanation_plan serves as a high-level roadmap and should only be updated when major shifts in user understanding occur.
+Note: The explanation_plan serves as a high-level roadmap and should only be updated when shifts in user understanding occur, for example the user cannot understand an explanation because he lacks some more general concept knowledge, or the user explicitely wants to explore other concepts or explanation directions.
 
 <<Last Explanation>>:
 {last_explanation}\n

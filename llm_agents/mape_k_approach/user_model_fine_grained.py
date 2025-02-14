@@ -54,14 +54,12 @@ class Explanation(NewExplanationModel):
         super().__init__(**data)
         self.explanation_steps = [ExplanationStep(**step.dict()) for step in self.explanation_steps]
 
-    def add_explanation(self, step_name: str, description: str, dependencies: Optional[List[str]] = None,
-                        is_optional: bool = False):
+    def add_explanation(self, step_name: str, description: str, dependencies: Optional[List[str]] = None):
         if not any(ex.step_name == step_name for ex in self.explanation_steps):
             explanation = ExplanationStep(
                 step_name=step_name,
                 description=description,
                 dependencies=dependencies or [],
-                is_optional=is_optional
             )
             self.explanation_steps.append(explanation)
             logger.info(f"Added step '{step_name}' to explanation '{self.explanation_name}'.")
@@ -130,12 +128,12 @@ class UserModelFineGrained:
             step_name: str,
             description: str,
             dependencies: Optional[List[str]] = None,
-            is_optional: bool = False
+            # is_optional: bool = False # TODO: Implement in future versions.
     ) -> None:
         """Add an explanation step under a specific explanation."""
         explanation = self._get_explanation(explanation_name)
         if explanation:
-            explanation.add_explanation(step_name, description, dependencies, is_optional)
+            explanation.add_explanation(step_name, description, dependencies)
         else:
             logger.warning(f"Explanation '{explanation_name}' not found in the model.")
 
@@ -206,8 +204,8 @@ class UserModelFineGrained:
                 step_name = ex["step_name"]
                 description = ex["description"]
                 dependencies = ex.get("dependencies", [])
-                is_optional = ex["is_optional"]
-                self.add_explanation_step(explanation_name, step_name, description, dependencies, is_optional)
+                # is_optional = ex["is_optional"]
+                self.add_explanation_step(explanation_name, step_name, description, dependencies)
 
     def add_explanations_from_plan_result(self, exp_dict_list: List[NewExplanationModel]) -> None:
         """
@@ -228,8 +226,7 @@ class UserModelFineGrained:
                 step_name = ex.step_name
                 description = ex.description
                 dependencies = ex.dependencies
-                is_optional = ex.is_optional
-                self.add_explanation_step(explanation_name, step_name, description, dependencies, is_optional)
+                self.add_explanation_step(explanation_name, step_name, description, dependencies)
 
     def get_summary(self) -> Dict[str, Dict]:
         """Return a summary of all explanations and their steps, excluding 'ScaffoldingStrategy'."""
@@ -242,7 +239,6 @@ class UserModelFineGrained:
                     step.step_name: {
                         "state": step.state.value,
                         "dependencies": step.dependencies,
-                        "is_optional": step.is_optional,
                     } for step in exp.explanation_steps
                 }
             }
@@ -305,10 +301,10 @@ class UserModelFineGrained:
 
         return prompt_lines
 
-    def get_explanation_plan(self, as_dict: bool = False) -> Union[Dict[str, Dict], str]:
+    def get_complete_explanation_collection(self, as_dict: bool = False) -> Union[Dict[str, Dict], str]:
         """
         Return the explanation plan for all explanations, including states,
-        dependencies, and optionality, either as a dictionary or a string representation.
+        dependencies either as a dictionary or a string representation.
 
         Args:
             as_dict (bool): If True, return the explanation plan as a dictionary.
@@ -329,7 +325,6 @@ class UserModelFineGrained:
                         "description": step.description.strip(),
                         "state": step.state.name,
                         "dependencies": step.dependencies,
-                        "is_optional": step.is_optional,
                     }
                     for step in exp_object.explanation_steps
                 ]
@@ -349,7 +344,6 @@ class UserModelFineGrained:
                 f"    - **{step['step_name']}**\n"
                 f"      - Description: {step['description']}\n"
                 f"      - Dependent on Step: {', '.join(step['dependencies']) if step['dependencies'] else 'None'}\n"
-                f"      - Optional: {'Yes' if step['is_optional'] else 'No'}"
                 for step in details["steps"]
             ])
             for exp_name, details in explanation_plan.items()

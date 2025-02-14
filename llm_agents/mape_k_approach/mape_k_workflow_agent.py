@@ -83,9 +83,9 @@ async def write_log_to_csv(ctx: Context, user_model_string):
     plan = await ctx.get("plan_result")
     execute = await ctx.get("execute_result")
     monitor_row = monitor.reasoning + "  \n->\n (" + str(
-        monitor.understanding_displays) + ", " + monitor.mode_of_engagement + ")"
+        monitor.explicit_understanding_displays) + ", " + monitor.mode_of_engagement + ")"
 
-    plan_row = plan.reasoning + " \n->\n " + str([(exp.explanation_name, exp.step) for exp in plan.explanation_plan]) + \
+    plan_row = plan.reasoning + " \n->\n " + str([(exp.explanation_name, exp.step) for exp in plan.explanation_collection]) + \
                " \n->\n " + str(plan.next_explanation)
 
     row = [
@@ -271,7 +271,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         monitor_result: MonitorResultModel = await ctx.get("monitor_result", None)
 
         self.user_model.cognitive_state = monitor_result.mode_of_engagement
-        self.user_model.current_understanding_signals = monitor_result.understanding_displays
+        self.user_model.current_understanding_signals = monitor_result.explicit_understanding_displays
 
         # Analyze the user's understanding
         analyze_prompt = PromptTemplate(get_analyze_prompt_template().format(
@@ -284,7 +284,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             user_model=self.user_model.get_state_summary(as_dict=False),
             last_shown_explanations=self.last_shown_explanations,
             user_message=user_message,
-            explanation_plan=self.user_model.get_explanation_plan(as_dict=False),
+            explanation_plan=self.user_model.get_complete_explanation_collection(as_dict=False),
         ))
 
         analyze_result = await self.llm.astructured_predict(output_cls=AnalyzeResult, prompt=analyze_prompt)
@@ -331,7 +331,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             chat_history=self.chat_history,
             user_model=self.user_model.get_state_summary(as_dict=False),
             user_message=user_message,
-            explanation_plan=self.user_model.get_explanation_plan(as_dict=False),
+            explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
             previous_plan=self.explanation_plan,
             last_explanation=las_exp
         ))
@@ -362,14 +362,14 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             raise ValueError("Plan result is None.")
 
         # Check the types of elements in the list
-        if not all(isinstance(exp, ChosenExplanationModel) for exp in plan_result.explanation_plan):
+        if not all(isinstance(exp, ChosenExplanationModel) for exp in plan_result.explanation_collection):
             raise ValueError(
                 f"Invalid plan result: Expected a list of ChosenExplanationModel, got {type(plan_result.next_explanations)}.")
 
         explanation_target: ExplanationTarget = plan_result.next_explanation
         next_explanation = explanation_target.communication_goals[0]
 
-        xai_explanations_from_plan = self.user_model.get_string_explanations_from_plan(plan_result.explanation_plan)
+        xai_explanations_from_plan = self.user_model.get_string_explanations_from_plan(plan_result.explanation_collection)
 
         # Execute the plan
         execute_prompt = PromptTemplate(get_execute_prompt_template().format(
