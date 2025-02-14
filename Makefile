@@ -5,7 +5,7 @@ build:
 	docker buildx build --platform linux/arm64 \
 		--build-arg BUILDPLATFORM=linux/arm64 \
 		--build-arg TARGETPLATFORM=linux/arm64 \
-		-t dialogue-llm-app \
+		-t dialogue-xai-app \
 		--no-cache --load .
 
 # Build locally for x86 (optional)
@@ -13,7 +13,7 @@ build-amd64:
 	docker buildx build --platform linux/amd64 \
 		--build-arg BUILDPLATFORM=linux/amd64 \
 		--build-arg TARGETPLATFORM=linux/amd64 \
-		-t dialogue-llm-app \
+		-t dialogue-xai-app \
 		--no-cache --load .
 
 # Remove existing container
@@ -23,10 +23,9 @@ remove:
 # Run locally
 run: remove
 	docker run -d --name dialogue-xai-app \
-		-e PORT=4000 \
 		-p 4000:4000 \
-		--memory=4g \
 		--cpus=2 \
+		--memory=2g \
 		dialogue-xai-app
 
 # Build and push multi-arch image
