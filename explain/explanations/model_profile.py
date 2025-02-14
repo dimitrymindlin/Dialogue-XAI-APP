@@ -100,19 +100,19 @@ class PdpExplanation:
         # TODO: This was plotted and analyzed by hand. Find a way to automatically analyze the graphs ... LLM prompt?
 
         feature_to_trend_mapping = {
-            "InvestmentOutcome": "<p>On Average, the most important value of <strong>InvestmentOutcome</strong> is <strong>Major Gain (above 5K$)</strong>, which is most strongly linked to higher income.</p> <p><strong>Major Loss</strong> and <strong>Minor Loss</strong> are also linked to higher income, but less strongly, while <strong>No Investment</strong> and <strong>Minor Gain</strong> are slightly linked to lower income.</p>",
+            "InvestmentOutcome": "<p>On Average, the most important value of <strong>Investment Outcome</strong> is <strong>Major Gain (above 5K$)</strong>, which is most strongly linked to higher income.</p> <p><strong>Major Loss</strong> and <strong>Minor Loss</strong> are also linked to higher income, but less strongly, while <strong>No Investment</strong> and <strong>Minor Gain</strong> are slightly linked to lower income.</p>",
 
-            "MaritalStatus": "<p>On Average, the most important value of <strong>MaritalStatus</strong> is <strong>Married</strong>, which is most often associated with higher income, while <strong>Single</strong> is more often linked to lower income.</p>",
+            "MaritalStatus": "<p>On Average, the most important value of <strong>Marital Status</strong> is <strong>Married</strong>, which is most often associated with higher income, while <strong>Single</strong> is more often linked to lower income.</p>",
 
-            "EducationLevel": "<p>On Average, the most important value of <strong>EducationLevel</strong> is <strong>Bachelor’s Degree</strong>, which is most often linked to higher income.</p> <p><strong>Associate’s Degree</strong> and <strong>High School Graduate</strong> are also linked to higher income, but to a lesser extent, while <strong>Primary Education</strong> and <strong>Middle School</strong> are linked to lower income.</p> ",
+            "EducationLevel": "<p>On Average, the most important value of <strong>Education Level</strong> is <strong>Bachelor’s Degree</strong>, which is most often linked to higher income.</p> <p><strong>Associate’s Degree</strong> and <strong>High School Graduate</strong> are also linked to higher income, but to a lesser extent, while <strong>Primary Education</strong> and <strong>Middle School</strong> are linked to lower income.</p> ",
 
             "Occupation": "<p>On Average, the most important values of <strong>Occupation</strong> are <strong>Professional</strong> and <strong>White-Collar</strong> jobs, which are most often linked to higher income.</p> <p><strong>Sales</strong> and <strong>Military</strong> jobs are also linked to slightly higher income, but less strong, while <strong>Blue-Collar</strong> and <strong>Service</strong> jobs are more often slightly linked to lower income.</p>",
 
-            "WorkLifeBalance": "<p>On Average, the differences in <strong>WorkLifeBalance</strong> do not seem to have an effect on income, as all categories (<strong>Good, Fair, Poor</strong>) show no difference and impact.</p> <p>This suggests that WorkLifeBalance does not play a role in determining income in this dataset.</p>",
+            "WorkLifeBalance": "<p>On Average, the differences in <strong>Work Life Balance</strong> do not seem to have an effect on income, as all categories (<strong>Good, Fair, Poor</strong>) show no difference and impact.</p> <p>This suggests that <strong>Work Life Balance does not play a role</strong> in determining income in this dataset.</p>",
 
-            "Age": "<p>On Average, the most important age range for higher income is between <strong>40–50 years</strong>, where people are most likely to earn more.</p> <p>Before 40, income levels tend to increase with age, while after 50, they remain more stable.</p>",
+            "Age": "<p>On Average, the most important Age range for higher income is between <strong>40–50 years</strong>, where people are most likely to earn more.</p> <p>Before 40, income levels tend to increase with age, while after 50, they remain more stable.</p>",
 
-            "WeeklyWorkingHours": "<p>On Average, the most important value of <strong>WeeklyWorkingHours</strong> is working <strong>more than 40 hours per week</strong>, which is strongly linked to higher income. After 40, income levels tend to increase with more hours while after 50, they remain more stable.</p>"
+            "WeeklyWorkingHours": "<p>On Average, the most important value of <strong>Weekly Working Hours</strong> is working <strong>more than 40 hours per week</strong>, which is strongly linked to higher income. After 40, income levels tend to increase with more hours while after 50, they remain more stable.</p>"
         }
 
         if use_cache:
