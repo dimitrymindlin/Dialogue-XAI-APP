@@ -25,6 +25,7 @@ from data.response_templates.template_manager import TemplateManager
 from create_experiment_data.test_instances import TestInstances
 from explain.action import run_action, run_action_new, compute_explanation_report
 from explain.actions.explanation import explain_cfe_by_given_features
+from explain.actions.static_followup_options import get_mapping
 from explain.conversation import Conversation
 from explain.dialogue_manager.manager import DialogueManager
 from explain.explanation import MegaExplainer
@@ -33,6 +34,7 @@ from explain.explanations.ceteris_paribus import CeterisParibus
 from explain.explanations.dice_explainer import TabularDice
 from explain.explanations.diverse_instances import DiverseInstances
 from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
+from explain.explanations.model_profile import PdpExplanation
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
 from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant
@@ -261,22 +263,23 @@ class ExplainBot:
         feature_statistics_explainer = self.conversation.get_var('feature_statistics_explainer').contents
         return feature_statistics_explainer.get_feature_ranges()
 
-    def set_user_prediction(self, user_prediction):
-        true_label = self.get_current_prediction()
-        current_id = self.current_instance.instance_id
+    def set_user_prediction(self, experiment_phase, datapoint_count, user_prediction):
         reversed_dict = {value: key for key, value in self.conversation.class_names.items()}
-        true_label_as_int = reversed_dict[true_label]
         try:
             user_prediction_as_int = reversed_dict[user_prediction]
         except KeyError:
             user_prediction_as_int = int(1000)
             # for "I don't know" option
-        print(f"User prediction: {user_prediction_as_int}, True label: {true_label_as_int}")
-        # Make 2d dict with self.current_instance_type as first key and current_id as second key
-        if self.current_instance_type not in self.user_prediction_dict:
-            self.user_prediction_dict[self.current_instance_type] = {}
 
-        self.user_prediction_dict[self.current_instance_type][current_id] = (user_prediction_as_int, true_label_as_int)
+        # Make 2d dict with self.current_instance_type as first key and current_id as second key
+
+        self.user_prediction_dict[experiment_phase][datapoint_count]['user_prediction'] = user_prediction_as_int
+
+        # Check if user was correct
+        correct_pred = self.user_prediction_dict[experiment_phase][datapoint_count]['true_label']
+        correct_pred_string = self.conversation.class_names[correct_pred]
+        user_correct = user_prediction_as_int == correct_pred
+        return user_correct, correct_pred_string
 
     def get_user_correctness(self, train=False):
         # Check self.user_prediction_dict for correctness
@@ -298,7 +301,7 @@ class ExplainBot:
     def get_proceeding_okay(self):
         return self.dialogue_manager.get_proceeding_okay()
 
-    async def get_next_instance_triple(self, instance_type, return_probability=False):
+    async def get_next_instance_triple(self, instance_type, datapoint_count, return_probability=False):
         """
         Returns the next instance in the data_instances list if possible.
         param instance_type: type of instance to return, can be train, test or final_test
@@ -306,6 +309,7 @@ class ExplainBot:
         experiment_helper = self.conversation.get_var('experiment_helper').contents
         self.current_instance = experiment_helper.get_next_instance(
             instance_type=instance_type,
+            datapoint_count=datapoint_count,
             return_probability=return_probability)
         # Update agent with new instance
         if self.use_llm_agent:
@@ -317,6 +321,12 @@ class ExplainBot:
             await self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
                                                       self.get_current_prediction(),
                                                       opposite_class_name=opposite_class_name)
+        # Update user_prediction_dict with current instance's correct prediction
+        true_label = self.get_current_prediction(as_int=True)
+        try:
+            self.user_prediction_dict[instance_type][self.current_instance.counter] = {"true_label": true_label}
+        except KeyError:
+            self.user_prediction_dict[instance_type] = {self.current_instance.counter: {"true_label": true_label}}
         return self.current_instance
 
     def get_study_group(self):
@@ -427,7 +437,8 @@ class ExplainBot:
 
         # Load local FI explanations
         app.logger.info("...loading MegaExplainer...")
-        mega_explainer = MegaExplainer(prediction_fn=pred_f,
+        mega_explainer = MegaExplainer(model=model,
+                                       prediction_fn=pred_f,
                                        data=background_ds_x,
                                        cat_features=categorical_f,
                                        class_names=self.conversation.class_names,
@@ -435,8 +446,13 @@ class ExplainBot:
 
         # Load diverse instances (explanations)
         app.logger.info("...loading DiverseInstances...")
-        diverse_instances_explainer = DiverseInstances(
-            lime_explainer=mega_explainer.mega_explainer.explanation_methods['lime_0.75'])
+        submodular_pick = False
+
+        if submodular_pick:
+            lime_for_submodular = mega_explainer.mega_explainer.explanation_methods['lime_0.75']
+        else:
+            lime_for_submodular = None
+        diverse_instances_explainer = DiverseInstances(lime_explainer=lime_for_submodular)
         diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=test_data,
                                                                                     model=model,
                                                                                     y_values=test_data_y,
@@ -445,12 +461,8 @@ class ExplainBot:
         diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
         app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")
 
-        # Compute explanations for diverse instances
-        mega_explainer.get_explanations(ids=diverse_instance_ids, data=test_data)
-        message = f"...loaded {len(mega_explainer.cache)} mega explainer explanations from cache!"
-        app.logger.info(message)
 
-        # Load dice explanations
+        ## Load dice explanations
         tabular_dice = TabularDice(model=model,
                                    data=test_data,
                                    num_features=numeric_f,
@@ -462,7 +474,15 @@ class ExplainBot:
         tabular_dice.get_explanations(ids=diverse_instance_ids,
                                       data=test_data)
 
+        # Remove ids without cfes from diverse_instance_ids
+        diverse_instance_ids = [id for id in diverse_instance_ids if id not in tabular_dice.ids_without_cfes]
+
         message = f"...loaded {len(tabular_dice.cache)} dice tabular explanations from cache!"
+        app.logger.info(message)
+
+        ## Feature Importance
+        mega_explainer.get_explanations(ids=diverse_instance_ids, data=test_data)
+        message = f"...loaded {len(mega_explainer.cache)} mega explainer explanations from cache!"
         app.logger.info(message)
 
         # Load anchor explanations
@@ -492,8 +512,18 @@ class ExplainBot:
                                              class_names=self.conversation.class_names)
 
         shap_explainer.get_explanations()
-        self.conversation.add_var('global_shap', shap_explainer, 'explanation')
-        """
+        self.conversation.add_var('global_shap', shap_explainer, 'explanation')"""
+
+        pdp_explainer = PdpExplanation(model=model,
+                                       background_data=background_ds_x,
+                                       ys=background_ds_y,
+                                       feature_names=list(test_data.columns),
+                                       categorical_features=self.categorical_features,
+                                       numerical_features=self.numerical_features,
+                                       categorical_mapping=self.categorical_mapping
+                                       )
+        pdp_explainer.get_explanations()
+        self.conversation.add_var('pdp', pdp_explainer, 'explanation')
 
         # Load FeatureStatisticsExplainer with background data
         feature_statistics_explainer = FeatureStatisticsExplainer(background_ds_x,
@@ -637,7 +667,7 @@ class ExplainBot:
         """Performs the system logging."""
         assert isinstance(logging_input, dict), "Logging input must be dict"
         assert "time" not in logging_input, "Time field will be added to logging input"
-        # TODO: No logging implemented...
+        # log_dialogue_input(logging_input)
 
     @staticmethod
     def build_logging_info(bot_name: str,

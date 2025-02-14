@@ -99,14 +99,25 @@ class TemplateManager:
         else:
             for i, (feature_name, val) in enumerate(instance.items()):
                 index_as_str = str(i)
-                val_as_int = int(val)
                 if index_as_str in self.categorical_mapping:
-                    try:
-                        instance[feature_name] = self.categorical_mapping[index_as_str][val_as_int]
-                    except KeyError:
-                        raise ValueError(f"Value {val_as_int} not found in categorical mapping for feature {feature_name}.")
-                    except TypeError:
-                        raise ValueError(f"Feature {feature_name} is not in the categorical mapping.")
+                    mapping = self.categorical_mapping[index_as_str]
+                    if isinstance(val, dict):
+                        for key in ['current', 'old']:
+                            if key in val:
+                                try:
+                                    val[key] = mapping[int(val[key])]
+                                except KeyError:
+                                    raise ValueError(
+                                        f"Value {val[key]} not found in categorical mapping for feature {feature_name} under key '{key}'."
+                                    )
+                        instance[feature_name] = val
+                    else:
+                        try:
+                            instance[feature_name] = mapping[int(val)]
+                        except KeyError:
+                            raise ValueError(
+                                f"Value {int(val)} not found in categorical mapping for feature {feature_name}."
+                            )
 
         return instance
 

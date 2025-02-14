@@ -61,10 +61,36 @@ def explain_operation(conversation, parse_text, i, **kwargs):
     raise NameError(f"No explanation operation defined for {parse_text}")
 
 
+def explain_model_confidence(model_pred_probas, predicted_class):
+    """
+    Given the model confidence values, explain how confident the model is in predicting the predicted class.
+    """
+    if predicted_class == "under 50k":
+        predicted_class_index = 0
+    else:
+        predicted_class_index = 1
+
+    predicted_class_confidence = model_pred_probas[0][predicted_class_index]
+    # Multiply to make it a percentage and round to int
+    predicted_class_confidence = round(predicted_class_confidence * 100)
+
+    confidence_explanation = ""
+
+    if predicted_class_confidence >= 90:
+        confidence_explanation = f"The model is <b>extremely confident</b> in predicting {predicted_class} ({predicted_class_confidence}%)"
+    elif predicted_class_confidence >= 75:
+        confidence_explanation = f"The model is <b>very confident</b> in predicting {predicted_class} ({predicted_class_confidence}%)."
+    elif predicted_class_confidence >= 50:
+        confidence_explanation = f"The model is <b>somewhat confident</b> in predicting {predicted_class} ({predicted_class_confidence}%)."
+
+    return confidence_explanation
+
+
 def explain_local_feature_importances(conversation,
                                       data,
                                       parse_op,
                                       regen,
+                                      current_prediction_str=None,
                                       as_text=True,
                                       template_manager=None):
     """Get Lime or SHAP explanation, considering fidelity (mega explainer functionality)"""
@@ -73,7 +99,8 @@ def explain_local_feature_importances(conversation,
         explanation_text = mega_explainer_exp.summarize_explanations(data,
                                                                      filtering_text=parse_op,
                                                                      ids_to_regenerate=regen,
-                                                                     template_manager=template_manager)
+                                                                     template_manager=template_manager,
+                                                                     current_prediction_str=current_prediction_str)
         conversation.store_followup_desc(explanation_text)
         return explanation_text, 1
     else:
@@ -123,6 +150,7 @@ def explain_global_feature_importances(conversation, as_plot=True):
         html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
                       f'<span>This is a general trend and might change for individual instances.</span>'
         return html_string, 1
+    return explanation, 1
 
 
 def explain_feature_importances_as_plot(conversation,
@@ -130,6 +158,7 @@ def explain_feature_importances_as_plot(conversation,
                                         parse_op,
                                         regen,
                                         current_prediction_string: str,
+                                        opposite_class_str,
                                         prediction_id: int,
                                         target_class=None):
     explanation_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
@@ -144,6 +173,10 @@ def explain_feature_importances_as_plot(conversation,
     labels = labels[::-1]
     values = values[::-1]
 
+    # Enforce fixed ordering: positive values (right/red) always represent "over 50k"
+    if current_prediction_string != "over 50k":
+        values = [-v for v in values]
+
     # Turn labels to display names
     template_manager = conversation.get_var('template_manager').contents
     feature_name_to_display_name = template_manager.feature_display_names.feature_name_to_display_name
@@ -153,40 +186,29 @@ def explain_feature_importances_as_plot(conversation,
             labels[labels.index(feature)] = f"{display_name} ({feature_value_name})"
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    bars = ax.barh(labels, values, color=['red' if v < 0 else 'blue' for v in values])
+    bars = ax.barh(labels, values, color=['red' if v > 0 else 'blue' for v in values])
 
-    # Increase the y-axis label size
     plt.yticks(fontsize=18)
     plt.xticks(fontsize=18)
     plt.tight_layout()
-
-    # Format x-ticks to have only two decimal places
     ax.xaxis.set_major_formatter(FuncFormatter('{:.2f}'.format))
 
-    # Get current x-tick labels
     xticks = ax.get_xticklabels()
-
-    # Show only every second x-tick
     for i in range(len(xticks)):
-        if i % 2 == 0:  # Skip every second tick
+        if i % 2 == 0:
             xticks[i].set_visible(False)
-
-    # Apply the changes to the x-ticks
     ax.set_xticklabels(xticks)
 
-    # Save the plot to a BytesIO object
     image_base64 = save_plot_as_base64(fig)
-
-    # Clear the current plot to free memory
     plt.close()
 
-    # TODO: Change to multilabel and get correct class name.
-    class_0_label = conversation.class_names[0]
-
-    # TODO: Only for binary case?
+    # Updated explanation text: blue bars always for "under 50k" and red bars for "over 50k"
     html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                  f'<span>Blue bars = attributes in favor of predicting <b>{current_prediction_string}</b>. <br>' \
-                  f'Red bars = attributes against current prediction.</span>'
+                  f"This chart shows the how the different attributes <i>pull</i> the model's prediction toward above or below 50K. " \
+                  f'The model <b>starts with a 75% chance that each person earns below $50K</b>, based on general trends. ' \
+                  f'To predict above 50K, the supporting factors need to be <b>three times stronger</b> than those for below 50K.<br>' \
+                  f'<span><b>Blue bars</b> represent factors that support predicting an income <b>{current_prediction_string}</b>. <br>' \
+                  f'<b>Red bars</b> represent factors in favor of <b>{opposite_class_str}</b></span>'
 
     return html_string
 
@@ -237,6 +259,15 @@ def explain_cfe(conversation, data, parse_op, regen):
                                                                  'template_manager').contents)
     short_summary = out
     return short_summary, desired_class
+
+
+def explain_pdp(conversation, feature_name):
+    pdp_explainer = conversation.get_var('pdp').contents
+    try:
+        exp = pdp_explainer.get_explanation(feature_name)
+    except KeyError:
+        exp = "Sorry, something went wrong."
+    return exp
 
 
 def explain_cfe_by_given_features(conversation,

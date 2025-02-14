@@ -49,10 +49,15 @@ class DialogueManager:
         return None
 
     def mark_as_explained(self, explanation, feature):
+        # get feature name from feature id
+        if isinstance(feature, int):
+            feature_name = self.template_manager.conversation.get_var("dataset").contents["X"].columns[feature]
+        else:
+            feature_name = feature
         if explanation == "ceterisParibus":
-            self.ceteris_paribus_features_explained.add(feature)
+            self.ceteris_paribus_features_explained.add(feature_name)
         elif explanation == "featureStatistics":
-            self.feature_statistics_explained.add(feature)
+            self.feature_statistics_explained.add(feature_name)
 
     def update_state(self, user_input, question_id=None, feature_id=None):
         """
@@ -69,7 +74,7 @@ class DialogueManager:
             # Direct mapping, update state machine
             self.interacted_explanations.add(question_id)
             if self.active_mode:
-                self.dialogue_policy.model.trigger(question_id)
+                self.dialogue_policy.predict_fn.trigger(question_id)
                 self.mark_as_explained(question_id, feature_id)
             single_reasoning_string = "Clicked on question"
             return question_id, feature_id, single_reasoning_string
@@ -95,7 +100,7 @@ class DialogueManager:
 
         # Update the state machine
         if self.active_mode:
-            self.dialogue_policy.model.trigger(method_name)
+            self.dialogue_policy.predict_fn.trigger(method_name)
             self.interacted_explanations.add(method_name)
             self.mark_as_explained(method_name, feature_name)
         return method_name, feature_name, single_reasoning_string

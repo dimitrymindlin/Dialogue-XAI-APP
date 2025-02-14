@@ -11,7 +11,7 @@ class ShapGlobalExplainer:
     """This class generates Shap Global explanations for tabular data with its own caching system."""
 
     def __init__(self, model, data: pd.DataFrame, link: str = 'identity', class_names: dict = None,
-                 cache_location: str = "./cache/shap-global-tabular.pkl"):
+                 cache_location: str = "./cache/shap-global.pkl"):
         self.data = data
         self.model = model
         self.link = link

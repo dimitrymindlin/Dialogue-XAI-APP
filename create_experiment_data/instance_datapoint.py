@@ -17,14 +17,14 @@ class InstanceDatapoint:
         # return a dict with frontend-needed information
         try:
             datapoint_dict = {
-                "id": self.instance_id,
+                "id": str(self.instance_id),
                 "probabilities": self.class_probabilities.tolist(),
                 "ml_prediction": self.model_predicted_label_string,
                 "displayable_features": self.displayable_features,
             }
         except AttributeError:
             datapoint_dict = {
-                "id": self.instance_id,
+                "id": str(self.instance_id),
                 "ml_prediction": self.model_predicted_label_string,
                 "displayable_features": self.displayable_features,
             }

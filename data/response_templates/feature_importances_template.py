@@ -3,7 +3,8 @@ from typing import Dict
 import io
 
 
-def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=None, template_manager=None):
+def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=None, template_manager=None,
+                           current_prediction_str=None):
     """Formats sorted list of (feature name, feature importance) tuples into a string.
 
     Arguments:
@@ -16,15 +17,13 @@ def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=
     """
     output_text = "<ol>"
 
-    if "least 3" in filtering_text:
-        # Handle summarizing least important features separately
+    if filtering_text and "least 3" in filtering_text:
         sig_coefs = sig_coefs[::-1]  # Reverse to start with the worst.
 
-    describing_features = 0  # Initialize counter for described features
+    describing_features = 0
     for i, (feature_name, feature_importance) in enumerate(sig_coefs):
-        if describing_features == 3 or \
-                num_features_to_show and describing_features >= num_features_to_show or \
-                "only_positive" in filtering_text and feature_importance <= 0:
+        if describing_features == 3 or (num_features_to_show and describing_features >= num_features_to_show) or \
+                (filtering_text and "only_positive" in filtering_text and feature_importance <= 0):
             break
 
         feature_display_name = template_manager.get_feature_display_name_by_name(feature_name)
@@ -35,13 +34,21 @@ def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=
         else:
             position_prefix = ""
 
-        if "least" in filtering_text:
+        if filtering_text and "least" in filtering_text:
             position = "least" if i == 0 else f"{position_prefix} least"
         else:
             position = "most" if i == 0 else f"{position_prefix} most"
-        increase_decrease = "increases" if feature_importance > 0 else "decreases"
-        # output_text += f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute which {increase_decrease} the model's output.</li>"
-        output_text += f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute.</li>"
+
+        # Adapt increases/decreases to always refer to over 50k.
+        # If current_prediction_str is 'under 50k', then a positive importance (which increases under 50k)
+        # actually means it decreases the likelihood of over 50k.
+        if current_prediction_str == "under 50k":
+            increase_decrease = "decreases" if feature_importance > 0 else "increases"
+        else:
+            increase_decrease = "increases" if feature_importance > 0 else "decreases"
+
+        output_text += (f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute and "
+                        f"<b>{increase_decrease}</b> the likelihood of over 50k</li>.")
         describing_features += 1
     output_text += "</ol>"
     return output_text
