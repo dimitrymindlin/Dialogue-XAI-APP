@@ -59,9 +59,6 @@ PdpExplanation.cache_location = "./cache/adult-pdp.pkl"
 # Tabular Anchor Params
 TabularAnchor.cache_location = "./cache/adult-anchor-tabular.pkl"
 
-# Shap Global Params
-ShapGlobalExplainer.cache_location = "./cache/adult-shap-global.pkl"
-
 # Conversation params
 Conversation.class_names = {0: "under 50k", 1: "over 50k"}
 Conversation.question_bank_path =  "./data/question_bank.csv"
@@ -80,8 +77,7 @@ ExplainBot.feature_tooltip_mapping = {
     "weekly working hours": "The total number of hours the individual works in a typical week.",
     "marital status": "The individual's marital status, indicating whether they are Married or Single. This simplification may encompass a broader range of legal statuses.",
     "work life balance": "A self-reported assessment of the individual's work-life balance, ranging from poor to excellent. This subjective measure reflects the individual's satisfaction with their ability to balance work and personal life.",
-    "occupation": "The category of the individual's occupation, such as Admin (Administrative and clerical roles, such as office clerks and secretaries), Military (Personnel serving in the armed forces), Blue-Collar (Manual labor occupations, including craft workers, machine operators, farmers, handlers, cleaners, and transportation workers), White-Collar (Executive and managerial positions involving strategic planning and oversight), Professional (Specialized professions requiring advanced education, like doctors, lawyers, engineers, and educators), Sales (Roles related to selling products or services, such as sales representatives and retail personnel), Service (Occupations providing services to individuals or communities, including protective services (e.g., law enforcement officers, firefighters), technical support, and other service-oriented roles)",
-    "workclass": "The work class of the person: Government, Private Sector, Self-Employed / Entrepreneurial, Unemployed and Other.",
+    "occupation": "The category of the individual's occupation, such as Admin (Administrative and clerical roles: office clerks and secretaries), Military (Personnel serving in the army), Blue-Collar (Manual labor occupations: craft workers, machine operators, farmers, handlers, cleaners), White-Collar (Executive and managerial positions involving strategic planning), Professional (Specialized professions requiring advanced education: doctors, lawyers, engineers, and educators), Sales (Roles related to selling products or services: sales representatives, retail personnel), Service (Occupations providing services to individuals or communities: protective services e.g., law enforcement officers, firefighters, technical support)","workclass": "The work class of the person: Government, Private Sector, Self-Employed / Entrepreneurial, Unemployed and Other.",
     "investment outcome": "The result of the individual's investment activities, categorized as: No investment, Loss, or Gain. This reflects whether the individual has investments and if so, whether they have made a profit or a loss."
 }
 

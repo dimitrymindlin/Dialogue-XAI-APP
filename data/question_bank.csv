@@ -4,7 +4,7 @@ least3Features;What features are used the least for prediction of the current in
 shapAllFeatures;Give me a list of features and their impact for predicting the current instance.;What is the <b>strength</b> of each attribute for the current model prediction?;shap/lime;Feature Importance;general
 counterfactualAnyChange;How should this instance change to get a different prediction?;To <b>switch the model’s prediction</b>, which attributes would need to be different?;cfe;Counterfactual;general
 anchor;What attributes must be present or absent to guarantee this prediction?;Which <b>group of attributes</b> is most important for the current prediction?;anchor;Minimal Feature Set;general
-ceterisParibus;What if I changed the value of a feature?;Does the <b>prediction change</b> if only [feature selection] was different?;Ceteris Paribus;Feature Change;feature
-featureStatistics;Is the current value of feature high or low?;How are the different values of [feature selection] <b>distributed</b> in the dataset?;feature-description;Feature Statistics;feature
-globalPdp;What are the global influences of a feature and its values on the prediction?;How are the values of [feature selection] <b>on average associated</b> with the model’s prediction?;pdp;global correlation;feature
 modelConfidence;What is the model confidence?;How <b>confident</b> is the model in its current prediction?;confidence;model information;general
+ceterisParibus;What if I changed the value of a feature?;Does the <b>prediction of the current person change</b> if only [feature selection] was different?;Ceteris Paribus;Feature Change;feature
+globalPdp;What are the average influences of a feature and its values on the prediction?;How are the values of [feature selection] <b>on average</b> associated with the model’s prediction?;pdp;global correlation;feature
+featureStatistics;Is the current value of feature high or low?;How are the different values of [feature selection] <b>distributed</b> in the dataset?;feature-description;Feature Statistics;feature

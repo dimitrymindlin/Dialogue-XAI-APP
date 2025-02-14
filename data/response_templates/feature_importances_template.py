@@ -48,7 +48,7 @@ def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=
             increase_decrease = "increases" if feature_importance > 0 else "decreases"
 
         output_text += (f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute and "
-                        f"<b>{increase_decrease}</b> the likelihood of over 50k</li>.")
+                        f"<b>{increase_decrease}</b> the likelihood of over 50k.</li>")
         describing_features += 1
     output_text += "</ol>"
     return output_text

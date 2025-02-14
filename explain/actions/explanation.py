@@ -77,11 +77,11 @@ def explain_model_confidence(model_pred_probas, predicted_class):
     confidence_explanation = ""
 
     if predicted_class_confidence >= 90:
-        confidence_explanation = f"The model is <b>extremely confident</b> in predicting {predicted_class} ({predicted_class_confidence}%)"
+        confidence_explanation = f"The model is <b>extremely confident</b> ({predicted_class_confidence}%) in predicting {predicted_class}."
     elif predicted_class_confidence >= 75:
-        confidence_explanation = f"The model is <b>very confident</b> in predicting {predicted_class} ({predicted_class_confidence}%)."
+        confidence_explanation = f"The model is <b>very confident</b> ({predicted_class_confidence}%) in predicting {predicted_class}."
     elif predicted_class_confidence >= 50:
-        confidence_explanation = f"The model is <b>somewhat confident</b> in predicting {predicted_class} ({predicted_class_confidence}%)."
+        confidence_explanation = f"The model is <b>somewhat confident</b> ({predicted_class_confidence}%) in predicting {predicted_class}."
 
     return confidence_explanation
 
