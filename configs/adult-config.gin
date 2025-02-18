@@ -43,13 +43,13 @@ TabularDice.final_cfe_amount = 3
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"
-DiverseInstances.instance_amount = 20
+DiverseInstances.instance_amount = 10
 DiverseInstances.dataset_name = "adult"
 
 # Test Instances
 TestInstances.cache_location = "./cache/adult-test-instances.pkl"
 TestInstances.max_features_to_vary = 2
-TestInstances.instance_amount = 20
+TestInstances.instance_amount = 10
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/adult-ceteris-paribus.pkl"

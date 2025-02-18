@@ -76,8 +76,14 @@ class DiverseInstances:
         np.random.shuffle(balanced_class_0)
         np.random.shuffle(balanced_class_1)
 
+        # Step 6: Take half of the instances from each class
+        balanced_class_0 = balanced_class_0[:int(instance_amount / 2)]
+        balanced_class_1 = balanced_class_1[:int(instance_amount / 2)]
+
         # Combine the lists (ensured that the final list has the desired length and class balance)
         combined_instances = np.concatenate((balanced_class_0, balanced_class_1))
+        # Shuffle
+        np.random.shuffle(combined_instances)
         final_instances = combined_instances[:instance_amount].tolist()
 
         return final_instances

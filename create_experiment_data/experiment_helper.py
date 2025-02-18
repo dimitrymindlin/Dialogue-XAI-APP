@@ -28,16 +28,16 @@ class ExperimentHelper:
         self.actionable_features = actionable_features
 
     def load_instances(self):
-        self._load_data_instances()
+        self._load_train_instances()
         self._load_test_instances()
 
-    def _load_data_instances(self):
+    def _load_train_instances(self):
         diverse_instances = self.conversation.get_var("diverse_instances").contents
-        self.instances["train"] = [self._prepare_instance_data(instance) for instance in diverse_instances]
+        self.instances["train"] = [self._prepare_train_instance(instance) for instance in diverse_instances]
 
     def _load_test_instances(self):
         test_instances = self.conversation.get_var("test_instances").contents
-        self.instances["test"] = {instance_id: self._process_test_instances(instances_dict)
+        self.instances["test"] = {instance_id: self._process_test_instances(instance_id, instances_dict)
                                   for instance_id, instances_dict in test_instances.items()}
 
     def _convert_values_to_string(self, instance):
@@ -82,7 +82,7 @@ class ExperimentHelper:
 
     def get_next_instance(self, instance_type, datapoint_count, return_probability=False):
         old_instance = None
-        load_instance_methods = {"train": self._load_data_instances, "test": self._load_test_instances}
+        load_instance_methods = {"train": self._load_train_instances, "test": self._load_test_instances}
         get_instance_methods = {
             "train": lambda: self._get_training_instance(return_probability, datapoint_count),
             "test": lambda: self._get_test_instance(
@@ -92,30 +92,16 @@ class ExperimentHelper:
             "intro-test": lambda: self._get_intro_test_instance(datapoint_count)
         }
 
-        if not self.instances.get(instance_type, []):
-            load_instance_methods.get(instance_type, lambda: None)()
+        if self.instances.get(instance_type, None) is None:
+            self.load_instances()
+
+        load_instance_methods.get(instance_type, lambda: None)()
 
         if instance_type != "train":
             instance_id, instance = get_instance_methods[instance_type]()
             old_instance = self.current_instance
-            predicted_label_index = np.argmax(
-                self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance, index=[0])))
-            model_predicted_label = self.conversation.class_names[predicted_label_index]
-            probability = None
-            instance = (instance_id, instance, probability, model_predicted_label, predicted_label_index)
         else:  # "train"
             instance = get_instance_methods[instance_type]()
-            predicted_label_index = np.argmax(
-                self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance[1], index=[0])))
-            model_predicted_label = self.conversation.class_names[predicted_label_index]
-            instance = (instance[0], instance[1], instance[2], model_predicted_label, predicted_label_index)
-
-        # Turn instance dict in InstanceDatapoint object
-        instance = InstanceDatapoint(instance_id=instance[0],
-                                     instance_as_dict=instance[1],
-                                     class_probabilities=instance[2],
-                                     model_predicted_label_string=instance[3],
-                                     model_predicted_label=predicted_label_index)
 
         self.current_instance_type = instance_type
 
@@ -131,16 +117,54 @@ class ExperimentHelper:
         self.current_instance = instance
         return instance
 
-    def _prepare_instance_data(self, instance):
+    def print_all_labels(self):
+        # Make a table with datapoint count as columns and train, test, intro-test and final-test as rows
+        # 1. Create empty table
+        df = pd.DataFrame(columns=["train", "test", "intro-test", "final-test"])
+        # 2. Iterate over all datapoints and get the instance
+        for i in range(len(self.instances["train"])):
+            train_instance = self.get_next_instance("train", i)
+            test_instance = self.get_next_instance("test", i)
+            intro_test_instance = self.get_next_instance("intro-test", i)
+            final_test_instance = self.get_next_instance("final-test", i)
+            # 3. Add the labels to the table
+            df.loc[i] = [train_instance.model_predicted_label_string,
+                         test_instance.model_predicted_label_string,
+                         intro_test_instance.model_predicted_label_string,
+                         final_test_instance.model_predicted_label_string]
+        print(df)
+
+    def _prepare_train_instance(self, instance):
         # Simplified example of preparing a data instance
         model_prediction = \
             self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance['values'], index=[0]))[0]
-        true_label = self._fetch_true_label(instance['id'])
-        return instance['id'], instance['values'], model_prediction, true_label
+        # true_label = self._fetch_true_label(instance['id'])
+        # Turn to InstanceDatapoint
+        instance = InstanceDatapoint(instance_id=instance['id'],
+                                     instance_as_dict=instance['values'],
+                                     class_probabilities=model_prediction,
+                                     model_predicted_label_string=self.conversation.class_names[
+                                         np.argmax(model_prediction)],
+                                     model_predicted_label=np.argmax(model_prediction),
+                                     instance_type='train')
+        return instance
 
-    def _process_test_instances(self, instances_dict):
-        # Example process for test instances
-        return {comp: pd.DataFrame(data).to_dict('records')[0] for comp, data in instances_dict.items()}
+    def _process_test_instances(self, train_datapoint_id, instances_dict):
+        # Turn to InstanceDatapoint
+        instances_dict_new = {}
+        instance_dicts = {comp: pd.DataFrame(data).to_dict('records')[0] for comp, data in instances_dict.items()}
+        for instance_naming, instance_dict in instance_dicts.items():
+            class_probabilities = self.conversation.get_var("model_prob_predict").contents(
+                pd.DataFrame(instance_dict, index=[0]))
+            predicted_label_index = np.argmax(class_probabilities)
+            model_predicted_label = self.conversation.class_names[predicted_label_index]
+            instances_dict_new[instance_naming] = InstanceDatapoint(instance_id=train_datapoint_id,
+                                                                    instance_as_dict=instance_dict,
+                                                                    class_probabilities=class_probabilities,
+                                                                    model_predicted_label_string=model_predicted_label,
+                                                                    model_predicted_label=predicted_label_index,
+                                                                    instance_type="test")
+        return instances_dict_new
 
     def _get_training_instance(self, return_probability, datapoint_count, instance_type="train"):
         if not self.instances[instance_type]:
@@ -163,7 +187,7 @@ class ExperimentHelper:
 
         instance_key = "most_complex_instance"
         # Get final test instance based on train instance id
-        train_instance_id = self.instances["train"][datapoint_count][0]
+        train_instance_id = self.instances["train"][datapoint_count].instance_id
         test_instances_dict = self.instances["test"][train_instance_id]
         instance = test_instances_dict[instance_key]
         return train_instance_id, instance
@@ -174,11 +198,11 @@ class ExperimentHelper:
             self._load_test_instances()
         if not self.instances["train"]:
             # Load training instances if not already loaded
-            self._load_data_instances()
+            self._load_train_instances()
 
-        instance_key = "most_complex_instance"  # (Dimi) Same as final test for now...
+        instance_key = "most_complex_instance"  # Same as final test
         # Get intro test instance based on train instance id
-        train_instance_id = self.instances["train"][datapoint_count][0]
+        train_instance_id = self.instances["train"][datapoint_count].instance_id
         test_instances_dict = self.instances["test"][train_instance_id]
         instance = test_instances_dict[instance_key]
         return train_instance_id, instance
