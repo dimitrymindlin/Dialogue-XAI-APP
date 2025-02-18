@@ -107,10 +107,13 @@ def get_datapoint(user_id, datapoint_type, datapoint_count, return_probability=F
     """
     Get a datapoint from the dataset based on the datapoint type.
     """
+    # convert to 0-indexed count
+    datapoint_count = int(datapoint_count) - 1
+
     if user_id is None:
         user_id = "TEST"
     instance = bot_dict[user_id].get_next_instance(datapoint_type,
-                                                   int(datapoint_count),
+                                                   datapoint_count,
                                                    return_probability=return_probability)
     instance_dict = instance.get_datapoint_as_dict_for_frontend()
     return instance_dict
@@ -172,7 +175,7 @@ def set_user_prediction():
     data = request.get_json()  # Get JSON data from request body
     user_id = data.get("user_id")
     experiment_phase = data.get("experiment_phase")
-    datapoint_count = data.get("datapoint_count")
+    datapoint_count = int(data.get("datapoint_count")) - 1  # 0 indexed for backend
     user_prediction = data.get("user_prediction")
     if user_id is None:
         user_id = "TEST"  # Default user_id for testing
@@ -335,6 +338,8 @@ async def get_bot_response_from_nl():
 app = Flask(__name__)
 app.register_blueprint(bp, url_prefix=args.baseurl)
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+CORS(app, resources={r"/*": {"origins": "http://dialogue-xai-frontend:3000"}})
+
 
 if __name__ != '__main__':
     stream_handler = logging.StreamHandler()

@@ -76,8 +76,14 @@ class DiverseInstances:
         np.random.shuffle(balanced_class_0)
         np.random.shuffle(balanced_class_1)
 
+        # Step 6: Take half of the instances from each class
+        balanced_class_0 = balanced_class_0[:int(instance_amount / 2)]
+        balanced_class_1 = balanced_class_1[:int(instance_amount / 2)]
+
         # Combine the lists (ensured that the final list has the desired length and class balance)
         combined_instances = np.concatenate((balanced_class_0, balanced_class_1))
+        # Shuffle
+        np.random.shuffle(combined_instances)
         final_instances = combined_instances[:instance_amount].tolist()
 
         return final_instances
@@ -123,7 +129,7 @@ class DiverseInstances:
                 # Get random instances
                 dynamic_seed = int(time.time()) % 10000
                 # Get 10 times more instances to filter and ensure diversity
-                diverse_instances_pandas_indices = data.sample(self.instance_amount * 10,
+                diverse_instances_pandas_indices = data.sample(self.instance_amount * 50,
                                                                random_state=dynamic_seed).index.tolist()
 
                 # If adult dataset, filter by marital status and class

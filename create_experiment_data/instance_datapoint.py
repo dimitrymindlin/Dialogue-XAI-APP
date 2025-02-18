@@ -1,9 +1,11 @@
 class InstanceDatapoint:
-    def __init__(self, instance_id,
+    def __init__(self,
+                 instance_id,
                  instance_as_dict,
                  class_probabilities,
                  model_predicted_label_string,
-                 model_predicted_label=None):
+                 model_predicted_label=None,
+                 instance_type=None):
         self.instance_id = instance_id
         self.instance_as_dict = instance_as_dict
         self.class_probabilities = class_probabilities
@@ -12,6 +14,7 @@ class InstanceDatapoint:
         self.displayable_features = None
         self.instance_type = None
         self.counter = -1
+        self.instance_type = instance_type
 
     def get_datapoint_as_dict_for_frontend(self):
         # return a dict with frontend-needed information

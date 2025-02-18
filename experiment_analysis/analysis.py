@@ -456,7 +456,6 @@ def main():
     # load user_df from csv
     analysis.user_df = pd.read_csv(result_folder_path + "user_df.csv")
     # print number of people per study group
-    print("Dimi")
     print(analysis.user_df.groupby("study_group").size())
     # Get demographics of the users
     user_prolific_ids = analysis.user_df["prolific_id"].values
