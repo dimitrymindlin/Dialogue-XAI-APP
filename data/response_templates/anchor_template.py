@@ -20,6 +20,8 @@ def anchor_template(exp, template_manager):
                 value = change_string.split(">=")[1].strip()
             else:
                 raise ValueError("Could not split the change string.")
+
+        value = template_manager.get_feature_display_value(value)
         # If its a categorical feature, get the display name of the value
         """if feature in template_manager.encoded_col_mapping.keys(): NOT NEEDED?!
             value = template_manager.get_encoded_feature_name(feature, value)"""
