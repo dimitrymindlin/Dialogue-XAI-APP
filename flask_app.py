@@ -142,23 +142,23 @@ async def get_train_datapoint():
 
 
 @bp.route('/get_test_datapoint', methods=['GET'])
-def get_test_datapoint():
+async def get_test_datapoint():
     """
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
     datapoint_count = request.args.get("datapoint_count")
-    return get_datapoint(user_id, "test", datapoint_count)
+    return await get_datapoint(user_id, "test", datapoint_count)
 
 
 @bp.route('/get_final_test_datapoint', methods=['GET'])
-def get_final_test_datapoint():
+async def get_final_test_datapoint():
     """
     Get a final test datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
     datapoint_count = request.args.get("datapoint_count")
-    return get_datapoint(user_id, "final-test", datapoint_count)
+    return await get_datapoint(user_id, "final-test", datapoint_count)
 
 
 @bp.route('/get_intro_test_datapoint', methods=['GET'])
@@ -168,7 +168,7 @@ async def get_intro_test_datapoint():
     """
     user_id = request.args.get("user_id")
     datapoint_count = request.args.get("datapoint_count")
-    return get_datapoint(user_id, "intro-test", datapoint_count)
+    return await get_datapoint(user_id, "intro-test", datapoint_count)
 
 
 @bp.route("/set_user_prediction", methods=['POST'])
