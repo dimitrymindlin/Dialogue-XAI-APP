@@ -232,12 +232,11 @@ def run_action_new(conversation: Conversation,
         return most_important_feature_name
 
     if question_id == "shapAllFeatures":
-        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction_str,
-                                                          opposite_class_str,
-                                                          current_prediction_id)
+        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction_str)
         return explanation
     if question_id == "ceterisParibus":
-        explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming, opposite_class_str,
+        explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming,
+                                              opposite_class_str,
                                               as_text=True)
         if opposite_class_str not in explanation and not explanation.startswith("No"):
             explanation = explanation + opposite_class_str + "."
@@ -283,8 +282,7 @@ def compute_explanation_report(conversation,
     # Get already sorted feature importances
     if not as_text:
         feature_importances = explain_feature_importances_as_plot(conversation, data, parse_op, regen,
-                                                                  current_prediction_str,
-                                                                  current_prediction_id)
+                                                                  current_prediction_str)
     else:
         feature_importances = explain_local_feature_importances(conversation,
                                                                 data,
