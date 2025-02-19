@@ -157,10 +157,12 @@ def explain_feature_importances_as_plot(conversation,
                                         data,
                                         parse_op,
                                         regen,
-                                        current_prediction_string: str,
-                                        opposite_class_str,
-                                        prediction_id: int,
-                                        target_class=None):
+                                        current_prediction_string: str):
+    """
+    Get feature importances as a plot for a specific prediction. The red bars represent features that push the prediction
+    toward over 50k, while the blue bars represent features that push the prediction toward under 50k, this is
+    enforrced by
+    """
     explanation_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
     labels = list(explanation_dict.keys())
     values = [val[0] for val in explanation_dict.values()]
@@ -207,8 +209,8 @@ def explain_feature_importances_as_plot(conversation,
                   f"This chart shows how different attributes <i>influence</i> the model’s prediction, pushing it either above or below $50K. " \
                   f'The model <b>starts with a 75% likelihood</b> that a person earns <b>less than $50K</b>, based on general trends in the data. ' \
                   f'To predict an income above $50K, the positive factors must be <b>three times stronger</b> than the negative ones.<br>' \
-                  f'<span><b>Blue bars</b> represent factors that increase the model’s likelihood of predicting <b>{current_prediction_string}</b>. <br>' \
-                  f'<b>Red bars</b> represent factors that decrease it, pushing the prediction toward <b>{opposite_class_str}</b>.</span>'
+                  f'<span><b>Blue bars</b> represent factors push the model’s likelihood toward predicting <b>under 50K</b>. <br>' \
+                  f'<b>Red bars</b> represent factors pushing the prediction toward <b>over 50K</b>.</span>'
 
     return html_string
 
