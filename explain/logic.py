@@ -260,39 +260,18 @@ class ExplainBot:
         return feature_statistics_explainer.get_feature_ranges()
 
     def set_user_prediction(self, experiment_phase, datapoint_count, user_prediction):
-        reversed_dict = {value: key for key, value in self.conversation.class_names.items()}
-        try:
-            user_prediction_as_int = reversed_dict[user_prediction]
-        except KeyError:
-            user_prediction_as_int = int(1000)
-            # for "I don't know" option
-
-        # Make 2d dict with self.current_instance_type as first key and current_id as second key
-
-        self.user_prediction_dict[experiment_phase][datapoint_count]['user_prediction'] = user_prediction_as_int
-
-        # Check if user was correct
-        correct_pred = self.user_prediction_dict[experiment_phase][datapoint_count]['true_label']
-        correct_pred_string = self.conversation.class_names[correct_pred]
-        user_correct = user_prediction_as_int == correct_pred
-        return user_correct, correct_pred_string
+        reversed_dict = {v: k for k, v in self.conversation.class_names.items()}
+        user_prediction_as_int = reversed_dict.get(user_prediction, 1000)  # 1000 is for "I don't know" option
+        entry = self.user_prediction_dict[experiment_phase][datapoint_count]
+        entry['user_prediction'] = user_prediction_as_int
+        correct_pred = entry['true_label']
+        return user_prediction_as_int == correct_pred, self.conversation.class_names[correct_pred]
 
     def get_user_correctness(self, train=False):
-        # Check self.user_prediction_dict for correctness
-        correct_counter = 0
-        total_counter = 0
-        # Get correct prediction dict
-        if train:
-            predictions_dict = self.user_prediction_dict["train"]
-        else:
-            predictions_dict = self.user_prediction_dict["test"]
-        # Calculate correctness
-        for instance_id, (user_prediction, true_label) in predictions_dict.items():
-            if user_prediction == true_label:
-                correct_counter += 1
-            total_counter += 1
-        correctness_string = f"{correct_counter} out of {total_counter}"
-        return correctness_string
+        predictions = self.user_prediction_dict["train" if train else "test"]
+        total = len(predictions)
+        correct = sum(1 for p in predictions.values() if p["user_prediction"] == p["true_label"])
+        return f"{correct} out of {total}"
 
     def get_proceeding_okay(self):
         return self.dialogue_manager.get_proceeding_okay()
