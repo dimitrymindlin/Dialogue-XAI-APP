@@ -129,7 +129,7 @@ class DiverseInstances:
                 # Get random instances
                 dynamic_seed = int(time.time()) % 10000
                 # Get 10 times more instances to filter and ensure diversity
-                diverse_instances_pandas_indices = data.sample(self.instance_amount * 10,
+                diverse_instances_pandas_indices = data.sample(self.instance_amount * 50,
                                                                random_state=dynamic_seed).index.tolist()
 
                 # If adult dataset, filter by marital status and class
