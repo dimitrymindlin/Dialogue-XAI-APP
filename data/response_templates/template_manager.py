@@ -12,6 +12,7 @@ class TemplateManager:
         self.feature_display_names = FeatureDisplayNames(self.conversation)
         self.encoded_col_mapping = self._load_label_encoded_feature_dict(encoded_col_mapping_path)
         self.categorical_mapping = categorical_mapping
+        self.rounding_precision = 2
 
     def _load_label_encoded_feature_dict(self, encoded_col_mapping_path):
         """
@@ -139,3 +140,17 @@ class TemplateManager:
                 instance[display_name] = feature_value
                 del instance[feature_name]
         return instance
+
+    def get_feature_display_value(self, feature_value):
+        """
+        Return displayable value by trying to turn to int or float with rounding precisiong and then to string
+        """
+        if feature_value.isdigit():
+            feature_value = int(feature_value)
+        elif "." in feature_value:
+            float_value = float(feature_value)
+            if float_value.is_integer():
+                feature_value = int(float_value)
+            else:
+                feature_value = round(float_value, self.rounding_precision)
+        return str(feature_value)
