@@ -186,8 +186,8 @@ def run_action_new(conversation: Conversation,
     if question_id == "counterfactualAnyChange":
         # How should this instance change to get a different prediction?
         explanation, _ = explain_cfe(conversation, data, parse_op, regen)
-        explanation = f"Here are possible scenarios that would change the prediction to <b>{opposite_class_str}</b>:<br> <br>" + \
-                      explanation + "<br>There might be other possible changes. These are examples."
+        explanation = f"Here are <b> some possible changes</b> that could shift the model's prediction to <b>{opposite_class_str}</b>:<br> <br>" + \
+                      explanation + "<br>There might be <b>other possible changes</b>. These are examples."
         return explanation
     if question_id == "counterfactualSpecificFeatureChange":
         # How should this attribute change to get a different prediction?
