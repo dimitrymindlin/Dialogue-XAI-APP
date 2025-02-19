@@ -204,11 +204,11 @@ def explain_feature_importances_as_plot(conversation,
 
     # Updated explanation text: blue bars always for "under 50k" and red bars for "over 50k"
     html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                  f"This chart shows the how the different attributes <i>pull</i> the model's prediction toward above or below 50K. " \
-                  f'The model <b>starts with a 75% chance that each person earns below $50K</b>, based on general trends. ' \
-                  f'To predict above 50K, the supporting factors need to be <b>three times stronger</b> than those for below 50K.<br>' \
-                  f'<span><b>Blue bars</b> represent factors that support predicting an income <b>{current_prediction_string}</b>. <br>' \
-                  f'<b>Red bars</b> represent factors in favor of <b>{opposite_class_str}</b></span>'
+                  f"This chart shows how different attributes <i>influence</i> the model’s prediction, pushing it either above or below $50K. " \
+                  f'The model <b>starts with a 75% likelihood</b> that a person earns <b>less than $50K</b>, based on general trends in the data. ' \
+                  f'To predict an income above $50K, the positive factors must be <b>three times stronger</b> than the negative ones.<br>' \
+                  f'<span><b>Blue bars</b> represent factors that increase the model’s likelihood of predicting <b>{current_prediction_string}</b>. <br>' \
+                  f'<b>Red bars</b> represent factors that decrease it, pushing the prediction toward <b>{opposite_class_str}</b>.</span>'
 
     return html_string
 

@@ -84,7 +84,7 @@ class FeatureStatisticsExplainer:
 
         # Create a bar plot on the axis
         value_counts.plot(kind='bar', ax=ax)
-        ax.set_title(f'Frequency of {feature_name} Categories', fontsize=max_font_size)
+        ax.set_title(f'Proportion of {feature_name} Categories in the Data', fontsize=max_font_size)
         ax.set_xlabel('Category', fontsize=max_font_size-2)
         ax.set_ylabel('Frequency', fontsize=max_font_size-2)
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=max_font_size-4)
