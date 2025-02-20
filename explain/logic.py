@@ -58,6 +58,7 @@ class ExplainBot:
     def __init__(self,
                  study_group: str,
                  ml_knowledge: str,
+                 user_id: str,
                  model_file_path: str,
                  dataset_file_path: str,
                  background_dataset_file_path: str,
@@ -135,7 +136,7 @@ class ExplainBot:
         self.bot_name = name
         self.study_group = study_group
         self.ml_knowledge = ml_knowledge
-
+        self.experiment_id = user_id
         # Prompt settings
         self.prompt_metric = prompt_metric
         self.prompt_ordering = prompt_ordering
@@ -229,6 +230,7 @@ class ExplainBot:
             self.agent = Agent(feature_names=self.feature_ordering,
                                domain_description=self.conversation.describe.get_dataset_description(),
                                user_ml_knowledge=self.ml_knowledge,
+                               experiment_id=self.experiment_id,
                                verbose=True)
 
         # Load Template Manager

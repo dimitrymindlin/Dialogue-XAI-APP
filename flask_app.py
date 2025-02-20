@@ -65,7 +65,7 @@ def init():
         study_group = "interactive"
     if ml_knowledge is None or "":
         ml_knowledge = "low"
-    BOT = ExplainBot(study_group, ml_knowledge)
+    BOT = ExplainBot(study_group, ml_knowledge, user_id)
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
 
@@ -105,7 +105,7 @@ def finish():
     return "200 OK"
 
 
-async def get_datapoint(user_id, datapoint_type, datapoint_count, return_probability=False):
+def get_datapoint(user_id, datapoint_type, datapoint_count, return_probability=False):
     """
     Get a datapoint from the dataset based on the datapoint type.
     """
@@ -114,22 +114,22 @@ async def get_datapoint(user_id, datapoint_type, datapoint_count, return_probabi
 
     if user_id is None:
         user_id = "TEST"
-    instance = await bot_dict[user_id].get_next_instance(datapoint_type,
-                                                         datapoint_count,
-                                                         return_probability=return_probability)
+    instance = bot_dict[user_id].get_next_instance(datapoint_type,
+                                                   datapoint_count,
+                                                   return_probability=return_probability)
     instance_dict = instance.get_datapoint_as_dict_for_frontend()
     return instance_dict
 
 
 @bp.route('/get_train_datapoint', methods=['GET'])
-async def get_train_datapoint():
+def get_train_datapoint():
     """
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
     datapoint_count = request.args.get("datapoint_count")
     user_study_group = bot_dict[user_id].get_study_group()
-    result_dict = await get_datapoint(user_id, "train", datapoint_count)
+    result_dict = get_datapoint(user_id, "train", datapoint_count)
     if bot_dict[user_id].use_active_dialogue_manager:
         bot_dict[user_id].reset_dialogue_manager()
 
@@ -142,33 +142,33 @@ async def get_train_datapoint():
 
 
 @bp.route('/get_test_datapoint', methods=['GET'])
-async def get_test_datapoint():
+def get_test_datapoint():
     """
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
     datapoint_count = request.args.get("datapoint_count")
-    return await get_datapoint(user_id, "test", datapoint_count)
+    return get_datapoint(user_id, "test", datapoint_count)
 
 
 @bp.route('/get_final_test_datapoint', methods=['GET'])
-async def get_final_test_datapoint():
+def get_final_test_datapoint():
     """
     Get a final test datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
     datapoint_count = request.args.get("datapoint_count")
-    return await get_datapoint(user_id, "final-test", datapoint_count)
+    return get_datapoint(user_id, "final-test", datapoint_count)
 
 
 @bp.route('/get_intro_test_datapoint', methods=['GET'])
-async def get_intro_test_datapoint():
+def get_intro_test_datapoint():
     """
     Get a final test datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
     datapoint_count = request.args.get("datapoint_count")
-    return await get_datapoint(user_id, "intro-test", datapoint_count)
+    return get_datapoint(user_id, "intro-test", datapoint_count)
 
 
 @bp.route("/set_user_prediction", methods=['POST'])
@@ -219,6 +219,8 @@ def set_user_prediction():
                 prompt = f"""
                 Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. <br>
                 To understand its reasoning and improve your predictions, <b>type your questions</b> in the chat, and I will answer them."""
+            if bot_dict[user_id].use_llm_agent:
+                bot_dict[user_id].agent.append_to_history("agent", prompt)
 
         message = {
             "isUser": False,
@@ -344,7 +346,7 @@ async def get_bot_response_from_nl():
 app = Flask(__name__)
 app.register_blueprint(bp, url_prefix=args.baseurl)
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
-CORS(app, resources={r"/*": {"origins": "http://dialogue-xai-frontend:3000"}})
+# CORS(app, resources={r"/*": {"origins": "http://dialogue-xai-frontend:3000"}})
 
 # Create cache folder in root if it doesn't exist
 if not os.path.exists("cache"):
