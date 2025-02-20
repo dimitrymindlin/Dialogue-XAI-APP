@@ -281,7 +281,7 @@ class ExplainBot:
     def get_proceeding_okay(self):
         return self.dialogue_manager.get_proceeding_okay()
 
-    async def get_next_instance(self, instance_type, datapoint_count, return_probability=False) -> InstanceDatapoint:
+    def get_next_instance(self, instance_type, datapoint_count, return_probability=False) -> InstanceDatapoint:
         """
         Returns the next instance in the data_instances list if possible.
         param instance_type: type of instance to return, can be train, test or final_test
@@ -292,15 +292,16 @@ class ExplainBot:
             datapoint_count=datapoint_count,
             return_probability=return_probability)
         # Update agent with new instance
-        if self.use_llm_agent:
+        if self.use_llm_agent and instance_type == "train":
             xai_report = self.get_explanation_report(as_text=True)
             # Get visual explanations
             visual_exp_dict = {}
-            visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeatures")[0]
+            visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeaturesPlot")[0]
             opposite_class_name = self.conversation.class_names[1 - self.get_current_prediction(as_int=True)]
-            await self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
-                                                      self.get_current_prediction(),
-                                                      opposite_class_name=opposite_class_name)
+            self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
+                                                self.get_current_prediction(),
+                                                opposite_class_name=opposite_class_name,
+                                                datapoint_count=datapoint_count)
         # Update user_prediction_dict with current instance's correct prediction
         true_label = self.get_current_prediction(as_int=True)
         try:
