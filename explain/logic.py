@@ -37,7 +37,6 @@ from explain.explanations.feature_statistics_explainer import FeatureStatisticsE
 from explain.explanations.model_profile import PdpExplanation
 from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
-from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant
 
 # from parsing.llm_intent_recognition.llm_pipeline_setup.ollama_pipeline.ollama_pipeline import LLMSinglePrompt REMOVED FOR PRODUCTION
 
