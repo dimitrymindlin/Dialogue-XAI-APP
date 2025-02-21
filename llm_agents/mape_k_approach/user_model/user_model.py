@@ -50,15 +50,6 @@ class UserModel:
                     return item
         return None
 
-    def get_summary(self):
-        """Return a summary of all understood, misunderstood, shown explanation, and not explained yet items."""
-        return {
-            "understood": [item.label for item in self.understood],
-            "misunderstood": [item.label for item in self.misunderstood],
-            "shown explanation": [item.label for item in self.shown_explanation],
-            "not explained yet": [item.label for item in self.not_explained_yet]
-        }
-
     def set_model_from_summary(self, summary):
         """Set the user model from a summary dictionary."""
         for label in summary["understood"]:

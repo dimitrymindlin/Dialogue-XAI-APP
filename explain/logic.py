@@ -388,6 +388,9 @@ class ExplainBot:
                 .to_dict(orient='records')
             }
 
+            # save question_pd to conversation
+            self.conversation.add_var('question_bank', question_pd, 'question_bank')
+
             return answer_dict
 
         except FileNotFoundError:

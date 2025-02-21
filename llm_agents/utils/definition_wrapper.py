@@ -20,5 +20,20 @@ class DefinitionWrapper:
             name = display.get("name", "Unnamed display")
             description = display.get("description", "No description available.")
             example = display.get("example", "No example provided.")
-            summary.append(f"- {name}: {description} {example}")
+            differentiating_description = display.get("differentiating_description", None)
+            if differentiating_description is not None:
+                summary.append(f"- {name}: {description} {example} {differentiating_description}")
+            else:
+                summary.append(f"- {name}: {description} {example}")
         return "\n".join(summary)
+
+    def get_differentiating_description(self, concept_name):
+        """
+        Provides the differentiating description for a given concept.
+        :param concept_name: The name of the concept.
+        :return: The differentiating description for the concept, or None if none is available.
+        """
+        for display in self.displays:
+            if display["name"] == concept_name:
+                return display.get("differentiating_description", None)
+        return None

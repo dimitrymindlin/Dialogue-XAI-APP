@@ -1,11 +1,13 @@
 from typing import List
 from pydantic import BaseModel, Field
 
+
 class CommunicationGoal(BaseModel):
     goal: str = Field(
         ...,
         description="Each goal should focus on a specific aspect, such as eliciting if the user understands a concept or providing a step-by-step explanation."
     )
+
 
 class ExplanationTarget(BaseModel):
     reasoning: str = Field(..., description="The reasoning behind the choice of the current explanandum.")
@@ -22,11 +24,13 @@ class ExplanationTarget(BaseModel):
                 f"Step Name: {self.step_name}\n"
                 f"Communication Goals:\n{communication_goals_str}")
 
+
 class ExplanationStepModel(BaseModel):
     step_name: str = Field(..., description="The name of the explanation step.")
     description: str = Field(..., description="Description of the explanation step.")
     dependencies: list = Field(..., description="List of dependencies for the explanation step.")
     is_optional: bool = Field(..., description="Whether the explanation step is optional or not.")
+
 
 class NewExplanationModel(BaseModel):
     explanation_name: str = Field(..., description="The name of the new explanation concept.")
@@ -36,9 +40,11 @@ class NewExplanationModel(BaseModel):
         description="List of steps for the new explanation concept."
     )
 
+
 class ChosenExplanationModel(BaseModel):
     explanation_name: str = Field(..., description="The name of the explanation concept.")
     step: str = Field(..., description="The name or label of the step of the explanation.")
+
 
 class ScaffoldingResultModel(BaseModel):
     plan_reasoning: str = Field(
@@ -66,6 +72,7 @@ class ScaffoldingResultModel(BaseModel):
         description="A concise summary of the response highlighting key delivered facts and whether the explanation ended with a question."
     )
 
+
 # --- Merged Prompt Template ---
 def get_scaffolding_prompt_template():
     return """
@@ -81,7 +88,7 @@ Your tasks in planning are:
     - Update the plan if major shifts in user understanding occur.
 3. **Generate the Next Explanation**:
     - Based on the user's input and the last provided explanation, generate the next explanation target with specific communication goals.
-    - Ensure communication goals are tailored to the user's current state.
+    - Ensure communication goals are tailored to the user's current state, are short and focused, and aim to elicit understanding or provide information. Maximum of 3 sentences per goal.
 
 <<Context for Planning>>:
 - Domain Description: {domain_description}
@@ -105,5 +112,6 @@ Using the updated explanation plan and the next explanation target:
 - Generate a response to the user's query about the model's prediction.
 - Tailor the response to the user's language proficiency and cognitive state.
 - Use HTML formatting (e.g., <b>, <ul>, <li>, <p>) to structure the response.
+- Be as short as possible to not overwhelm the user.
 - Conclude with a question or prompt to encourage further interaction if appropriate.
 """

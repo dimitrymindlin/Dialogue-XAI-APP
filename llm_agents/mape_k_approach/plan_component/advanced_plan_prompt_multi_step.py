@@ -22,8 +22,8 @@ class ExplanationTarget(BaseModel):
                                                          description="List of atomic goals while communicating the complete explanation to the user, breaking down each ExplanationTarget into multiple CommunicationGoal,"
                                                                      "including eliciting information and providing"
                                                                      "information. Each atomic goal should be short to communicate to not overwhelm the user."
-                                                                     "Begins with assessing the user’s familiarity "
-                                                                     "with key concepts, if it is not evident by the question that the user knows the concept, like he is directly asking for an explanation type, either directly through questions or "
+                                                                     "Begins with assessing the user’s familiarity if the user question was super general like 'why'. Do not elicit user's familiarity if the user actively asks for a certain explanation type."
+                                                                     "with key concepts if not already understood as indicated by the user model or if it is not evident by the question that the user knows the concept, like he is directly asking for an explanation type, the most important features, either directly through questions or "
                                                                      "implicitly by observing their query, chat history and user model")
 
     def __str__(self):
@@ -75,9 +75,9 @@ class PlanResultModel(BaseModel):
     new_explanations: List[NewExplanationModel] = Field(...,
                                                         description="List of new explanations to be added to the explanation plan. Each new explanation is a dict with an explanation_name, a description, and a list of steps called 'explanations'. Each step is a dict with a 'step_name', 'description' and 'dependencies' and 'is_optional' keys.")
     explanation_plan: List[ChosenExplanationModel] = Field(...,
-                                                           description="Mandatory List of explanations or scaffolding with dicts with keys `(explanation_name, step)`, indicating the next steps to explain to the user. Cannot be empty list, at least contains the next explanations.")
-    next_explanation: ExplanationTarget = Field(...,
-                                                description="The next explanation target, must be element from the explanation_plan.")
+                                                           description="Mandatory List of explanations or scaffolding with dicts with keys `(explanation_name, step)`, indicating long term steps to explain to the user. Cannot be empty list, at least contains the next explanations.")
+    next_response: List[ExplanationTarget] = Field(...,
+                                                   description="A list of explanations and steps to include in the next response to answer the user's question. Only include multiple if the user requests the full reasoning of the model or asks for multiple explanations.")
 
 
 def get_plan_prompt_template():
@@ -109,54 +109,31 @@ In the explanation collection above, the scaffolding strategies can be used to b
 
 <<Explanation Plan>>:
 {previous_plan}\n
-Note: The explanation_plan serves as a high-level roadmap and should only be updated when shifts in user understanding occur, for example the user cannot understand an explanation because he lacks some more general concept knowledge, or the user explicitely wants to explore other concepts or explanation directions.
+Note: The Explanation Plan serves as a high-level roadmap and should only be updated when shifts in user understanding occur, for example the user cannot understand an explanation because he lacks some more general concept knowledge, or the user explicitely wants to explore other concepts or explanation directions.
 
 <<Last Explanation>>:
 {last_explanation}\n
     
 <<Task>>:
 You have three primary tasks:
-1. **Define New Explanations**:
-    - Identify if new explanation concepts need to be introduced based on the user's latest input. If the user does not explicitly request a new concept or definition, use scaffolding strategies to address gaps in understanding.
-    - If a new concept is required, define it and integrate it into the explanation_plan.
-2. **Maintain the General Explanation Plan**:
-    - Continuously assess whether the high-level explanation_plan remains relevant.
-    - Update the explanation_plan only if substantial gaps or shifts in user understanding are identified.
-3. **Generate the Next Explanation**:
-    - Based on the latest user input and the last shown explanation, generate the next_explanation with a list of communication_goals.
-    - Ensure that communication_goals are tailored to the user's current state and adapt frequently to provide immediate, relevant information. If a previous explanation plan and last explanation are given, decide if the previous communication_goal is still relevant or if the next one should be taken.
-    
-**Guidelines**:
-1. **Creating an Explanation Plan or deciding when to update the Plan if an one is given**:
-    - **Initial Plan**: If no explanation_plan is given, generate a new one based on the user's latest input.
-    - **Significant Changes**: Update the explanation_plan if the user demonstrates a major misunderstanding, requests a new overarching concept, or if their queries indicate a need for restructuring the explanation flow.
-    - **Minor Adjustments**: Do not modify the explanation_plan for minor misunderstandings or clarifications. Instead, handle these through communication_goals. Delete already explained and understood concepts from the explanation_plan if this can be justified by the UserModel and the user's latest input.
-    - If no plan is given, generate a new explanation_plan based on the user's latest input, planning ahead which order of explanations would be most beneficial for the user.
+1. **Defining New Explanations**:
+   - Determine if the latest input requires introducing a new concept by checking each possible explanation. If the user does not explicitly request one, apply scaffolding to address understanding gaps.
+   - Define any new concept and integrate it into the explanation_plan if needed.
 
-2. **Generating Communication Steps**:
-    - **Assess User Understanding**: Begin with a step that assesses the user's familiarity with key concepts related to the next_explanation. The user might hear about machine learning for the first time and if you do not have any information on the user yet because it is a fresh conversation, try to elicit the user's knowledge before diving into explanations.
-    - **Adaptive Content**: Depending on the user's response, adapt the subsequent communication_goals to either delve deeper into the concept or simplify the explanation.
-    - **Avoid Redundancy**: Do not repeat explanations unless the user explicitly requests clarification.
+2. **Maintaining the Explanation Plan**:
+    - consider that the user might only ask one or maximally three questions in a row:
+    - If no explanation_plan exists, generate one based on the latest input.
+    - Continuously assess the plan’s relevance. Update it only when significant gaps, shifts in user understanding, or requests for new overarching concepts occur.
+    - Continuously check if the user's question that can be mapped to another explanation. If the user asks a question that fits any of the explanation methods, avoid explaining the concept of that explanations and assume the user knows it.
+    - Address minor misunderstandings through communication_goals without altering the plan. Remove concepts that the user fully understands, as justified by the UserModel and recent input.
 
-3. **Integration of New Explanations**:
-    - When introducing new explanations, ensure they logically fit within the existing explanation_plan.
-    - Provide clear connections between new and existing concepts to maintain a coherent learning path.
+3. **Generating the Next Explanation**:
+   - Based on the latest input and the previous explanation, create the next_explanation along with tailored communication_goals. If the last explanation was not understood, consider scaffolding strategies and put them back into the next communication goal.
+   - Ensure these goals are concise, engaging, and matched to the user’s current state. If the user’s ML knowledge is low or unclear, first assess and elicit their familiarity with key concepts.
+   - For ambiguous requests, use scaffolding to clarify intent before providing details.
+   - Adapt content dynamically—delving deeper, simplifying, or redirecting based on the user’s responses.
+   - Avoid repetition unless the user explicitly asks for clarification, and prioritize reacting to user queries over strictly following the plan.
+   - If the user asks question unrelated to understanding the current explanation, provide a short answer that you are not able to respond to that and can only talk about the model prediction and the instance shown.\n
 
-4. **Output Structure**:
-    - **If updating the explanation_plan**:
-        - Provide the updated explanation_plan in the `new_explanations` section.
-        - Adjust the `chosen_explanation_plan` accordingly.
-    - **Always provide the next_explanation with communication_goals** tailored to the latest user input.
-
-**Example Workflow**:
-
-1. **User Interaction**:
-    - User asks, "Can you explain what overfitting is?"
-
-2. **System Response**:
-    - **Check Explanation Plan**: Determine if overfitting has already been covered or needs to be added.
-    - **Update Plan if Necessary**: If overfitting is a significant new concept, add it to the explanation_plan.
-    - **Generate Communication Steps**:
-        - Step 1: "Are you familiar with the term 'overfitting' in machine learning?"
-        - Step 2 (if user is unfamiliar): "Overfitting occurs when a model learns the training data too well, including its noise and outliers, which negatively impacts its performance on new data."
+Think step by step and provide a reasoning for each decision based on the user's latest input, the conversation history, and the current explanation plan.
 """

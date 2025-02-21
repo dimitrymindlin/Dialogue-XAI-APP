@@ -1,3 +1,5 @@
+import json
+
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
@@ -81,7 +83,7 @@ class XAIExplanationPopulator:
         counterfactuals = self.xai_explanations.get("counterfactuals", {})
         substitution_dict["counterfactuals"] = {
             "possible_counterfactuals": counterfactuals,
-            "single_feature_cf": "Placeholder ... No way to determine single feature cf yet."
+            "single_feature_cf": "No single feature CF found. Provide Ceteris Paribus explanations instead."
         }
 
         # Process Feature Statistics
@@ -92,6 +94,12 @@ class XAIExplanationPopulator:
             )
         }
 
+        # Process Anchor explanation
+        anchor = self.xai_explanations.get("anchors", {})
+        substitution_dict["anchor"] = {
+            "anchor_text": anchor
+        }
+
         # Process Ceteris Paribus with PossibleClassFlips and ImpossibleClassFlips
         ceteris_paribus = self.xai_explanations.get("ceteris_paribus", {})
         impossible_flips = [flip for flip in ceteris_paribus if "No changes" in flip]
@@ -99,6 +107,27 @@ class XAIExplanationPopulator:
         substitution_dict["ceteris_paribus"] = {
             "possible_class_flips": " ".join(f"{flip}" for flip in possible_flips),
             "impossible_class_flips": " ".join(f"{flip}" for flip in impossible_flips)
+        }
+
+        # Get pdp textual explanation
+        pdp = self.xai_explanations.get("pdp", {})
+
+        substitution_dict["pdp"] = {
+            "all_pdp_text": [{f"PDP result for {feature}": pdp_text} for feature, pdp_text in pdp.items()],
+        }
+
+        # Get followup clarifications
+        followup_clarifications = self.xai_explanations.get("static_clarifications", {})
+        # Make a Question: question, Answer: answer pair
+        substitution_dict["static_clarifications"] = {
+            "all_clarifications": [{"question": question, "possible_answer": answer} for question, answer in
+                                   followup_clarifications.items()]
+        }
+
+        # Model confidence
+        model_confidence = self.xai_explanations.get("model_confidence", "No model confidence provided.")
+        substitution_dict["model_confidence"] = {
+            "confidence_description": model_confidence
         }
 
         return substitution_dict
@@ -131,6 +160,13 @@ class XAIExplanationPopulator:
             return yaml.safe_load(self.populated_yaml_content)
         else:
             return self.populated_yaml_content
+
+    def get_populated_json(self, as_dict=False):
+        if self.populated_yaml_content is None:
+            self.populate_yaml()
+
+        data = yaml.safe_load(self.populated_yaml_content)
+        return data if as_dict else json.dumps(data)
 
     def save_populated_yaml(self, output_yaml_path):
         """

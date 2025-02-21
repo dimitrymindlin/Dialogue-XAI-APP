@@ -9,12 +9,12 @@ from llm_agents.mape_k_approach.execute_component.execute_prompt import get_exec
 from llm_agents.mape_k_approach.analyze_component.analyze_prompt import get_analyze_prompt_template, AnalyzeResult
 from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import PlanResultModel, \
     get_plan_prompt_template, ChosenExplanationModel
-from llm_agents.mape_k_approach.monitor_component.definition_wrapper import ICAPModes
+from llm_agents.utils.definition_wrapper import ICAPModes
 from llm_agents.mape_k_approach.monitor_component.monitor_prompt import get_monitor_prompt_template, MonitorResultModel
 from llm_agents.mape_k_approach.mape_k_workflow_agent import AugmentResult, \
     ExecuteResult
 from llm_agents.mape_k_approach.monitor_component.understanding_displays import DefinitionWrapper
-from llm_agents.mape_k_approach.user_model_fine_grained import UserModelFineGrained, ExplanationState
+from llm_agents.mape_k_approach.user_model.user_model_fine_grained import UserModelFineGrained, ExplanationState
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 from llm_agents.xai_prompts import get_augment_user_question_prompt_template
 from llama_index.llms.openai import OpenAI

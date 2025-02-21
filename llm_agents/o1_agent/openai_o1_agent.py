@@ -125,12 +125,12 @@ class XAITutorAssistant:
         self.user_knowlede_summary = summary
         return summary
 
-    async def initialize_new_datapoint(self,
-                                       instance: InstanceDatapoint,
-                                       xai_explanations,
-                                       xai_visual_explanations,
-                                       predicted_class_name,
-                                       opposite_class_name):
+    def initialize_new_datapoint(self,
+                                 instance: InstanceDatapoint,
+                                 xai_explanations,
+                                 xai_visual_explanations,
+                                 predicted_class_name,
+                                 opposite_class_name):
         # If the user_model is not empty, store understood and not understood concept information in the user model
         # and reset the rest to not_explained
         if self.data_point_counter > 0:

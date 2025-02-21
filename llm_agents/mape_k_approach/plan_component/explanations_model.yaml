@@ -4,68 +4,57 @@ xai_explanations:
     explanation_steps:
       - step_name: "Concept"
         description: >
-          Counterfactual explanations show examples of feature changes that would flip the model prediction. 
-          The counterfactual method tries to find minimal counterfactuals first, only changing one attribute.
+          Counterfactual explanations highlight feature changes that alter a model’s prediction. The method prioritizes minimal counterfactuals, modifying only one attribute.
         dependencies: [ ]
 
       - step_name: "ImpactMultipleFeatures"
         description: >
           {{counterfactuals.possible_counterfactuals}}
-        dependencies:
-          - "Concept"
 
       - step_name: "ImpactSingleFeature"
         description: >
-          Understanding how individual features impact the model prediction. If the counterfactuals do not provide
-          examples with a single feature change, check the ceteris paribus explanation.
-          {{counterfactuals.single_feature_cf}}
-        dependencies:
-          - "Concept"
+          Understanding individual feature impact on model predictions. If no single-feature counterfactuals are found, check the CeterisParibus explanation. {{counterfactuals.single_feature_cf}}
 
   - explanation_name: "FeatureImportances"
     description: "Understanding the importance and influence of features in the model's decision-making."
     explanation_steps:
       - step_name: "Concept"
         description: >
-          Feature importance explanations highlight how individual features influence the model's predictions. Features
-          can contribute toward over 50k or under 50k predictions and have a strong or weak influence. This helps in 
-          identifying which features are most influential in driving the model's decisions. The combination of features
-          and their influences shows the full picture of how the prediction came to be.
-        dependencies: [ ]
+          Feature importance explanations show how individual features influence predictions, either toward over or under 50k, with varying strength. This helps identify key drivers behind the model’s decisions.
+          dependencies: [ ]
 
       - step_name: "FeatureInfluencesPlot"
         description: >
-          A plot showing the feature importances and influences on the model's decision-making, blue bars show the
-          contribution towards the model prediction, and red bars show the contribution toward the opposite prediction.
-          The plot only shows the bars without further explanations, so consider explaining additional details if not
-          already provided beforehand. The plot will be places in the message as an image where the palceholder 
-          ##FeatureInfluencesPlot## is located.
-        dependencies:
-          - "Concept"
+          Reading plots requires some knowledge of data science or statistics, consider not using it for lay users unless specifically asked about or very suitable.
+          A plot visualizing feature importance and influence on the model’s decision. Blue bars indicate features in favor of 'under 50k', red bars toward 'over 50k'. The plot lacks explanations, so provide context if needed. Include the placeholder ##FeatureInfluencesPlot## to give this explanation fluently in the text and it will be substituted by the chart.
+          The base value of this SHAP explanation is 0.75 in favor of class 'under 50k' which can be important to mention.
 
       - step_name: "FeaturesInFavourOfOver50k"
         description: >
+          The base value of this SHAP explanation is 0.75 in favor of class 'under 50k'.
           {{feature_importance.features_in_favour_of_over_50k}}
-        dependencies:
-          - "Concept"
 
       - step_name: "FeaturesInFavourOfUnder50k"
         description: >
+          The base value of this SHAP explanation is 0.75 in favor of class 'under 50k'.
           {{feature_importance.features_in_favour_of_under_50k}}
-        dependencies:
-          - "Concept"
 
-      - step_name: "Diagnostic Query"
+      - step_name : "WhyThisFeatureImportant"
         description: >
-          What is the most important feature in favor of current prediction?
-        dependencies:
-          - "Most Important Features"
+          Check PossibleClarifications for a reply to this question. We cannot address why a feature is specially important
+          beyond explaining how features influence the model's decision and how the importances are learned during training and observing many examples.
 
-      - step_name: "Wrong Assumptions"
+  - explanation_name: "AnchorExplanation"
+    description: "Finding the minimal set of features that define or anchor the prediction."
+    explanation_steps:
+      - step_name: "Concept"
         description: >
-          Feature importances and influences are correlation based and do not lead to causal statements.
-        dependencies:
-          - "Most Important Features"
+            Anchor explanations identify the minimal set of features that anchor the model’s decision. They provide a clear, human-understandable explanation for the model’s prediction that is similar to the most important features. Anchors can answer...
+        dependencies: [ ]
+
+      - step_name: "Anchor"
+        description: >
+          Anchor showing which features with their current values need to be present for the model to predict the current model prediction. {{anchor.anchor_text}}
 
   - explanation_name: "FeatureStatistics"
     description: "An overview of the statistical distribution of features used in the model, such as minimum and maximum
@@ -73,15 +62,44 @@ xai_explanations:
     explanation_steps:
       - step_name: "Concept"
         description: >
-          The statistical breakdown of features, such as ranges, means, and value distributions, helps understand the dataset
-          and the value each feature can have. This information can highlight data imbalances, possible value ranges, and
-          categorical possible values.
-        dependencies: [ ]
+          A statistical breakdown of features (ranges, means, distributions) helps understand the dataset, revealing imbalances, value ranges, and categorical options.
 
       - step_name: "Feature Statistics"
         description: >
-          {{feature_statistics.most_important_features_text}}
-        dependencies: [ "Feature Statistics Overview" ]
+          {{feature_statistics.feature_statistics}}
+
+  - explanation_name: "TextualPartialDependence"
+    description: "Understanding the global relationship between a feature and the model's prediction."
+    explanation_steps:
+      - step_name: "Concept"
+        description: >
+          Textual PDP explanations describe how a feature affects the model’s prediction while keeping others constant. They highlight global relationships and how predictions change at specific feature values.
+
+      - step_name: "PDPDescription"
+        description: >
+          {{pdp.all_pdp_text}}
+
+  - explanation_name: "PossibleClarifications"
+    description: "Here are some clarification with common user questions."
+    explanation_steps:
+      - step_name: "Concept"
+        description: >
+          Possible clarifications provide answers to common user questions and help in understanding the explanations better.
+
+      - step_name: "ClarificationsList"
+        description: >
+          {{static_clarifications.all_clarifications}}
+
+  - explanation_name: "ModelPredictionConfidence"
+    description: "This explanation provides information about the model's confidence in its prediction."
+    explanation_steps:
+      - step_name: "Concept"
+        description: >
+          The model prediction confidence explanation shows how certain the model is in its decision, influenced by dataset features. Confidence can be high or low.
+
+      - step_name: "Confidence"
+        description: >
+          {{model_confidence.confidence_description}}
 
   - explanation_name: "CeterisParibus"
     description: "Understanding the model's decision-making by observing how the model's prediction changes when only one
@@ -89,29 +107,15 @@ xai_explanations:
     explanation_steps:
       - step_name: "Concept"
         description: >
-          Ceteris Paribus explanations show how the model's prediction changes when only one feature is changed, while keeping
-          all other features constant. This helps in understanding the impact of individual features on the model's decision-making.
-        dependencies: [ ]
+          Ceteris Paribus explanations show how changing one feature affects the model’s prediction while keeping others constant, revealing individual feature impact.
 
       - step_name: "PossibleClassFlips"
         description: >
           {{ceteris_paribus.possible_class_flips}}
-        dependencies:
-          - "Concept"
-        is_optional: false
 
       - step_name: "ImpossibleClassFlips"
         description: >
           {{ceteris_paribus.impossible_class_flips}}
-        dependencies:
-          - "Concept"
-        is_optional: false
-
-      - step_name: "Wrong Assumptions"
-        description: >
-          Ceteris Paribus explanations are local and do not provide a global understanding of the model's decision-making.
-        dependencies:
-          - "Single Feature Ceteris Paribus"
 
   - explanation_name: "ScaffoldingStrategy"
     description: "A strategy for improving understanding by simplifying, repeating, and eliciting feedback."
@@ -119,17 +123,11 @@ xai_explanations:
       - step_name: "Reformulating"
         description: >
           Reformulating the explanation in a simpler way.
-        dependencies: [ ]
 
       - step_name: "Repeating"
         description: >
           Repeating the explanation slightly differently to reinforce understanding.
-        dependencies: [ ]
 
       - step_name: "ElicitingFeedback"
         description: >
-          Question, prompting the user to restate or summarize the concept or specific parts of the explanation in their own 
-          words to assess their level of understanding and identify areas that may need further clarification. This step
-          requires to check the conversation history and user question to understand the context and ask a relevant question.
-          The question should test the understanding and help to identify the areas that need further clarification.
-        dependencies: [ ]
+          A question prompting the user to summarize or restate key parts of the explanation in their own words. It assesses understanding and identifies areas needing clarification based on conversation history and context.

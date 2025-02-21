@@ -1,7 +1,7 @@
 [
   {
     "name": "acknowledge",
-    "description": "Acknowledgments are utterances consisting of short phrases such as “ok”, “yes”, “uh-huh”, that signal that the previous utterance was understood without necessarily signaling acceptance. They do not resolve the content of the utterance they address.",
+    "description": "Acknowledgments are explicit utterances consisting of short phrases such as “ok”, “yes”, “uh-huh”, that signal that the previous utterance was understood without necessarily signaling acceptance. They do not resolve the content of the utterance they address.",
     "example": "Examples include 'ok', 'yes', 'uh-huh', 'right', 'alright'."
   },
   {

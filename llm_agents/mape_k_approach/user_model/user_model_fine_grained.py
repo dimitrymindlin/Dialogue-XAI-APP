@@ -1,14 +1,15 @@
 # Configure logger
+import json
 import logging
 from collections import defaultdict
-from enum import Enum
-from typing import List, Tuple, Optional, Dict, Union
+from typing import List, Optional, Dict, Union
 
 from pydantic import PrivateAttr
 
 from llm_agents.explanation_state import ExplanationState
 from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt import ExplanationStepModel, NewExplanationModel, \
     ChosenExplanationModel
+from llm_agents.utils.definition_wrapper import DefinitionWrapper
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # Adjust to DEBUG/INFO as needed
@@ -56,6 +57,8 @@ class Explanation(NewExplanationModel):
 
     def add_explanation(self, step_name: str, description: str, dependencies: Optional[List[str]] = None):
         if not any(ex.step_name == step_name for ex in self.explanation_steps):
+            if isinstance(dependencies, str):
+                dependencies = [dependencies]
             explanation = ExplanationStep(
                 step_name=step_name,
                 description=description,
@@ -94,23 +97,42 @@ class Explanation(NewExplanationModel):
 class UserModelFineGrained:
     def __init__(self, user_ml_knowledge):
         self.explanations: Dict[str, Explanation] = {}
-        self.cognitive_state: Optional[str] = None
-        self.current_understanding_signals: List[str] = []
+        self.cognitive_state: Optional[str] = ""
+        self.explicit_understanding_signals: List[str] = []
         self.current_explanation_request: List[str] = []  # TODO: Not used for now.
-        self.user_ml_knowledge = user_ml_knowledge
+        self.user_ml_knowledge = self.set_user_ml_knowledge(user_ml_knowledge)
 
     def set_cognitive_state(self, cognitive_state: str):
         """Set the cognitive state of the user model."""
         self.cognitive_state = cognitive_state
 
-    def get_user_info(self):
-        """Return the user's cognitive state and ML knowledge as a string"""
-        info = f"The user is in a {self.cognitive_state} cognitive state and their ML knowledge is: {self.user_ml_knowledge}. With the last message they signalled {self.current_understanding_signals}."
-        """if len(self.current_explanation_request) > 0:
-            info += f" and showed the following explanation requests {self.current_explanation_request}."
-        else:
-            info += . """
-        return info
+    def set_user_ml_knowledge(self, user_ml_knowledge: str):
+        """Set the user's ML knowledge"""
+        if user_ml_knowledge == "anonymous":
+            return None
+        # 1 Load Ml knowledge concepts from json file
+        file_path = "llm_agents/mape_k_approach/user_model/user_ml_knowledge_definitions.json"
+        definitions = DefinitionWrapper(file_path)
+        # Get the differentiating_description for the user's ML knowledge
+        definition = definitions.get_differentiating_description(user_ml_knowledge)
+        return definition
+
+    def get_user_info(self, as_dict=False):
+        """Return the user's cognitive state and ML knowledge as a string."""
+        if as_dict:
+            return {
+                "Cognitive State": self.cognitive_state,
+                "ML Knowledge": self.user_ml_knowledge,
+                "Explicit Understanding Signals": self.explicit_understanding_signals,
+            }
+        parts = []
+        if self.cognitive_state != "":
+            parts.append(f"The user's cognitive state is {self.cognitive_state}.")
+        if self.user_ml_knowledge is not None:
+            parts.append(f"The user's ML knowledge is {self.user_ml_knowledge}.")
+        if self.explicit_understanding_signals != []:
+            parts.append(f"With the last message they signalled {self.explicit_understanding_signals}.")
+        return "\n".join(parts)
 
     def add_explanation(self, explanation_name: str, description: str):
         """Add a new explanation, overriding if it already exists."""
@@ -171,18 +193,6 @@ class UserModelFineGrained:
         else:
             logger.warning(f"Explanation '{exp_name}' not found in the model.")
 
-    def mark_entire_exp_as_understood(self, exp_name):
-        """Mark all explanation steps as 'understood'."""
-        explanation = self._get_explanation(exp_name)
-        if explanation:
-            explanation.update_state_of_all(ExplanationState.UNDERSTOOD)
-
-    def mark_entire_exp_as_misunderstood(self, exp_name):
-        """Mark all explanation steps as 'misunderstood'."""
-        explanation = self._get_explanation(exp_name)
-        if explanation:
-            explanation.update_state_of_all(ExplanationState.NOT_UNDERSTOOD)
-
     def reset_explanation_state(self, exp_name):
         """Get the explanation and reset all steps to "not explained" apart from Concept step"""
         explanation = self._get_explanation(exp_name)
@@ -192,20 +202,26 @@ class UserModelFineGrained:
 
     def set_model_from_summary(self, summary: Dict) -> None:
         """
-        Initialize the UserModel from a summary dictionary.
-        The dictionary should include keys: 'xai_explanations', each containing 'explanation_name', 'description', and 'explanation_steps'.
+        Initialize the UserModel from a JSON summary.
+        The summary is expected to be a dictionary with the key 'xai_explanations'
+        containing a list of explanation dictionaries, each including 'explanation_name',
+        'description', and 'steps'.
         """
-        explanations = summary.get("xai_explanations", [])
-        for exp_dict in explanations:
-            explanation_name = exp_dict["explanation_name"]
-            description = exp_dict["description"]
+        understood_exp_concepts = self.get_understood_concepts()
+        xai_summary = summary.get("xai_explanations", [])
+        for exp_data in xai_summary:
+            explanation_name = exp_data["explanation_name"]
+            description = exp_data["description"]
             self.add_explanation(explanation_name, description)
-            for ex in exp_dict.get("explanation_steps", []):  # Updated field name
-                step_name = ex["step_name"]
-                description = ex["description"]
-                dependencies = ex.get("dependencies", [])
-                # is_optional = ex["is_optional"]
-                self.add_explanation_step(explanation_name, step_name, description, dependencies)
+            for step in exp_data.get("explanation_steps", []):
+                step_name = step["step_name"]
+                step_description = step["description"]
+                dependencies = step.get("dependencies", [])
+                if len(dependencies) > 0:
+                    dependencies = dependencies[0]  # For some reason dependencies are in two lists
+                self.add_explanation_step(explanation_name, step_name, step_description, dependencies)
+        for exp_name in understood_exp_concepts:
+            self.update_explanation_step_state(exp_name, "Concept", ExplanationState.UNDERSTOOD)
 
     def add_explanations_from_plan_result(self, exp_dict_list: List[NewExplanationModel]) -> None:
         """
@@ -227,25 +243,6 @@ class UserModelFineGrained:
                 description = ex.description
                 dependencies = ex.dependencies
                 self.add_explanation_step(explanation_name, step_name, description, dependencies)
-
-    def get_summary(self) -> Dict[str, Dict]:
-        """Return a summary of all explanations and their steps, excluding 'ScaffoldingStrategy'."""
-        excluded_explanations = {"ScaffoldingStrategy"}
-
-        summary = {
-            exp_name: {
-                "description": exp.description,
-                "steps": {
-                    step.step_name: {
-                        "state": step.state.value,
-                        "dependencies": step.dependencies,
-                    } for step in exp.explanation_steps
-                }
-            }
-            for exp_name, exp in self.explanations.items()
-            if exp_name not in excluded_explanations
-        }
-        return summary
 
     def get_state_summary(self, as_dict: bool = False) -> Union[Dict[str, Dict[str, List[str]]], str]:
         """
@@ -270,7 +267,9 @@ class UserModelFineGrained:
 
         if as_dict:
             # Convert defaultdict to a regular dict with regular nested dicts
-            return {state: dict(exps) for state, exps in summary.items()}
+            state_dict = {state: dict(exps) for state, exps in summary.items()}
+            state_dict["User Info"] = self.get_user_info(as_dict=True)
+            return state_dict
 
         # Generate a string representation using list comprehensions and join
         # Initialize an empty list to store all the formatted states
@@ -297,34 +296,25 @@ class UserModelFineGrained:
         prompt_lines = "\n".join(formatted_states)
 
         # Prepend the cognitive state and ml knowledge to the prompt
-        prompt_lines = f"{self.get_user_info()}\n\n" + prompt_lines
+        prompt_lines = f"{self.get_user_info()}\n The user's understanding about the explanations is detailed here with the keys what the user UNDERSTOOD, NOT_UNDERSTOOD, or has been SHOWN or NOT_YET_EXPLAINED" + prompt_lines
 
         return prompt_lines
 
-    def get_complete_explanation_collection(self, as_dict: bool = False) -> Union[Dict[str, Dict], str]:
+    def get_complete_explanation_collection(self, as_dict: bool = False, include_exp_content=True) -> Union[
+        Dict[str, Dict], str]:
         """
-        Return the explanation plan for all explanations, including states,
-        dependencies either as a dictionary or a string representation.
-
-        Args:
-            as_dict (bool): If True, return the explanation plan as a dictionary.
-                            Otherwise, return a formatted string.
-
-        Returns:
-            Union[Dict[str, Dict], str]: The explanation plan in the desired format.
+        Return the explanation plan for all explanations as a JSON structure.
+        If as_dict is True, returns a dictionary. Otherwise, returns a JSON-formatted string.
         """
         excluded_explanations = {"ScaffoldingStrategy"}
 
-        # Construct the explanation_plan dictionary using comprehensions
         explanation_plan = {
             exp_name: {
                 "description": exp_object.description,
                 "steps": [
                     {
                         "step_name": step.step_name,
-                        "description": step.description.strip(),
-                        "state": step.state.name,
-                        "dependencies": step.dependencies,
+                        **({"description": step.description.strip()} if include_exp_content else {}),
                     }
                     for step in exp_object.explanation_steps
                 ]
@@ -335,20 +325,8 @@ class UserModelFineGrained:
 
         if as_dict:
             return explanation_plan
-
-        # Generate a string representation using list comprehensions
-        plan_str = "\n".join([
-            f"Explanation: **{exp_name}**\n"
-            f"- Description: {details['description']}\n"
-            f"- Steps:\n" + "\n".join([
-                f"    - **{step['step_name']}**\n"
-                f"      - Description: {step['description']}\n"
-                f"      - Dependent on Step: {', '.join(step['dependencies']) if step['dependencies'] else 'None'}\n"
-                for step in details["steps"]
-            ])
-            for exp_name, details in explanation_plan.items()
-        ])
-        return plan_str
+        else:
+            return json.dumps(explanation_plan, indent=2)
 
     def get_string_explanations_from_plan(self, explanation_plan: List[ChosenExplanationModel]) -> str:
         """
@@ -360,24 +338,50 @@ class UserModelFineGrained:
         Returns:
             str: A string listing the explanations and steps.
         """
-        explanations = [
-            f"- Use the step **{choosen_exp.step}** of the explanation **{choosen_exp.explanation_name}**: " \
-            f"{self._get_explanation_step(choosen_exp.explanation_name, choosen_exp.step).description}."
-            for choosen_exp in explanation_plan
-        ]
+        try:
+            explanations = [
+                f"- Use the step **{choosen_exp.step}** of the explanation **{choosen_exp.explanation_name}**: " \
+                f"{self._get_explanation_step(choosen_exp.explanation_name, choosen_exp.step).description}."
+                for choosen_exp in explanation_plan
+            ]
+        except AttributeError:
+            # Scaffolding Strategies
+            explanations = [
+                f"- Use the step **{choosen_exp.step}** of the explanation **{choosen_exp.explanation_name}**."
+                for choosen_exp in explanation_plan
+            ]
+            # return "No explanations found in the explanation plan."
         return "\n".join(explanations)
 
     def persist_knowledge(self):
         # Reset all explanations that are not Concept explanations
         for state, explanations_dict in self.get_state_summary(as_dict=True).items():
-            if state != "NOT_YET_EXPLAINED":
-                for exp_name in explanations_dict:
-                    self.reset_explanation_state(exp_name)
+            # Only reset the explanations that have been shown
+            if state != "User Info":
+                if state != "NOT_YET_EXPLAINED":
+                    for exp_name in explanations_dict:
+                        if exp_name != "PossibleClarifications":  # don't reset the clarifications
+                            self.reset_explanation_state(exp_name)
+        # Return understood concepts
+        return
 
-        # Print user model after reset
-        # TODO: ONLY FOR DEBUGGING.
-        print("PERSISTED KNOWLEDGE:")
-        print(self.get_state_summary())
+    def get_understood_concepts(self):
+        """
+        Get the concepts that the user has understood so far.
+        """
+        understood_concepts = []
+        for state, explanations_dict in self.get_state_summary(as_dict=True).items():
+            # Only reset the explanations that have been shown
+            if state != "User Info":
+                if state == "UNDERSTOOD":
+                    for exp_name, concepts_list in explanations_dict.items():
+                        for concept_tuple in concepts_list:
+                            if concept_tuple[0] == "Concept":
+                                understood_concepts.append(exp_name)
+        return understood_concepts
+
+    def new_datapoint(self):
+        self.explicit_understanding_signals = []
 
     def __repr__(self):
         return f"User_Model({self.explanations})"
