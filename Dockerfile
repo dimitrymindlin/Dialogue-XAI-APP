@@ -39,7 +39,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /usr/src/app
 
 # Application Environment variables
-ENV PORT 4001
+ENV PORT 4000
 
 # Exposing Ports
 EXPOSE $PORT
@@ -48,4 +48,4 @@ EXPOSE $PORT
 VOLUME ["/app-data"]
 
 # Run the Python application with Gunicorn
-CMD ["gunicorn", "--timeout", "0", "-b", "0.0.0.0:4001", "flask_app:app"]
+CMD ["gunicorn", "--timeout", "0", "-b", "0.0.0.0:4000", "flask_app:app"]
