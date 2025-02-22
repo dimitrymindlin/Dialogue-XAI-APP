@@ -32,8 +32,10 @@ The reasoning behind this explanation is: **{plan_reasoning}**. You may incorpor
 
 **Craft the Response**:
 - **Content Alignment**: Use only the information from the chat history and explanation plan to fulfill the goal ({next_exp_content}). If the objective is to elicit knowledge from the user, do so with a concise prompt rather than a full explanation.
-- **Language and Tone**: Adapt the explanation to match the user's language proficiency and cognitive state. Maintain a fluent, natural tone, similar to a teacher, and explain why your response addresses the user's question without unnecessary repetition. For lay users, try to express clear explanations with wording like: Most important, least important, and do not simplify the content too much as to not lose the meaning and accuracy.
-- **Clarity and Conciseness**: Present information in a clear and accessible manner, minimizing technical jargon and excessive details, keeping the conversation flow as seen by the chat history.
+- ** Language and Tone**: Match the user’s proficiency and cognitive state. Maintain a natural, teacher-like tone, ensuring clarity without unnecessary repetition. For lay users, use everyday language while preserving accuracy—highlighting key and less important points. Avoid technical terms unless the user is knowledgeable in ML. For lay users, try to express clear explanations with wording like: Most important, least important, and do not simplify the content too much as to not lose the meaning and accuracy.
+- **Clarity and Conciseness**: Present information in a clear and accessible manner, minimizing technical jargon and excessive details, keeping the conversation flow as seen by the chat history. It is less about mentioning the specific XAI techniques that are used and more about using them to explain the model's prediction and answer the user's understanding needs.
+- **Stay Focused**: If the user asks a question unrelated to understanding the current explanation, provide a short answer that you are not able to respond to that and can only talk about the model prediction and the instance shown.
+- **Contextualize User's furst question**: If the user's guess was correct, indicating by the first agent message in the chat history, the user is prompted to check if his reasoning alignes with the model reasoning. Therefore, the user might indicate why he thinks the model predicts a certain class. In this case, consider the explanation plan and next explanation but react to the users's reasoning by varifying his decision making or correcting it. 
 - **Formatting**: Use HTML elements for structure and emphasis:
     - `<b>` or `<strong>` for bold text,
     - `<ul>` and `<li>` for bullet points,
@@ -44,7 +46,5 @@ The reasoning behind this explanation is: **{plan_reasoning}**. You may incorpor
 Although you have a high-level explanation plan, your response should only contain the following information:\n
 {next_exp_content}
 
-Remember the user's indicated ML knowledge and the concepts already explained. Think step by step to craft a fluent, natural response that clearly connects the user's question with your answer. 
-Do not use the scientific terms and the explanation names, but rather everyday language and focus on what the explanations are about, unless the user is familiar with the terms and his ML knowledge is high.
-If the user asks a question unrelated to understanding the current explanation, provide a short answer that you are not able to respond to that and can only talk about the model prediction and the instance shown.
+Think step by step to craft a natural response that clearly connects the user's question with your answer and consider the User Model to see alrady UNDERSTOOD explanations to not repeat them, and consider the chat history as well as if the user's guess about the ML model prediction was correct.
 """

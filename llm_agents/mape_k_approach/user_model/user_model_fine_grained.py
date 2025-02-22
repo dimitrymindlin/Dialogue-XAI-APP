@@ -296,7 +296,7 @@ class UserModelFineGrained:
         prompt_lines = "\n".join(formatted_states)
 
         # Prepend the cognitive state and ml knowledge to the prompt
-        prompt_lines = f"{self.get_user_info()}\n The user's understanding about the explanations is detailed here with the keys what the user UNDERSTOOD, NOT_UNDERSTOOD, or has been SHOWN or NOT_YET_EXPLAINED" + prompt_lines
+        prompt_lines = f"{self.get_user_info()}\n The user's understanding about the explanations is detailed here with the keys what the user UNDERSTOOD, NOT_UNDERSTOOD, or NOT_YET_EXPLAINED" + prompt_lines
 
         return prompt_lines
 

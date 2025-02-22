@@ -220,6 +220,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         # Optionally, retrieve as a dictionary
         populated_yaml_json = self.populator.get_populated_json(as_dict=True)
         self.user_model.set_model_from_summary(populated_yaml_json)
+        logger.info(f"User model after initialization: {self.user_model.get_state_summary(as_dict=True)}.\n")
         self.visual_explanations_dict = xai_visual_explanations
         self.last_shown_explanations = []
 
@@ -421,7 +422,6 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
 
         # Log and save history before replacing placeholders
         self.current_log_row["execute"] = execute_result
-        self.current_log_row["user_model"] = self.user_model.get_state_summary(as_dict=True)
         update_last_log_row(self.current_log_row, self.log_file)
         self.append_to_history("user", user_message)
         self.append_to_history("agent", execute_result.response)
@@ -435,8 +435,10 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             explanation_target = next_explanation
             exp = explanation_target.explanation_name
             exp_step = explanation_target.step_name
-            self.user_model.update_explanation_step_state(exp, exp_step,
-                                                          ExplanationState.SHOWN.value)
+            self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.UNDERSTOOD.value)
+
+        self.current_log_row["user_model"] = self.user_model.get_state_summary(as_dict=True)
+        update_last_log_row(self.current_log_row, self.log_file)
         self.user_model.new_datapoint()
 
         """# 2. Update current explanation and explanation plan
