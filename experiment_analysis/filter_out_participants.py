@@ -230,16 +230,43 @@ def filter_by_work_life_balance(analysis, wlb_users):
 
 
 def filter_by_missing_ml_kowledge(analysis):
-    # Extract ml_knowledge from profile column
-    analysis.user_df["ml_knowledge"] = analysis.user_df["profile"].apply(
-        lambda x: int(json.loads(x)["fam_ml_val"]) if json.loads(x)["fam_ml_val"] != '' else None)
-    analysis.user_df.drop(columns=["profile"], inplace=True)
-    # Filter
-    if analysis.user_df["ml_knowledge"].isnull().sum() > 0:
-        # print user_ids with missing ml_knowledge values
+    fam_ml_mapping = {
+        "very low": 0,
+        "low": 1,
+        "moderate": 2,
+        "high": 3,
+        "very high": 4,
+        "anonymous": None
+    }
+
+    def parse_ml_knowledge(profile):
+        """Safely extract and map ML knowledge level from profile."""
+        try:
+            profile_data = json.loads(profile)
+            fam_ml_val = profile_data.get("fam_ml_val", "")
+            if fam_ml_val == "":
+                return None
+            # try to cast to int
+            try:
+                fam_ml_val = int(fam_ml_val)
+            except ValueError:
+                pass
+            if isinstance(fam_ml_val, int):
+                return fam_ml_val if 0 <= fam_ml_val <= 4 else None  # Ensure it's in range
+            elif isinstance(fam_ml_val, str):  # String mapping needed
+                return fam_ml_mapping.get(fam_ml_val, None)
+        except (json.JSONDecodeError, KeyError, TypeError):
+            return None  # Handle unexpected cases
+
+    # Apply function to extract ML knowledge
+    analysis.user_df["ml_knowledge"] = analysis.user_df["profile"].apply(parse_ml_knowledge)
+
+    # Filter users with missing ml_knowledge values
+    missing_count = analysis.user_df["ml_knowledge"].isnull().sum()
+    if missing_count > 0:
         users_to_remove = analysis.user_df[analysis.user_df["ml_knowledge"].isnull()]["id"]
-        if len(users_to_remove) > 0:
-            print("Missing ml_knowledge values: ", analysis.user_df["ml_knowledge"].isnull().sum())
+        if not users_to_remove.empty:
+            print(f"Missing ml_knowledge values: {missing_count}")
             analysis.update_dfs(users_to_remove)
             print(
                 f"Amount of users per study group after removing missing ml_knowledge values: {len(analysis.user_df)}")
