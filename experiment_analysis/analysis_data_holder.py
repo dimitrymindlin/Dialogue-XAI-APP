@@ -121,7 +121,7 @@ class AnalysisDataHolder:
         # The self_assessment is in "questionnaires" column in user_df
         remove_users = []
         self.user_df["self_assessment_understanding"] = self.user_df["questionnaires"].apply(
-            lambda x: json.loads(x[2]) if isinstance(x, list) and len(x) > 2 else None)
+            lambda x: json.loads(x[1]) if isinstance(x, list) and len(x) > 2 else None)
 
         # Calculate the self-assessment value by aggregating the "answers" list
         """
@@ -135,12 +135,12 @@ class AnalysisDataHolder:
             if row["self_assessment_understanding"] is not None:
                 try:
                     answers = self.user_df.loc[user_id, "self_assessment_understanding"]['self_assessment']['answers']
+                    # TODO: How to handle people who didn't pass attention check here?
+                    understanding_value = answers[0] + -1 * answers[1] + answers[2] + -1 * answers[4]  # Range: -8 to 8
+                    self.user_df.loc[user_id, "subjective_understanding"] = understanding_value
                 except KeyError:
                     # How come some users don't have self-assessment answers?
                     remove_users.append(row["id"])
-                # TODO: How to handle people who didn't pass attention check here?
-                understanding_value = answers[0] + -1 * answers[1] + answers[2] + -1 * answers[4]  # Range: -8 to 8
-                self.user_df.loc[user_id, "subjective_understanding"] = understanding_value
         if len(remove_users) > 0:
             print(f"Removing users since they don't have self-assessment: {len(remove_users)}")
             self.update_dfs(remove_users)
