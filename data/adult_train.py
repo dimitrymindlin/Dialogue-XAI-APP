@@ -16,6 +16,7 @@ from data.ml_utilities import label_encode_and_save_classes, construct_pipeline,
 DATASET_NAME = "adult"
 config_path = f"./{DATASET_NAME}_model_config.json"
 save_path = f"./{DATASET_NAME}"
+save_flag = False
 
 # Mapping of categories to new integer representations
 category_to_int = {
@@ -262,7 +263,7 @@ def map_occupation_col(data):
         "Priv-house-serv": "Service",
         "Prof-specialty": "Professional",
         "Protective-serv": "Service",
-        "Sales":"Sales",
+        "Sales": "Sales",
         "Tech-support": "Service",
         "Transport-moving": "Blue-Collar",
     }
@@ -340,8 +341,9 @@ def main():
         raise ValueError("There are NaN values in the training data.")
 
     # Copy the config file to the save path
-    with open(os.path.join(save_path, f"{DATASET_NAME}_model_config.json"), 'w') as file:
-        json.dump(config, file)
+    if save_flag:
+        with open(os.path.join(save_path, f"{DATASET_NAME}_model_config.json"), 'w') as file:
+            json.dump(config, file)
 
     # Change list of column names to be encoded to a list of column indices
     columns_to_encode = [X_train.columns.get_loc(col) for col in config["columns_to_encode"]]
@@ -370,12 +372,13 @@ def main():
     print("Best Model Score Test:", test_score)
 
     # Print evaluation metrics on train and test
-    #print("Best Model Score Train:", best_model.score(X_train, y_train, metric="roc_auc"))
-    #print("Best Model Score Test:", best_model.score(X_test, y_test,  metric="roc_auc"))
+    # print("Best Model Score Train:", best_model.score(X_train, y_train, metric="roc_auc"))
+    # print("Best Model Score Test:", best_model.score(X_test, y_test,  metric="roc_auc"))
     # print("Best Parameters:", best_params)
 
     # Save the best model
-    pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
+    if save_flag:
+        pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
 
 
 if __name__ == "__main__":
