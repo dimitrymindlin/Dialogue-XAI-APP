@@ -41,15 +41,20 @@ def load_json_details(data):
 def normalize_details(df):
     details = df['details'].apply(load_json_details)
     df = pd.concat([df.drop(['details'], axis=1), details.apply(pd.Series)], axis=1)
-    df['accuracy'] = df.apply(lambda row: 'Correct' if row['prediction'] == row['true_label'] else 'Wrong', axis=1)
+    try:
+        df['accuracy'] = df.apply(lambda row: 'Correct' if row['prediction'] == row['true_label'] else 'Wrong', axis=1)
+    except ValueError:
+        pass
     return df
 
 
 def process_and_remove_duplicates(df, key_columns):
-    if 'feedback' in df.columns:
-        key_columns.append('feedback')
-    unique_indices = df.drop_duplicates(subset=key_columns).index
-    return df.loc[unique_indices]
+    if df is not None:
+        if 'feedback' in df.columns:
+            key_columns.append('feedback')
+        unique_indices = df.drop_duplicates(subset=key_columns).index
+        return df.loc[unique_indices]
+    return None
 
 
 def calculate_score_and_confidence(predictions_df, phase="final"):
@@ -72,7 +77,7 @@ def update_user_df(user_df, user_id, score_intro, score_final, confidence_intro,
     user_df.loc[conditions, "learning_score"] = score_learning
 
 
-def create_predictions_df(user_df, user_events, exclude_incomplete=False):
+def create_predictions_df(user_df, user_events, exclude_incomplete=False, user_id=None):
     exclude = False
     # Filter predictions by source and action
     predictions = (user_events["action"] == "user_prediction")
@@ -93,8 +98,35 @@ def create_predictions_df(user_df, user_events, exclude_incomplete=False):
                                                               ["datapoint_count", "accuracy"])
 
     if exclude_incomplete:
-        if len(predictions_final_test) != 10 or len(predictions_intro_test) != 10 or len(predictions_learning_test) < 10:
-            return None, None, None, True
+        if len(predictions_final_test) != 10 or len(predictions_intro_test) != 10 or len(
+                predictions_learning_test) < 10:
+            def fix_predictions_order(df, required_length):
+                # Sort by the timestamp
+                df = df.sort_values("created_at")
+                cleaned_rows = []
+                expected = 1
+                for _, row in df.iterrows():
+                    if row["datapoint_count"] == expected:
+                        cleaned_rows.append(row)
+                        expected += 1
+                    elif row["datapoint_count"] < expected:
+                        # Duplicate entry – keep the earlier one (already added)
+                        continue
+                    else:
+                        # Out-of-order entry found, stop processing further
+                        break
+                return pd.DataFrame(cleaned_rows) if len(cleaned_rows) >= required_length else None
+
+            fixed_final = fix_predictions_order(predictions_final_test, 10)
+            fixed_intro = fix_predictions_order(predictions_intro_test, 10)
+            fixed_learning = fix_predictions_order(predictions_learning_test, 10)
+
+            if fixed_final is None or fixed_intro is None or fixed_learning is None:
+                return None, None, None, True
+
+            predictions_final_test = fixed_final
+            predictions_intro_test = fixed_intro
+            predictions_learning_test = fixed_learning
 
     # Calculate scores and confidence
     score_intro, confidence_intro = calculate_score_and_confidence(predictions_intro_test)
