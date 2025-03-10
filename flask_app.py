@@ -3,12 +3,17 @@ import json
 import logging
 import os
 import traceback
+import time
+from datetime import datetime
+from functools import wraps
 
 from flask import Flask
 from flask import request, Blueprint
 from flask_cors import CORS
 import gin
 from flask import jsonify
+import openai
+from dotenv import load_dotenv
 
 from explain.logic import ExplainBot
 
@@ -265,6 +270,7 @@ def get_proceeding_okay():
 
 
 @bp.route("/get_response_clicked", methods=['POST'])
+@log_performance
 def get_bot_response():
     """Load the box response."""
     user_id = request.args.get("user_id")
@@ -301,6 +307,7 @@ def get_bot_response():
 
 
 @bp.route("/get_response_nl", methods=['POST'])
+@log_performance
 async def get_bot_response_from_nl():
     """Load the box response."""
     user_id = request.args.get("user_id")
@@ -343,6 +350,50 @@ async def get_bot_response_from_nl():
         return jsonify(message_dict)
 
 
+@bp.route("/speech-to-text", methods=['POST'])
+@log_performance
+async def transcribe_audio():
+    """
+    Endpoint to convert speech to text using OpenAI's Whisper API.
+    Accepts an audio file and returns the transcribed text.
+    """
+    try:
+        user_id = request.form.get("user_id")
+        audio_file = request.files.get("audio_file")
+        
+        if not audio_file:
+            return jsonify({"error": "No audio file provided"}), 400
+        
+        # Save the uploaded file temporarily
+        temp_file_path = f"temp_{audio_file.filename}"
+        audio_file.save(temp_file_path)
+        
+        try:
+            # Call OpenAI's API to transcribe the audio
+            client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            with open(temp_file_path, "rb") as audio:
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio
+                )
+            
+            # Return the transcribed text
+            return jsonify({
+                "text": transcript.text,
+                "user_id": user_id
+            })
+            
+        finally:
+            # Clean up the temporary file
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+                
+    except Exception as e:
+        app.logger.error(f"Error transcribing audio: {str(e)}")
+        app.logger.error(traceback.format_exc())
+        return jsonify({"error": f"Error transcribing audio: {str(e)}"}), 500
+
+
 app = Flask(__name__)
 app.register_blueprint(bp, url_prefix=args.baseurl)
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
@@ -361,4 +412,4 @@ if __name__ != '__main__':
 if __name__ == "__main__":
     # clean up storage file on restart
     app.logger.info(f"Launching app from config: {args.config}")
-    app.run(debug=False, port=4455, host='0.0.0.0', use_reloader=False)
+    app.run(debug=True, port=4001, host='0.0.0.0', use_reloader=False)
