@@ -11,6 +11,7 @@ from random import seed as py_random_seed
 import secrets
 from typing import List, Tuple, Optional, Dict, Any
 import re
+import traceback
 
 from jinja2 import Environment, FileSystemLoader
 import numpy as np
@@ -839,33 +840,80 @@ class ExplainBot:
         return final_result, question_id, feature_id, reasoning
 
     async def update_state_from_nl(self, user_input):
-        # 1. Get the question_id and feature_name from the user input
-        feature_name = None
-        feature_id = None
-        if self.use_llm_agent:
-            reasoning, response = await self.agent.answer_user_question(user_input)
-            return response, None, None, reasoning
-        elif self.use_intent_recognition:
-            # Get the question_id and feature_name from the user input
-            question_id, feature_name, reasoning = self.dialogue_manager.update_state(user_input)
-            if feature_name != "" and feature_name is not None:
-                feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
-                # remove whitespace between words
-                feature_name = feature_name.replace(" ", "")
-                try:
-                    feature_id = feature_list.index(feature_name.lower())
-                except ValueError:
-                    # Get closest match
-                    closest_matches = difflib.get_close_matches(feature_name, feature_list, n=1, cutoff=0.5)
-                    if closest_matches:
-                        feature_id = feature_list.index(closest_matches[0])
-                    else:
-                        feature_id = None
-                        # Optionally handle the case where no close match is found
-                        print(f"No close match found for feature name: {feature_name}")
-
-        # 2. Update the state
-        return self.update_state_new(question_id, feature_id)
+        """Update the state of the conversation based on the user input."""
+        return self.conversation.update_state_from_nl(user_input)
+    
+    async def get_response_nl(self, message):
+        """Get a response from the bot using natural language."""
+        try:
+            response, question_id, feature_id, reasoning = await self.update_state_from_nl(user_input=message)
+            
+            if self.use_active_dialogue_manager:
+                followup = self.get_suggested_method()
+            else:
+                followup = []
+                
+            message_dict = {
+                "isUser": False,
+                "feedback": True,
+                "text": response,
+                "question_id": question_id,
+                "feature_id": feature_id,
+                "followup": followup,
+                "reasoning": reasoning
+            }
+            return message_dict
+        except Exception as e:
+            # Log the error
+            print(f"Error getting response: {str(e)}")
+            print(traceback.format_exc())
+            
+            # Return a fallback response
+            return {
+                "isUser": False,
+                "feedback": True,
+                "text": "Sorry! I couldn't understand that. Could you please try to rephrase?",
+                "question_id": None,
+                "feature_id": None,
+                "followup": [],
+                "reasoning": ""
+            }
+    
+    def get_response_clicked(self, question_id, feature_id):
+        """Get a response from the bot based on clicked question and feature."""
+        try:
+            response = self.update_state_new(question_id=question_id, feature_id=feature_id)
+            
+            if self.use_active_dialogue_manager:
+                followup = self.get_suggested_method()
+            else:
+                followup = []
+                
+            message_dict = {
+                "isUser": False,
+                "feedback": True,
+                "text": response[0],
+                "question_id": question_id,
+                "feature_id": feature_id,
+                "followup": followup,
+                "reasoning": response[3]
+            }
+            return message_dict
+        except Exception as e:
+            # Log the error
+            print(f"Error getting response: {str(e)}")
+            print(traceback.format_exc())
+            
+            # Return a fallback response
+            return {
+                "isUser": False,
+                "feedback": True,
+                "text": "Sorry! I couldn't understand that. Could you please try to rephrase?",
+                "question_id": None,
+                "feature_id": None,
+                "followup": [],
+                "reasoning": ""
+            }
 
     def get_feature_importances_for_current_instance(self):
         mega_explainer = self.conversation.get_var('mega_explainer').contents
