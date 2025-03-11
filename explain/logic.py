@@ -58,6 +58,8 @@ class ExplainBot:
 
     def __init__(self,
                  study_group: str,
+                 ml_knowledge: str,
+                 user_id: str,
                  model_file_path: str,
                  dataset_file_path: str,
                  background_dataset_file_path: str,
@@ -135,7 +137,8 @@ class ExplainBot:
 
         self.bot_name = name
         self.study_group = study_group
-
+        self.ml_knowledge = ml_knowledge
+        self.experiment_id = user_id
         # Prompt settings
         self.prompt_metric = prompt_metric
         self.prompt_ordering = prompt_ordering
@@ -166,15 +169,7 @@ class ExplainBot:
         self.intent_recognition_model = None
         if self.use_intent_recognition == "openAI":
             self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
-        elif self.use_intent_recognition == "t5":
-            pass
-            """app.logger.info(f"Loading parsing model {parsing_model_name}...")
-            self.decoder = Decoder(parsing_model_name,
-                                   t5_config,
-                                   use_guided_decoding=self.use_guided_decoding,
-                                   dataset_name=name)"""
-        """elif self.use_intent_recognition == "ollama_pipeline":
-            self.intent_recognition_model = LLMSinglePrompt(self.feature_ordering)"""
+
         self.decoder = None
 
         self.data_instances = []
@@ -222,11 +217,20 @@ class ExplainBot:
                                                                     remove_underscores,
                                                                     store_to_conversation=False)
 
-        """if self.use_llm_agent:
-            from llm_agents.workflow_agent.simple_workflow_agent import SimpleXAIWorkflowAgent as Agent
+        if use_llm_agent is not False:
+            if self.use_llm_agent == "o1":
+                from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant as Agent
+            if self.use_llm_agent == "simple":
+                from llm_agents.workflow_agent.simple_workflow_agent import SimpleXAIWorkflowAgent as Agent
+            elif self.use_llm_agent == "mape_k":
+                from llm_agents.mape_k_approach.mape_k_workflow_agent import MapeKXAIWorkflowAgent as Agent
+            elif self.use_llm_agent == "mape_k_2":
+                from llm_agents.mape_k_2_components.mape_k_workflow_agent import MapeK2Component as Agent
             self.agent = Agent(feature_names=self.feature_ordering,
                                domain_description=self.conversation.describe.get_dataset_description(),
-                               verbose=True)"""
+                               user_ml_knowledge=self.ml_knowledge,
+                               experiment_id=self.experiment_id,
+                               verbose=True)
 
         # Load Template Manager
         template_manager = TemplateManager(self.conversation,
@@ -276,7 +280,7 @@ class ExplainBot:
     def get_proceeding_okay(self):
         return self.dialogue_manager.get_proceeding_okay()
 
-    def get_next_instance(self, instance_type, datapoint_count, return_probability=False):
+    def get_next_instance(self, instance_type, datapoint_count, return_probability=False) -> InstanceDatapoint:
         """
         Returns the next instance in the data_instances list if possible.
         param instance_type: type of instance to return, can be train, test or final_test
@@ -286,17 +290,17 @@ class ExplainBot:
             instance_type=instance_type,
             datapoint_count=datapoint_count,
             return_probability=return_probability)
-        # TODO: Update agent with new instance
-        if self.use_llm_agent:
+        # Update agent with new instance
+        if self.use_llm_agent and instance_type == "train":
             xai_report = self.get_explanation_report(as_text=True)
             # Get visual explanations
             visual_exp_dict = {}
-            visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeatures")[0]
+            visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeaturesPlot")[0]
             opposite_class_name = self.conversation.class_names[1 - self.get_current_prediction(as_int=True)]
             self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
                                                 self.get_current_prediction(),
-                                                opposite_class_name=opposite_class_name)
-
+                                                opposite_class_name=opposite_class_name,
+                                                datapoint_count=datapoint_count)
         # Update user_prediction_dict with current instance's correct prediction
         true_label = self.get_current_prediction(as_int=True)
         try:
@@ -603,22 +607,6 @@ class ExplainBot:
 
             # Store the dataset
             self.conversation.add_dataset(dataset, y_values, categorical, numeric)
-
-            """# Set up the parser
-            self.parser = Parser(cat_features=categorical,
-                                 num_features=numeric,
-                                 dataset=dataset,
-                                 target=list(y_values))
-
-            # Generate the available prompts
-            # make sure to add the "incorrect" temporary feature
-            # so we generate prompts for this
-            self.prompts = Prompts(cat_features=categorical,
-                                   num_features=numeric,
-                                   target=np.unique(list(y_values)),
-                                   feature_value_dict=self.parser.features,
-                                   class_names=self.conversation.class_names,
-                                   skip_creating_prompts=skip_prompts)"""
             app.logger.info("..done")
 
             return "success"
@@ -636,167 +624,6 @@ class ExplainBot:
         except (KeyError, TypeError):
             return []
 
-    def set_num_prompts(self, num_prompts):
-        """Updates the number of prompts to a new number"""
-        self.prompts.set_num_prompts(num_prompts)
-
-    @staticmethod
-    def gen_almost_surely_unique_id(n_bytes: int = 30):
-        """To uniquely identify each input, we generate a random 30 byte hex string."""
-        return secrets.token_hex(n_bytes)
-
-    @staticmethod
-    def log(logging_input: dict):
-        """Performs the system logging."""
-        assert isinstance(logging_input, dict), "Logging input must be dict"
-        assert "time" not in logging_input, "Time field will be added to logging input"
-        # log_dialogue_input(logging_input)
-
-    @staticmethod
-    def build_logging_info(bot_name: str,
-                           username: str,
-                           response_id: str,
-                           system_input: str,
-                           parsed_text: str,
-                           system_response: str):
-        """Builds the logging dictionary."""
-        return {
-            'bot_name': bot_name,
-            'username': username,
-            'id': response_id,
-            'system_input': system_input,
-            'parsed_text': parsed_text,
-            'system_response': system_response
-        }
-
-    def compute_parse_text(self, text: str, error_analysis: bool = False):
-        """Computes the parsed text from the user text input.
-
-        Arguments:
-            error_analysis: Whether to do an error analysis step, where we compute if the
-                            chosen prompts include all the
-            text: The text the user provides to the system
-        Returns:
-            parse_tree: The parse tree from the formal grammar decoded from the user input.
-            parse_text: The decoded text in the formal grammar decoded from the user input
-                        (Note, this is just the tree in a string representation).
-        """
-        nn_prompts = None
-        if error_analysis:
-            grammar, prompted_text, nn_prompts = self.compute_grammar(text, error_analysis=error_analysis)
-        else:
-            grammar, prompted_text = self.compute_grammar(text, error_analysis=error_analysis)
-        app.logger.info("About to decode")
-        # Do guided-decoding to get the decoded text
-        api_response = self.decoder.complete(
-            prompted_text, grammar=grammar)
-        decoded_text = api_response['generation']
-
-        app.logger.info(f'Decoded text {decoded_text}')
-
-        # Compute the parse tree from the decoded text
-        # NOTE: currently, we're using only the decoded text and not the full
-        # tree. If we need to support more complicated parses, we can change this.
-        parse_tree, parsed_text = get_parse_tree(decoded_text)
-        if error_analysis:
-            return parse_tree, parsed_text, nn_prompts
-        else:
-            return parse_tree, parsed_text,
-
-    def compute_parse_text_t5(self, text: str):
-        """Computes the parsed text for the input using a t5 model.
-
-        This supposes the user has finetuned a t5 model on their particular task and there isn't
-        a need to do few shot
-        """
-        grammar, prompted_text = self.compute_grammar(text)
-        decoded_text = self.decoder.complete(text, grammar)
-        app.logger.info(f"t5 decoded text {decoded_text}")
-        parse_tree, parse_text = get_parse_tree(decoded_text[0])
-        return parse_tree, parse_text
-
-    def compute_grammar(self, text, error_analysis: bool = False):
-        """Computes the grammar from the text.
-
-        Arguments:
-            text: the input text
-            error_analysis: whether to compute extra information used for error analyses
-        Returns:
-            grammar: the grammar generated for the input text
-            prompted_text: the prompts computed for the input text
-            nn_prompts: the knn prompts, without extra information that's added for the full
-                        prompted_text provided to prompt based models.
-        """
-        nn_prompts = None
-        app.logger.info("getting prompts")
-        # Compute KNN prompts
-        if error_analysis:
-            prompted_text, adhoc, nn_prompts = self.prompts.get_prompts(text,
-                                                                        self.prompt_metric,
-                                                                        self.prompt_ordering,
-                                                                        error_analysis=error_analysis)
-        else:
-            prompted_text, adhoc = self.prompts.get_prompts(text,
-                                                            self.prompt_metric,
-                                                            self.prompt_ordering,
-                                                            error_analysis=error_analysis)
-        app.logger.info("getting grammar")
-        # Compute the formal grammar, making modifications for the current input
-        grammar = self.parser.get_grammar(
-            adhoc_grammar_updates=adhoc)
-
-        if error_analysis:
-            return grammar, prompted_text, nn_prompts
-        else:
-            return grammar, prompted_text
-
-    def update_state(self, text: str, user_session_conversation: Conversation):
-        """The main conversation driver.
-
-        The function controls state updates of the conversation. It accepts the
-        user input and ultimately returns the updates to the conversation.
-
-        Arguments:
-            text: The input from the user to the conversation.
-            user_session_conversation: The conversation sessions for the current user.
-        Returns:
-            output: The response to the user input.
-        """
-
-        if any([text is None, self.prompts is None, self.parser is None]):
-            return ''
-
-        app.logger.info(f'USER INPUT: {text}')
-        if False:  # "t5" not in self.decoding_model_name
-            parse_tree, parsed_text = self.compute_parse_text(text)
-        else:
-            pass
-            # parse_tree, parsed_text = self.compute_parse_text_t5(text) #We don't need text parsing for now.
-
-        # Run the action in the conversation corresponding to the formal grammar
-        if False:  # "t5" not in self.decoding_model_name
-            returned_item = run_action(
-                user_session_conversation, parse_tree, parsed_text)
-        else:
-            instance_id = self.current_instance.instance_id
-            returned_item = run_action_new(user_session_conversation, int(text), instance_id)
-
-        # username = user_session_conversation.username
-
-        response_id = self.gen_almost_surely_unique_id()
-        """logging_info = self.build_logging_info(self.bot_name,
-                                               username,
-                                               response_id,
-                                               text,
-                                               parsed_text,
-                                               returned_item)"""
-        # self.log(logging_info) # Logging dict currently off.
-        # Concatenate final response, parse, and conversation representation
-        # This is done so that we can split both the parse and final
-        # response, then present all the data
-        final_result = returned_item + f"<>{response_id}"
-
-        return final_result
 
     def update_state_new(self,
                          question_id: str = None,
@@ -829,12 +656,6 @@ class ExplainBot:
                                        instance_id,
                                        feature_id,
                                        instance_type_naming=self.instance_type_naming)
-
-        # self.log(logging_info) # Logging dict currently off.
-        # Concatenate final response, parse, and conversation representation
-        # This is done so that we can split both the parse and final
-        # response, then present all the data
-        # final_result = returned_item + f"<>{response_id}"
         final_result = returned_item
         return final_result, question_id, feature_id, reasoning
 
@@ -889,7 +710,8 @@ class ExplainBot:
     def get_explanation_report(self, as_text=False):
         """Returns the explanation report."""
         instance_id = self.current_instance.instance_id
-        report = compute_explanation_report(self.conversation, instance_id,
+        report = compute_explanation_report(self.conversation,
+                                            instance_id,
                                             instance_type_naming=self.instance_type_naming,
                                             feature_display_name_mapping=self.get_feature_display_name_dict(),
                                             as_text=as_text)

@@ -1,0 +1,47 @@
+[
+  {
+    "name": "concept_completion_question",
+    "description": "A question presented to prompt the addressee to supply the absent component of a phenomenon to form a coherent concept or idea.",
+    "example": [
+      "Who?",
+      "What?",
+      "When?",
+      "Where?"
+    ]
+  },
+  {
+    "name": "definition_question",
+    "description": "A question seeking definitional information.",
+    "example": [
+      "What does X mean?"
+    ]
+  },
+  {
+    "name": "procedural_question",
+    "description": "A question seeking what instrument or plan allows to accomplish a goal.",
+    "example": [
+      "How do you perform X?"
+    ]
+  },
+  {
+    "name": "causal_antecedent_question",
+    "description": "A question seeking what state or event causally led to an event or state.",
+    "example": [
+      "What caused X?"
+    ]
+  },
+  {
+    "name": "causal_consequence_question",
+    "description": "A question seeking to explore the consequences of an event or state.",
+    "example": [
+      "What will X cause?"
+    ]
+  },
+  {
+    "name": "justification_question",
+    "description": "A question seeking to explore the reasons or rationale behind the situation or condition represented by an entity.",
+    "example": [
+      "Why is X the case?"
+    ]
+  }
+]

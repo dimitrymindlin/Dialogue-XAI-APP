@@ -234,6 +234,11 @@ def run_action_new(conversation: Conversation,
     if question_id == "shapAllFeatures":
         explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction_str)
         return explanation
+
+    if question_id == "shapAllFeaturesPlot":
+        # Return only plot
+        explanation = explain_feature_importances_as_plot(conversation, data, parse_op, regen, current_prediction_str, only_plot=True)
+        return explanation
     if question_id == "ceterisParibus":
         explanation = explain_ceteris_paribus(conversation, data, feature_name, instance_type_naming,
                                               opposite_class_str,
@@ -281,7 +286,11 @@ def compute_explanation_report(conversation,
         feature_importances = explain_feature_importances_as_plot(conversation, data, parse_op, regen,
                                                                   current_prediction_str)
     else:
-        feature_importances = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False,
+        feature_importances = explain_local_feature_importances(conversation,
+                                                                data,
+                                                                parse_op,
+                                                                regen,
+                                                                as_text=False,
                                                                 template_manager=template_manager)
     """# Turn list of values into int
     feature_importances = {key: round(float(value[0]), ndigits=3) for key, value in feature_importances.items()}
@@ -318,6 +327,26 @@ def compute_explanation_report(conversation,
                                                   as_text=True)
         ceteris_paribus_sentences.append(ceteris_paribus)
 
+    # get PDP for all features
+    pdp_explanations = {}
+    for feature in data.columns:
+        pdp_explanation = explain_pdp(conversation, feature)
+        pdp_explanations[feature] = pdp_explanation
+
+    # get model confidence
+    model_confidence_exp = explain_model_confidence(model_prediction_probas, current_prediction_str)
+
+    # get the followups
+    followupWhyThisFeatureImportant = explainConceptOfFeatureImportance()
+    followupWhyFeatureImportancesChange = explainConceptOfLocalImportance(instance_type_naming)
+    followupWhyAreTheseFeaturesConsidered = explainWhyFeaturesAreConsideredAndOthersNot()
+    # Get questions for the followups
+    clarification_explanations = {
+        "Why are these the most important attributes?": followupWhyThisFeatureImportant,
+        "Why do most important factors change?": followupWhyFeatureImportancesChange,
+        "Why are all these attributes considered?": followupWhyAreTheseFeaturesConsidered
+    }
+
     return {
         "model_prediction": model_prediction_str,
         "instance_type": instance_type_naming,
@@ -326,7 +355,10 @@ def compute_explanation_report(conversation,
         "counterfactuals": counterfactual_strings,
         "anchors": anchors_string,
         "feature_statistics": feature_statistics,
-        "ceteris_paribus": ceteris_paribus_sentences
+        "ceteris_paribus": ceteris_paribus_sentences,
+        "pdp": pdp_explanations,
+        "model_confidence": model_confidence_exp,
+        "static_clarifications": clarification_explanations
     }
 
     """# Fill static report template

@@ -157,7 +157,8 @@ def explain_feature_importances_as_plot(conversation,
                                         data,
                                         parse_op,
                                         regen,
-                                        current_prediction_string: str):
+                                        current_prediction_string: str,
+                                        only_plot=False):
     """
     Get feature importances as a plot for a specific prediction. The red bars represent features that push the prediction
     toward over 50k, while the blue bars represent features that push the prediction toward under 50k, this is
@@ -204,14 +205,16 @@ def explain_feature_importances_as_plot(conversation,
     image_base64 = save_plot_as_base64(fig)
     plt.close()
 
-    # Updated explanation text: blue bars always for "under 50k" and red bars for "over 50k"
-    html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                  f"This chart shows how different attributes <i>influence</i> the model’s prediction, pushing it either above or below $50K. " \
-                  f'The model <b>starts with a 75% likelihood</b> that a person earns <b>less than $50K</b>, based on general trends in the data. ' \
-                  f'To predict an income above $50K, the positive factors must be <b>three times stronger</b> than the negative ones.<br>' \
-                  f'<span><b>Blue bars</b> represent factors push the model’s likelihood toward predicting <b>under 50K</b>. <br>' \
-                  f'<b>Red bars</b> represent factors pushing the prediction toward <b>over 50K</b>.</span>'
-
+    if not only_plot:
+        # Updated explanation text: blue bars always for "under 50k" and red bars for "over 50k"
+        html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
+                      f"This chart shows how different attributes <i>influence</i> the model’s prediction, pushing it either above or below $50K. " \
+                      f'The model <b>starts with a 75% likelihood</b> that a person earns <b>less than $50K</b>, based on general trends in the data. ' \
+                      f'To predict an income above $50K, the positive factors must be <b>three times stronger</b> than the negative ones.<br>' \
+                      f'<span><b>Blue bars</b> represent factors push the model’s likelihood toward predicting <b>under 50K</b>. <br>' \
+                      f'<b>Red bars</b> represent factors pushing the prediction toward <b>over 50K</b>.</span>'
+    else:
+        html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">'
     return html_string
 
 

@@ -150,5 +150,5 @@ class DialogueManager:
                 return False, not_asked_yet[
                               :3], "Already want to proceed? Maybe you have some more questions ... ?"
             else:
-                return False, None, "Already want to proceed? You could ask about the most or least important attribute," \
-                                    "the influences of features or about which changes would lead to a different prediction..."
+                return False, None, "Already want to proceed? You could ask about the <b>most or least important</b> attribute, " \
+                                    "the <b>influences</b> of the attributes, which changes would lead to a <b>different prediction</b> or for the <b>relationship</b> of income and an attribute."

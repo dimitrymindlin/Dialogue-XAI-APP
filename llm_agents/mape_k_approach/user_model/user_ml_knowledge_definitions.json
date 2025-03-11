@@ -1,0 +1,38 @@
+[
+  {
+    "name": "very low",
+    "description": "The user has little to no understanding of AI.",
+    "example": "Example: The user might say they don't really know what AI is and cannot explain basic concepts like algorithms or data processing.",
+    "differentiating_description": "Very low, which indicates that the user has minimal exposure to key ML concepts such as feature importances or model structures. Explanations need to start with very basic, foundational principles because extended ML concepts may be overwhelming for the user."
+  },
+  {
+    "name": "low",
+    "description": "The user has basic knowledge but a limited understanding of AI concepts.",
+    "example": "Example: The user may recognize common terms such as AI or Machine Learning but lacks detailed understanding or hands-on experience.",
+    "differentiating_description": "Low, which means that the user may have a basic understanding of AI from casual exposure or news reports. Explanations should focus on simple ideas and relatable examples, avoiding technical jargon or complex interpretability methods."
+  },
+  {
+    "name": "moderate",
+    "description": "The user has a fair understanding of AI concepts and their applications.",
+    "example": "Example: The user can discuss areas of AI applications and has a grasp of the differences between AI-based programs and classical algorithms.",
+    "differentiating_description": "Moderate, which means that the user has a fair grasp of AI concepts, likely from general interest or popular media. The user understands basic ideas like how data is used to train models, so explanations can build on this understanding without delving into technical details."
+  },
+  {
+    "name": "high",
+    "description": "The user is knowledgeable about AI and how it is developed.",
+    "example": "Example: The user can explain the process of developing AI models, including data preparation, model training, and evaluation.",
+    "differentiating_description": "High, which suggests that the user has a good understanding of how AI works, perhaps from self-study or strong personal interest. Explanations should remain clear and can get a bit technical and direct rather than using many metaphors and examples, unless the user asks for it or signals non-understanding."
+  },
+  {
+    "name": "very high",
+    "description": "The user is highly knowledgeable in AI and can train algorithms.",
+    "example": "Example: The user has hands-on experience with building and training complex models and can discuss advanced topics like deep learning architectures.",
+    "differentiating_description": "Very high, which indicates that the user has an in-depth understanding of AI. However, given that the application is tailored for lay users, explanations should still prioritize clarity and practical examples over complex technical jargon."
+  },
+  {
+    "name": "anonymous",
+    "description": "The user prefers not to disclose their level of understanding of AI.",
+    "example": "Example: The user chooses to keep their AI familiarity private, opting out of revealing any specific details.",
+    "differentiating_description": "This option indicates that the user has chosen not to disclose their familiarity with AI. Explanations should therefore be balanced and straightforward, without assuming a specific level of prior knowledge."
+  }
+]
