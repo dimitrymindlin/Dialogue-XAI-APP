@@ -44,7 +44,7 @@ TabularDice.final_cfe_amount = 3
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"
-DiverseInstances.instance_amount = 10
+DiverseInstances.instance_amount = 15
 DiverseInstances.dataset_name = "adult"
 
 # Test Instances

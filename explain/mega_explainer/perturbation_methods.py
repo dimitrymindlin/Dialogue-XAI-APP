@@ -1,5 +1,27 @@
 """TODO(satya): docstring."""
-import torch
+import numpy as np
+
+
+def compare_torch_numpy(torch_tensor, numpy_array, message=""):
+    """Compare torch tensor with numpy array and print differences."""
+    if isinstance(torch_tensor, torch.Tensor):
+        numpy_from_torch = torch_tensor.detach().cpu().numpy()
+    else:
+        numpy_from_torch = torch_tensor
+        
+    if not isinstance(numpy_array, np.ndarray):
+        numpy_array = np.array(numpy_array)
+        
+    try:
+        if not np.allclose(numpy_from_torch, numpy_array, equal_nan=True):
+            print(f"Difference detected {message}:")
+            print(f"Torch output: {numpy_from_torch}")
+            print(f"Numpy output: {numpy_array}")
+            print(f"Max difference: {np.max(np.abs(numpy_from_torch - numpy_array))}")
+    except Exception as e:
+        print(f"Error comparing arrays {message}: {str(e)}")
+        print(f"Torch shape: {numpy_from_torch.shape}, dtype: {numpy_from_torch.dtype}")
+        print(f"Numpy shape: {numpy_array.shape}, dtype: {numpy_array.dtype}")
 
 
 class BasePerturbation:
@@ -11,11 +33,11 @@ class BasePerturbation:
         self.data_format = data_format
 
     def get_perturbed_inputs(self,
-                             original_sample: torch.FloatTensor,
-                             feature_mask: torch.BoolTensor,
-                             num_samples: int,
-                             feature_metadata: list,
-                             max_distance: int = None) -> torch.tensor:
+                            original_sample: np.ndarray,
+                            feature_mask: np.ndarray,
+                            num_samples: int,
+                            feature_metadata: list,
+                            max_distance: int = None) -> np.ndarray:
         """Logic of the perturbation methods which will return perturbed samples.
 
         This method should be overwritten.
@@ -50,11 +72,11 @@ class NormalPerturbation(BasePerturbation):
         super(NormalPerturbation, self).__init__(data_format)
 
     def get_perturbed_inputs(self,
-                             original_sample: torch.FloatTensor,
-                             feature_mask: torch.BoolTensor,
-                             num_samples: int,
-                             feature_metadata: list,
-                             max_distance: int = None) -> torch.tensor:
+                            original_sample: np.ndarray,
+                            feature_mask: np.ndarray,
+                            num_samples: int,
+                            feature_metadata: list,
+                            max_distance: int = None) -> np.ndarray:
         """Given a sample and mask, compute perturbations.
 
         Args:
@@ -75,23 +97,23 @@ class NormalPerturbation(BasePerturbation):
         message = f"mask size == original sample in get_perturbed_inputs for {self.__class__}"
         assert len(feature_mask) == len(original_sample), message
 
-        continuous_features = torch.tensor([i == 'c' for i in feature_type])
-        discrete_features = torch.tensor([i == 'd' for i in feature_type])
+        # Create feature type masks
+        continuous_features = np.array([i == 'c' for i in feature_type])
+        discrete_features = np.array([i == 'd' for i in feature_type])
 
         # Processing continuous columns
         mean = self.mean
         std_dev = self.std_dev
-        perturbations = torch.normal(mean, std_dev,
-                                     [num_samples, len(feature_type)]) * continuous_features + original_sample
+        perturbations = np.random.normal(mean, std_dev,
+                                       [num_samples, len(feature_type)]) * continuous_features + original_sample
 
         # Processing discrete columns
         flip_percentage = self.flip_percentage
-        p = torch.empty(num_samples, len(feature_type)).fill_(flip_percentage)
-        perturbations = perturbations * (~discrete_features) + torch.abs(
-            (perturbations * discrete_features) - (torch.bernoulli(p) * discrete_features))
+        p = np.full((num_samples, len(feature_type)), flip_percentage)
+        perturbations = perturbations * (~discrete_features) + np.abs(
+            (perturbations * discrete_features) - (np.random.binomial(1, p) * discrete_features))
 
-        # keeping features static that are in top-K based on feature mask
-        perturbed_samples = torch.tensor(
-            original_sample) * feature_mask + perturbations * (~feature_mask)
+        # Keeping features static based on feature mask
+        perturbed_samples = np.array(original_sample) * feature_mask + perturbations * (~feature_mask)
 
         return perturbed_samples

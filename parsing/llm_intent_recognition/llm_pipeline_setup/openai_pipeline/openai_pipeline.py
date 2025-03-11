@@ -1,16 +1,9 @@
-import json
+import sys
 
 import pandas as pd
 
-from langchain.memory import ConversationBufferMemory
-from langchain.output_parsers import ResponseSchema, StructuredOutputParser
-from langchain_community.chat_models import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_community.adapters import openai as lc_openai
-
-from openai import OpenAI
-from openai.types.chat.completion_create_params import ResponseFormat
-
+import openai
+import json
 import tqdm
 import matplotlib.pyplot as plt
 
@@ -24,113 +17,68 @@ from parsing.llm_intent_recognition.prompts.initial_routing_prompt import openai
 
 load_dotenv()
 
-"""### Langsmith
-os.environ['LANGCHAIN_API_KEY'] = os.getenv('LANGSMITH_API_KEY')
-os.environ['LANGCHAIN_TRACING_V2'] = 'true'
-os.environ['LANGCHAIN_ENDPOINT'] = 'https://api.smith.langchain.com'"""
-
 ### OpenAI
 os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
 os.environ["OPENAI_ORGANIZATION"] = os.getenv('OPENAI_ORGANIZATION_ID')
 
 LLM_MODEL = os.getenv('OPENAI_MODEL_NAME')
-client = OpenAI()
-llm = ChatOpenAI(model=LLM_MODEL, temperature=0.0)
 
-response_schemas = [
-    ResponseSchema(name="reasoning",
-                   description="The reasoning behind the classification. For each classification possibility, the reasoning should be explained."),
-    ResponseSchema(name="method", description="id of the method to answer the user question, based on the reasoning."),
-    ResponseSchema(name="feature", description="Feature that the user mentioned, can be None."),
-]
-
-output_parser = StructuredOutputParser.from_response_schemas(response_schemas)
-format_instructions = output_parser.get_format_instructions()
+# Define format_instructions manually:
+format_instructions = "Return your answer as a JSON object with keys 'reasoning', 'method', and 'feature'."
 
 
 class LLMSinglePromptWithMemoryAndSystemMessage:
     def __init__(self, feature_names):
-        self.memory = ConversationBufferMemory(memory_key="chat_history")
+        # Replace ConversationBufferMemory with a simple list.
+        self.memory = []  # list to store conversation messages
+        self.feature_names = feature_names
 
-        self.explanations_prompt_chat_template = ChatPromptTemplate.from_messages(
-            [
-                openai_system_explanations_prompt(feature_names),
-                openai_user_prompt(),
-            ]
-        )
-
-        self.initial_routing_prompt_chat_template = ChatPromptTemplate.from_messages(
-            [
-                openai_system_prompt_initial_routing(feature_names),
-                openai_user_prompt_initial_routing(),
-            ]
-        )
+    def _get_chat_history_str(self):
+        return "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.memory])
 
     def call_explanations_prompt_function(self, question):
-        """ Explanation Methods prompt """
-        # Retrieve chat history
-        chat_history = self.memory.load_memory_variables({})["chat_history"]
-        # Directly pass question and chat_history as inputs
-        formatted_messages = self.explanations_prompt_chat_template.format_messages(
-            input=question, chat_history=chat_history, format_instructions=format_instructions)
-
+        chat_history = self._get_chat_history_str()
+        # Format prompts using your imported prompt functions.
+        system_message = openai_system_explanations_prompt(self.feature_names)[1].format(
+            chat_history=chat_history, format_instructions=format_instructions)
+        user_message = openai_user_prompt()[1].format(input=question)
         messages = [
-            {"role": "system", "content": formatted_messages[0].content},
-            {"role": "user", "content": formatted_messages[1].content},
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_message},
         ]
-        response_format = {"type": "json_object"}
-
-        # Wrapper to use Langsmith client
-        response = lc_openai.chat.completions.create(
-            messages=messages, model=LLM_MODEL, temperature=0, response_format=response_format)
-
-        """response = client.chat.completions.create(
+        response = openai.chat.completions.create(
             model=LLM_MODEL,
-            temperature=0.0,
+            temperature=0,
             messages=messages,
-            response_format=response_format,
-        )"""
-
-        try:
-            response = response.choices[0].message['content']
-        # Exception if not a dict
-        except KeyError:
-            response = response.choices[0].message.content
-
-        response = json.loads(response)
-
-        self.memory.save_context({"question": question}, {"response": response.__str__()})
-
-        return response
+            response_format={"type": "json_object"}
+        )
+        content = response.choices[0].message.content
+        if not content.strip():
+            raise ValueError("Empty response received from OpenAI API. Check your prompt formatting or API usage.")
+        parsed_response = json.loads(content)
+        # Append the interaction to memory.
+        self.memory.append({"role": "user", "content": question})
+        self.memory.append({"role": "assistant", "content": json.dumps(parsed_response)})
+        return parsed_response
 
     def call_initial_routing_function(self, explanation_suggestions, user_intent):
-        """ Prompt B is about initial user response intent (agreement, disagreement, other)"""
-        formatted_messages = self.initial_routing_prompt_chat_template.format_messages(
+        # Build messages for initial routing.
+        system_message = openai_system_prompt_initial_routing(self.feature_names)
+        user_message = openai_user_prompt_initial_routing().format(
             explanation_suggestions=explanation_suggestions, user_response=user_intent)
         messages = [
-            {"role": "system", "content": formatted_messages[0].content},
-            {"role": "user", "content": formatted_messages[1].content},
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_message},
         ]
-
-        response_format = ResponseFormat(type="json_object")
-
-        # Wrapper to use Langsmith client
-        response = lc_openai.chat.completions.create(
-            messages=messages, model=LLM_MODEL, temperature=0, response_format=response_format)
-
-        try:
-            response = response.choices[0].message['content']
-        # Exception if not a dict
-        except KeyError:
-            response = response.choices[0].message.content
-
-        response = json.loads(response)
-        return response
+        response = openai.chat.completions.create(model=LLM_MODEL,
+                                                  temperature=0,
+                                                  messages=messages,
+                                                  response_format={"type": "json_object"})
+        content = response.choices[0].message.content
+        parsed_response = json.loads(content)
+        return parsed_response
 
     def predict_explanation_method(self, user_question):
-        """
-        Predict the XAI method to answer the user question. (Prompt A)
-        """
         response = self.call_explanations_prompt_function(user_question)
         try:
             question_id = response[0]
@@ -142,18 +90,13 @@ class LLMSinglePromptWithMemoryAndSystemMessage:
         return question_id, feature, reasoning
 
     def interpret_user_answer(self, explanation_suggestions, user_question):
-        """
-        Predict the user intent as an answer to the suggested XAI method. (Prompt B)
-        """
         response = self.call_initial_routing_function(explanation_suggestions, user_question)
-        print(response)
         try:
             classification = response["classification"]
             mapped_question = response["method"]
             feature = response["feature"]
             reasoning = response["reasoning"]
         except KeyError:
-            print("Key error in:", response)
             return None, None, None
         return classification, mapped_question, feature, reasoning
 
@@ -304,7 +247,7 @@ def current_approach_performance(question_to_id_mapping, load_previous_results=F
 if __name__ == "__main__":
     current_approach_performance(question_to_id_mapping, load_previous_results=True)
     """feature_names = ["feature1", "feature2", "feature3", "feature4", "feature5"]
-    llm_model = LLMSinglePromptWithMemory(feature_names)
+    llm_model = LLMSinglePromptWithMemoryAndSystemMessage(feature_names)
 
     while True:
         question = input("Please enter your question (or type 'exit' to quit): ")
@@ -312,7 +255,7 @@ if __name__ == "__main__":
         if question.lower() == 'exit':
             break
 
-        question_text, question_id, feature = llm_model.predict(question)
-        print(f"Question ID: {question_text}, Feature: {feature}")
+        question_id, feature, reasoning = llm_model.predict_explanation_method(question)
+        print(f"Question ID: {question_id}, Feature: {feature}")
 
     sys.exit()"""

@@ -35,7 +35,6 @@ from explain.explanations.dice_explainer import TabularDice
 from explain.explanations.diverse_instances import DiverseInstances
 from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
 from explain.explanations.model_profile import PdpExplanation
-from explain.parser import get_parse_tree
 from explain.utils import read_and_format_data
 
 from parsing.llm_intent_recognition.llm_pipeline_setup.openai_pipeline.openai_pipeline import \
@@ -520,14 +519,30 @@ class ExplainBot:
         self.conversation.add_var('tabular_anchor', tabular_anchor, 'explanation')
         self.conversation.add_var('ceteris_paribus', ceteris_paribus_explainer, 'explanation')
         # list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
-        self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
         # Load test instances
         test_instance_explainer = TestInstances(test_data, model, mega_explainer,
                                                 self.conversation.get_var("experiment_helper").contents,
                                                 diverse_instance_ids=diverse_instance_ids,
                                                 actionable_features=self.actionable_features)
-        test_instances = test_instance_explainer.get_test_instances()
+        test_instances, remove_instances_from_experiment = test_instance_explainer.get_test_instances()
+        # given the list of remove_instances_from_experiment, remove them from the experiment in all explanations
+        if len(remove_instances_from_experiment) > 0:
+            print(f"Removing instances from experiment: {remove_instances_from_experiment}")
+            for instance_id in remove_instances_from_experiment:
+                # Remove instance from diverse instances
+                diverse_instances = [instance for instance in diverse_instances if instance['id'] != instance_id]
+                # Remove instance from tabular dice
+                tabular_dice.cache = {k: v for k, v in tabular_dice.cache.items() if k != instance_id}
+                # Remove instance from mega explainer
+                mega_explainer.cache = {k: v for k, v in mega_explainer.cache.items() if k != instance_id}
+                # Remove instance from anchor
+                tabular_anchor.cache = {k: v for k, v in tabular_anchor.cache.items() if k != instance_id}
+                # Remove instance from ceteris paribus
+                ceteris_paribus_explainer.cache = {k: v for k, v in ceteris_paribus_explainer.cache.items() if k != instance_id}
+                # Remove instance from pdp
+                pdp_explainer.cache = {k: v for k, v in pdp_explainer.cache.items() if k != instance_id}
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
+        self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
 
     def load_model(self, filepath: str):
         """Loads a model.

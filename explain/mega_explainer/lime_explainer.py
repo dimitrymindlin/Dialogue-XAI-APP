@@ -1,9 +1,7 @@
 """LIME explanations."""
 from lime import lime_tabular
 import numpy as np
-import torch
 from lime.submodular_pick import SubmodularPick
-
 from explain.mega_explainer.base_explainer import BaseExplainer
 
 
@@ -41,21 +39,21 @@ class Lime(BaseExplainer):
 
         if self.mode == "tabular":
             self.explainer = lime_tabular.LimeTabularExplainer(self.data,
-                                                               mode="classification",
-                                                               categorical_features=self.discrete_features,
-                                                               sample_around_instance=self.sample_around_instance,
-                                                               feature_names=feature_names,
-                                                               discretize_continuous=self.discretize_continuous,
-                                                               kernel_width=kernel_width * np.sqrt(
-                                                                   self.data.shape[1]),
-                                                               )
+                                                              mode="classification",
+                                                              categorical_features=self.discrete_features,
+                                                              sample_around_instance=self.sample_around_instance,
+                                                              feature_names=feature_names,
+                                                              discretize_continuous=self.discretize_continuous,
+                                                              kernel_width=kernel_width * np.sqrt(
+                                                                  self.data.shape[1]),
+                                                              )
         else:
             message = "Currently, only lime tabular explainer is implemented"
             raise NotImplementedError(message)
 
         super(Lime, self).__init__(model)
 
-    def get_explanation(self, data_x: np.ndarray, label=None) -> tuple[torch.FloatTensor, float]:
+    def get_explanation(self, data_x: np.ndarray, label=None) -> tuple[np.ndarray, float]:
         """
 
         Args:
@@ -67,14 +65,14 @@ class Lime(BaseExplainer):
         """
         if self.mode == "tabular":
             output = self.explainer.explain_instance(data_x[0],
-                                                     self.model,
-                                                     num_samples=self.n_samples,
-                                                     num_features=data_x.shape[1],
-                                                     labels=(label,),
-                                                     top_labels=None)
+                                                   self.model,
+                                                   num_samples=self.n_samples,
+                                                   num_features=data_x.shape[1],
+                                                   labels=(label,),
+                                                   top_labels=None)
             if label not in output.local_exp:
                 message = (f"label {label} not in local_explanation! "
-                           f"Only labels are {output.local_exp.keys()}")
+                          f"Only labels are {output.local_exp.keys()}")
                 raise NameError(message)
             local_explanation = output.local_exp[label]
 
@@ -83,13 +81,14 @@ class Lime(BaseExplainer):
             att_arr = [0] * data_x.shape[1]
             for feat_imp in local_explanation:
                 att_arr[feat_imp[0]] = feat_imp[1]
-            return torch.FloatTensor(att_arr), output.score
+
+            return np.array(att_arr, dtype=np.float32), output.score
         else:
             raise NotImplementedError
 
     def get_diverse_instance_ids(self,
-                                 data_x: np.ndarray,
-                                 num_instances: int = 15) -> list[int]:
+                               data_x: np.ndarray,
+                               num_instances: int = 15) -> list[int]:
         """
         Get instance ids (int) by submodular pick, i.e. instances that are diverse and explain a classifier.
         Args:

@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Tuple, List
 import pickle as pkl
 import gin
 import pandas as pd
@@ -47,7 +47,7 @@ class TestInstances:
 
     def get_test_instances(self,
                            save_to_cache: bool = True,
-                           close_instances: bool = True) -> Dict[str, Any]:
+                           close_instances: bool = True) -> Tuple[Dict[str, Any], List[int]]:
         """
         Generates instances for testing based on the provided dataset.
 
@@ -60,11 +60,11 @@ class TestInstances:
             Dict[str, Any]: A dictionary with diverse test instances.
         """
         if self.test_instances:
-            return self.test_instances
+            return self.test_instances, []
 
-        test_instances = self._generate_instances(self.instance_amount, close_instances)
+        test_instances, ids_to_remove = self._generate_instances(self.instance_amount, close_instances)
         self._save_instances_to_cache(test_instances, save_to_cache)
-        return test_instances
+        return test_instances, ids_to_remove
 
     def _generate_instances(self,
                             instance_count: int,
@@ -74,14 +74,20 @@ class TestInstances:
         param: instance_count (int): Number of diverse instances to generate.
         param: close_instances (bool): Flag to determine whether to generate close (similar) or random instances.
         """
+        ids_to_remove = []
         test_instances = {}
         for instance_id in self.diverse_instance_ids:
             original_instance = self._get_instance_dataframe(instance_id)
             if not close_instances:
                 test_instances[instance_id] = self._generate_random_instances()
             else:
-                test_instances[instance_id] = self._generate_close_instances(original_instance, instance_count)
-        return test_instances
+                # TODO: Sometimes this method returns None, which causes an error in the next step... Handle somehow
+                close_instances = self._generate_close_instances(original_instance, instance_count)
+                if close_instances is not None:
+                    test_instances[instance_id] = close_instances
+                else:
+                    ids_to_remove.append(instance_id)
+        return test_instances, ids_to_remove
 
     def _get_instance_dataframe(self, instance_id: str) -> pd.DataFrame:
         return self.data.loc[instance_id].to_frame().transpose()
@@ -102,6 +108,8 @@ class TestInstances:
                                   instance_count: int) -> Dict[str, Any]:
         original_class_prediction, feature_importances = self._predict_and_get_importances(original_instance)
         similar_instances = self._get_similar_instances(original_instance, instance_count, original_class_prediction)
+        if len(similar_instances) < instance_count:
+            return None
         complex_instances = self._sort_and_select_instances(original_instance, similar_instances, feature_importances)
         counterfactuals = self._get_and_sort_counterfactuals(original_instance,
                                                              complex_instances['least_complex_instance'],
@@ -116,7 +124,8 @@ class TestInstances:
     def _get_similar_instances(self, original_instance: pd.DataFrame,
                                instance_count: int,
                                original_class_prediction: int,
-                               only_correct_model_predictions: bool = True) -> pd.DataFrame:
+                               only_correct_model_predictions: bool = True,
+                               attempt: int = 1) -> pd.DataFrame:
         similar_instances_list = []
         for _ in range(instance_count):
             num_changed_features = 0
@@ -141,7 +150,20 @@ class TestInstances:
         # Filter based on prediction criteria.
         if only_correct_model_predictions:
             similar_instances = similar_instances[predictions == original_class_prediction]
-        return similar_instances
+            # If left amount is not enough, try again only up to 5 attempts
+            if len(similar_instances) < instance_count:
+                if attempt < 5:
+                    print(f"Not enough similar instances, trying again (attempt {attempt})")
+                    similar_instances = self._get_similar_instances(
+                        original_instance,
+                        instance_count,
+                        original_class_prediction,
+                        only_correct_model_predictions,
+                        attempt + 1
+                    )
+                else:
+                    print("Max attempts reached. Returning available similar instances.")
+            return similar_instances
 
     def _sort_and_select_instances(self,
                                    original_instance: pd.DataFrame,

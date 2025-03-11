@@ -226,7 +226,10 @@ class ExperimentHelper:
         if not isinstance(original_instance, pd.DataFrame):
             original_instance = pd.DataFrame.from_dict(original_instance["values"], orient="index").transpose()
         cfes = dice_tabular.run_explanation(original_instance, "opposite")
-        original_instance_id = original_instance.index[0]
+        try:
+            original_instance_id = original_instance.index[0]
+        except IndexError:
+            original_instance_id = 0
 
         final_cfs_df = cfes[original_instance_id].cf_examples_list[0].final_cfs_df
         # drop y column

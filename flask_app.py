@@ -59,11 +59,14 @@ def init():
     """Load the explanation interface."""
     user_id = request.args.get("user_id")
     study_group = request.args.get("study_group")
+    ml_knowledge = request.args.get("ml_knowledge")
     if user_id is None or "":
         user_id = "TEST"
     if study_group is None or "":
         study_group = "interactive"
-    BOT = ExplainBot(study_group)
+    if ml_knowledge is None or "":
+        ml_knowledge = "low"
+    BOT = ExplainBot(study_group, ml_knowledge, user_id)
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
 
@@ -217,6 +220,8 @@ def set_user_prediction():
                 prompt = f"""
                 Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. <br>
                 To understand its reasoning and improve your predictions, <b>type your questions</b> in the chat, and I will answer them."""
+            if bot_dict[user_id].use_llm_agent:
+                bot_dict[user_id].agent.append_to_history("agent", prompt)
 
         message = {
             "isUser": False,
@@ -323,6 +328,12 @@ async def get_bot_response_from_nl():
             followup = []
             reasoning = ""
 
+        assert isinstance(response, str)
+        assert isinstance(question_id, int) or question_id is None
+        assert isinstance(feature_id, int) or feature_id is None
+        assert isinstance(followup, list)
+        assert isinstance(reasoning, str)
+
         message_dict = {
             "isUser": False,
             "feedback": True,
@@ -338,8 +349,11 @@ async def get_bot_response_from_nl():
 app = Flask(__name__)
 app.register_blueprint(bp, url_prefix=args.baseurl)
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
-CORS(app, resources={r"/*": {"origins": "http://dialogue-xai-frontend:3000"}})
+# CORS(app, resources={r"/*": {"origins": "http://dialogue-xai-frontend:3000"}})
 
+# Create cache folder in root if it doesn't exist
+if not os.path.exists("cache"):
+    os.makedirs("cache")
 
 if __name__ != '__main__':
     stream_handler = logging.StreamHandler()

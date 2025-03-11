@@ -1,13 +1,11 @@
 """Important features operation."""
-import inflect
 import numpy as np
-import statsmodels.stats.api as sms
+import scipy.stats as stats
 
 from explain.utils import add_to_dict_lists
 
 from explain.actions.utils import gen_parse_op_text
 
-inflect_engine = inflect.engine()
 
 
 def gen_feature_name_to_rank_dict(data, explanations):
@@ -47,33 +45,33 @@ def compute_rank_stats(data, feature_name_to_rank):
     max_ranks = {}
     avg_ranks = {}
     ci_95s = {}
-    print(feature_name_to_rank)
-    for feature_name in data.columns:
-        # Get the ranks of each feature name
-        rank_to_ids = feature_name_to_rank[feature_name]
 
-        # If the feature isn't very important and never
-        # ends up getting included
-        if len(feature_name_to_rank[feature_name]) == 0:
+    for feature_name in data.columns:
+        rank_to_ids = feature_name_to_rank.get(feature_name, {})
+
+        if not rank_to_ids:  # Skip if the feature is not included in any explanations
             continue
 
         max_rank = sorted(rank_to_ids.keys())[0]
         max_ranks[feature_name] = max_rank
 
         rank_list = []
-        for key in rank_to_ids:
-            rank_list.extend([key] * len(rank_to_ids[key]))
+        for key, ids in rank_to_ids.items():
+            rank_list.extend([key] * len(ids))
         rank_list = np.array(rank_list) + 1
         avg_ranking = np.mean(rank_list)
 
-        # in case there is only one instance
-        if len(rank_list) == 1:
-            ci_95 = None
+        # Confidence Interval using SciPy
+        if len(rank_list) > 1:
+            mean = np.mean(rank_list)
+            std_err = stats.sem(rank_list)  # Standard error
+            ci_95 = stats.t.interval(0.95, df=len(rank_list) - 1, loc=mean, scale=std_err)
         else:
-            ci_95 = sms.DescrStatsW(rank_list).tconfint_mean()
+            ci_95 = None
 
         avg_ranks[feature_name] = avg_ranking
         ci_95s[feature_name] = ci_95
+
     return max_ranks, avg_ranks, ci_95s
 
 

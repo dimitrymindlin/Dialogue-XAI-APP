@@ -1,5 +1,5 @@
 # Use a stable Python image
-FROM python:3.9.7
+FROM python:3.10.16
 
 # Creating Application Source Code Directory
 RUN mkdir -p /usr/src/app
