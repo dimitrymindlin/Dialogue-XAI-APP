@@ -6,14 +6,15 @@ import traceback
 import time
 from datetime import datetime
 from functools import wraps
+import base64
 
 from flask import Flask
 from flask import request, Blueprint
+from flask import jsonify, Response
 from flask_cors import CORS
 import gin
-from flask import jsonify
-import openai
 from dotenv import load_dotenv
+import openai
 
 from explain.logic import ExplainBot
 
@@ -269,8 +270,45 @@ def get_proceeding_okay():
     return {"proceeding_okay": proceeding_okay, "message": message}
 
 
+def generate_audio_from_text(text, voice="alloy"):
+    """
+    Generate audio from text using OpenAI's TTS API.
+    
+    Args:
+        text (str): The text to convert to speech
+        voice (str): The voice to use (default: "alloy")
+        
+    Returns:
+        dict: A dictionary containing the audio data in base64 format or an error message
+    """
+    try:
+        if not openai.api_key:
+            app.logger.warning("OpenAI API key is not configured for text-to-speech!")
+            return {"error": "OpenAI API key is not configured"}
+        
+        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        
+        audio_response = client.audio.speech.create(
+            model="tts-1",
+            voice=voice,
+            input=text
+        )
+        
+        # Convert audio to base64 for sending in JSON response
+        audio_data = audio_response.read()
+        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+        
+        return {
+            "data": audio_base64,
+            "format": "mp3"
+        }
+    except Exception as e:
+        app.logger.error(f"Error generating speech: {str(e)}")
+        app.logger.error(traceback.format_exc())
+        return {"error": f"Error generating speech: {str(e)}"}
+
+
 @bp.route("/get_response_clicked", methods=['POST'])
-@log_performance
 def get_bot_response():
     """Load the box response."""
     user_id = request.args.get("user_id")
@@ -303,11 +341,22 @@ def get_bot_response():
             "followup": followup,
             "reasoning": response[3]
         }
+        
+        # Check if soundwave parameter is provided in the request
+        soundwave = data.get("soundwave", True)
+        if soundwave:
+            voice = data.get("voice", "alloy")
+            audio_result = generate_audio_from_text(response[0], voice)
+            
+            if "error" in audio_result:
+                message_dict["audio_error"] = audio_result["error"]
+            else:
+                message_dict["audio"] = audio_result
+        
         return jsonify(message_dict)
 
 
 @bp.route("/get_response_nl", methods=['POST'])
-@log_performance
 async def get_bot_response_from_nl():
     """Load the box response."""
     user_id = request.args.get("user_id")
@@ -337,7 +386,7 @@ async def get_bot_response_from_nl():
         assert isinstance(feature_id, int) or feature_id is None
         assert isinstance(followup, list)
         assert isinstance(reasoning, str)
-
+        
         message_dict = {
             "isUser": False,
             "feedback": True,
@@ -347,11 +396,22 @@ async def get_bot_response_from_nl():
             "followup": followup,
             "reasoning": reasoning
         }
+        
+        # Check if soundwave parameter is provided in the request
+        soundwave = data.get("soundwave", True)
+        if soundwave:
+            voice = data.get("voice", "alloy")
+            audio_result = generate_audio_from_text(response, voice)
+            
+            if "error" in audio_result:
+                message_dict["audio_error"] = audio_result["error"]
+            else:
+                message_dict["audio"] = audio_result
+        
         return jsonify(message_dict)
 
 
 @bp.route("/speech-to-text", methods=['POST'])
-@log_performance
 async def transcribe_audio():
     """
     Endpoint to convert speech to text using OpenAI's Whisper API.
@@ -370,6 +430,12 @@ async def transcribe_audio():
         
         try:
             # Call OpenAI's API to transcribe the audio
+            if not openai.api_key:
+                print("OpenAI API key is not configured!")
+                return jsonify({
+                    "text": "API anahtarı yapılandırılmamış. Bu bir test yanıtıdır.",
+                    "user_id": user_id
+                })
             client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             with open(temp_file_path, "rb") as audio:
                 transcript = client.audio.transcriptions.create(
@@ -389,9 +455,59 @@ async def transcribe_audio():
                 os.remove(temp_file_path)
                 
     except Exception as e:
-        app.logger.error(f"Error transcribing audio: {str(e)}")
-        app.logger.error(traceback.format_exc())
+        print(f"Error transcribing audio: {str(e)}")
+        print(traceback.format_exc())
         return jsonify({"error": f"Error transcribing audio: {str(e)}"}), 500
+
+
+@bp.route("/text-to-speech", methods=['POST'])
+def text_to_speech():
+    """
+    Endpoint to convert text to speech using OpenAI's TTS API.
+    Accepts text input and returns audio stream.
+    """
+    try:
+        data = json.loads(request.data)
+        text = data.get("text")
+        voice = data.get("voice", "alloy")  # Default voice is alloy
+        
+        if not text:
+            return jsonify({"error": "No text provided"}), 400
+        
+        # Check if OpenAI API key is configured
+        if not openai.api_key:
+            print("OpenAI API key is not configured!")
+            return jsonify({"error": "API key is not configured"}), 500
+        
+        # Call OpenAI's API to generate speech
+        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice=voice,
+            input=text
+        )
+        
+        # Create a streaming response
+        def generate():
+            for chunk in response.iter_bytes(chunk_size=4096):
+                yield chunk
+        
+        # Return the audio stream
+        return Response(generate(), mimetype="audio/mpeg")
+        
+    except Exception as e:
+        print(f"Error generating speech: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({"error": f"Error generating speech: {str(e)}"}), 500
+
+
+@bp.route("/test-tts", methods=['GET'])
+def test_tts_page():
+    """
+    Serve the test TTS HTML page.
+    """
+    return app.send_static_file('test_tts.html')
 
 
 app = Flask(__name__)

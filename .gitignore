@@ -235,3 +235,4 @@ ENV/
 poetry.lock
 
 experiment_analysis/prolific_export.csv
+main_frontend/
