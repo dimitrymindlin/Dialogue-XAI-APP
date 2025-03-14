@@ -7,7 +7,7 @@ class DefinitionWrapper:
         Initializes the Wrapper with data from a JSON file.
         :param json_file_path: Path to the JSON file describing the concepts.
         """
-        with open(json_file_path, 'r') as file:
+        with open(json_file_path, 'r', encoding='utf-8') as file:
             self.displays = json.load(file)
 
     def as_text(self):
