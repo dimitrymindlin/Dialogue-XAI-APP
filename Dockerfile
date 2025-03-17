@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt /usr/src/app/
 
 # Install dependencies with pre-built wheels to avoid compilation issues
-RUN pip install --no-cache-dir --prefer-binary spacy blis h5py
+RUN pip install --no-cache-dir --prefer-binary spacy
 
 # Install remaining dependencies from requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
