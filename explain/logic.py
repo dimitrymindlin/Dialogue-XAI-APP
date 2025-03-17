@@ -23,7 +23,7 @@ from create_experiment_data.experiment_helper import ExperimentHelper
 from create_experiment_data.instance_datapoint import InstanceDatapoint
 from data.response_templates.template_manager import TemplateManager
 from create_experiment_data.test_instances import TestInstances
-from explain.action import run_action, run_action_new, compute_explanation_report
+from explain.action import run_action_new, compute_explanation_report
 from explain.actions.explanation import explain_cfe_by_given_features
 from explain.actions.static_followup_options import get_mapping
 from explain.conversation import Conversation
@@ -774,12 +774,8 @@ class ExplainBot:
             # parse_tree, parsed_text = self.compute_parse_text_t5(text) #We don't need text parsing for now.
 
         # Run the action in the conversation corresponding to the formal grammar
-        if False:  # "t5" not in self.decoding_model_name
-            returned_item = run_action(
-                user_session_conversation, parse_tree, parsed_text)
-        else:
-            instance_id = self.current_instance.instance_id
-            returned_item = run_action_new(user_session_conversation, int(text), instance_id)
+        instance_id = self.current_instance.instance_id
+        returned_item = run_action_new(user_session_conversation, int(text), instance_id)
 
         # username = user_session_conversation.username
 
