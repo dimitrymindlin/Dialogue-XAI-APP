@@ -1,5 +1,9 @@
 # Use a stable Python image
+<<<<<<< HEAD
 FROM python:3.9.7
+=======
+FROM python:3.10.16
+>>>>>>> main
 
 # Creating Application Source Code Directory
 RUN mkdir -p /usr/src/app
@@ -30,7 +34,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt /usr/src/app/
 
 # Install dependencies with pre-built wheels to avoid compilation issues
+<<<<<<< HEAD
 RUN pip install --no-cache-dir --prefer-binary spacy blis h5py
+=======
+RUN pip install --no-cache-dir --prefer-binary spacy
+>>>>>>> main
 
 # Install remaining dependencies from requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt

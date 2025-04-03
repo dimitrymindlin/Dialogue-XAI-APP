@@ -5,8 +5,6 @@ import pickle
 from sklearn.metrics import roc_auc_score
 import numpy as np
 import pandas as pd
-import seaborn as sns
-from matplotlib import pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
@@ -16,7 +14,11 @@ from data.ml_utilities import label_encode_and_save_classes, construct_pipeline,
 DATASET_NAME = "adult"
 config_path = f"./{DATASET_NAME}_model_config.json"
 save_path = f"./{DATASET_NAME}"
+<<<<<<< HEAD
 save_flag = False
+=======
+save_flag = True
+>>>>>>> main
 
 # Mapping of categories to new integer representations
 category_to_int = {

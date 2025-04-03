@@ -36,7 +36,10 @@ from explain.explanations.dice_explainer import TabularDice
 from explain.explanations.diverse_instances import DiverseInstances
 from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
 from explain.explanations.model_profile import PdpExplanation
+<<<<<<< HEAD
 from explain.parser import get_parse_tree
+=======
+>>>>>>> main
 from explain.utils import read_and_format_data
 
 # from parsing.llm_intent_recognition.llm_pipeline_setup.ollama_pipeline.ollama_pipeline import LLMSinglePrompt REMOVED FOR PRODUCTION
@@ -88,7 +91,8 @@ class ExplainBot:
                  use_selection: bool = False,
                  use_intent_recognition: bool = False,
                  use_active_dialogue_manager: bool = False,
-                 use_llm_agent=False):
+                 use_llm_agent=False,
+                 use_static_followup=False):
         """The init routine.
 
         Arguments:
@@ -155,6 +159,9 @@ class ExplainBot:
         self.use_intent_recognition = use_intent_recognition
         self.use_active_dialogue_manager = use_active_dialogue_manager
         self.use_llm_agent = use_llm_agent
+        self.use_static_followup = use_static_followup
+        if self.use_static_followup:
+            self.static_followup_mapping = get_mapping()
 
         # A variable used to help file uploads
         self.manual_var_filename = None
@@ -163,6 +170,7 @@ class ExplainBot:
 
         # Initialize completion + parsing modules
         self.intent_recognition_model = None
+<<<<<<< HEAD
         if self.use_intent_recognition == "t5":
             pass
             """app.logger.info(f"Loading parsing model {parsing_model_name}...")
@@ -172,6 +180,11 @@ class ExplainBot:
                                    dataset_name=name)"""
         """elif self.use_intent_recognition == "ollama_pipeline":
             self.intent_recognition_model = LLMSinglePrompt(self.feature_ordering)"""
+=======
+        if self.use_intent_recognition == "openAI":
+            self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
+
+>>>>>>> main
         self.decoder = None
 
         self.data_instances = []
@@ -341,8 +354,19 @@ class ExplainBot:
         reverse_mapping = {v: k for k, v in feature_display_name_map.items()}
         original_feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
 
+<<<<<<< HEAD
         # Generate display names with fallback to original names
         feature_display_names = [feature_display_name_map.get(name, name) for name in original_feature_names]
+=======
+        # Sort
+        feature_names_ordering = [feature.replace(" ", "") for feature in
+                                  self.feature_ordering]  # From display names to feature names
+        if self.feature_ordering is not None:
+            # Sort feature names by feature_ordering
+            feature_names = sorted(feature_names, key=lambda k: feature_names_ordering)
+        else:
+            feature_names = sorted(feature_names)
+>>>>>>> main
 
         # Sort display names based on feature ordering, or alphabetically if no ordering is provided
         feature_display_names.sort(
@@ -446,6 +470,11 @@ class ExplainBot:
         diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
         app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")
 
+<<<<<<< HEAD
+=======
+        # Compute explanations for diverse instances
+
+>>>>>>> main
         ## Load dice explanations
         tabular_dice = TabularDice(model=model,
                                    data=test_data,
@@ -490,9 +519,10 @@ class ExplainBot:
         ceteris_paribus_explainer.get_explanations(ids=diverse_instance_ids,
                                                    data=test_data)
 
-        """# Load global explanation via shap explainer
-        shap_explainer = ShapGlobalExplainer(model=model,
-                                             data=data,
+        # Load global explanation via shap explainer
+        # Create background_data from x and y dfs
+        """shap_explainer = ShapGlobalExplainer(model=model,
+                                             data=background_ds_x,
                                              class_names=self.conversation.class_names)
 
         shap_explainer.get_explanations()
@@ -525,14 +555,30 @@ class ExplainBot:
         self.conversation.add_var('tabular_anchor', tabular_anchor, 'explanation')
         self.conversation.add_var('ceteris_paribus', ceteris_paribus_explainer, 'explanation')
         # list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
-        self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
         # Load test instances
         test_instance_explainer = TestInstances(test_data, model, mega_explainer,
                                                 self.conversation.get_var("experiment_helper").contents,
                                                 diverse_instance_ids=diverse_instance_ids,
                                                 actionable_features=self.actionable_features)
-        test_instances = test_instance_explainer.get_test_instances()
+        test_instances, remove_instances_from_experiment = test_instance_explainer.get_test_instances()
+        # given the list of remove_instances_from_experiment, remove them from the experiment in all explanations
+        if len(remove_instances_from_experiment) > 0:
+            print(f"Removing instances from experiment: {remove_instances_from_experiment}")
+            for instance_id in remove_instances_from_experiment:
+                # Remove instance from diverse instances
+                diverse_instances = [instance for instance in diverse_instances if instance['id'] != instance_id]
+                # Remove instance from tabular dice
+                tabular_dice.cache = {k: v for k, v in tabular_dice.cache.items() if k != instance_id}
+                # Remove instance from mega explainer
+                mega_explainer.cache = {k: v for k, v in mega_explainer.cache.items() if k != instance_id}
+                # Remove instance from anchor
+                tabular_anchor.cache = {k: v for k, v in tabular_anchor.cache.items() if k != instance_id}
+                # Remove instance from ceteris paribus
+                ceteris_paribus_explainer.cache = {k: v for k, v in ceteris_paribus_explainer.cache.items() if k != instance_id}
+                # Remove instance from pdp
+                pdp_explainer.cache = {k: v for k, v in pdp_explainer.cache.items() if k != instance_id}
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
+        self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
 
     def load_model(self, filepath: str):
         """Loads a model.
@@ -612,22 +658,6 @@ class ExplainBot:
 
             # Store the dataset
             self.conversation.add_dataset(dataset, y_values, categorical, numeric)
-
-            """# Set up the parser
-            self.parser = Parser(cat_features=categorical,
-                                 num_features=numeric,
-                                 dataset=dataset,
-                                 target=list(y_values))
-
-            # Generate the available prompts
-            # make sure to add the "incorrect" temporary feature
-            # so we generate prompts for this
-            self.prompts = Prompts(cat_features=categorical,
-                                   num_features=numeric,
-                                   target=np.unique(list(y_values)),
-                                   feature_value_dict=self.parser.features,
-                                   class_names=self.conversation.class_names,
-                                   skip_creating_prompts=skip_prompts)"""
             app.logger.info("..done")
 
             return "success"
@@ -637,10 +667,15 @@ class ExplainBot:
     def get_suggested_method(self):
         return self.dialogue_manager.get_suggested_explanations()
 
-    def set_num_prompts(self, num_prompts):
-        """Updates the number of prompts to a new number"""
-        self.prompts.set_num_prompts(num_prompts)
+    def get_static_followup(self, question_id) -> List[Dict[str, Any]]:
+        # return example [{"id": "shapAllFeatures", "question": "Would you like to see the feature contributions?", "feature_id": None}]
+        try:
+            method_id, question = self.static_followup_mapping[question_id]
+            return [{"question_id": method_id, "question": question, "feature_id": ""}]
+        except (KeyError, TypeError):
+            return []
 
+<<<<<<< HEAD
     @staticmethod
     def gen_almost_surely_unique_id(n_bytes: int = 30):
         """To uniquely identify each input, we generate a random 30 byte hex string."""
@@ -798,6 +833,8 @@ class ExplainBot:
         final_result = returned_item + f"<>{response_id}"
 
         return final_result
+=======
+>>>>>>> main
 
     def update_state_new(self,
                          question_id: str = None,
@@ -830,16 +867,11 @@ class ExplainBot:
                                        instance_id,
                                        feature_id,
                                        instance_type_naming=self.instance_type_naming)
-
-        # self.log(logging_info) # Logging dict currently off.
-        # Concatenate final response, parse, and conversation representation
-        # This is done so that we can split both the parse and final
-        # response, then present all the data
-        # final_result = returned_item + f"<>{response_id}"
         final_result = returned_item
         return final_result, question_id, feature_id, reasoning
 
     async def update_state_from_nl(self, user_input):
+<<<<<<< HEAD
         """Update the state of the conversation based on the user input."""
         return self.conversation.update_state_from_nl(user_input)
     
@@ -914,6 +946,35 @@ class ExplainBot:
                 "followup": [],
                 "reasoning": ""
             }
+=======
+        # 1. Get the question_id and feature_name from the user input
+        feature_name = None
+        feature_id = None
+        if self.use_llm_agent:
+            reasoning, response = await self.agent.answer_user_question(user_input)
+            return response, None, None, reasoning
+        elif self.use_intent_recognition:
+            # Get the question_id and feature_name from the user input
+            question_id, feature_name, reasoning = self.dialogue_manager.update_state(user_input)
+            if feature_name != "" and feature_name is not None:
+                feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
+                # remove whitespace between words
+                feature_name = feature_name.replace(" ", "")
+                try:
+                    feature_id = feature_list.index(feature_name.lower())
+                except ValueError:
+                    # Get closest match
+                    closest_matches = difflib.get_close_matches(feature_name, feature_list, n=1, cutoff=0.5)
+                    if closest_matches:
+                        feature_id = feature_list.index(closest_matches[0])
+                    else:
+                        feature_id = None
+                        # Optionally handle the case where no close match is found
+                        print(f"No close match found for feature name: {feature_name}")
+
+        # 2. Update the state
+        return self.update_state_new(question_id, feature_id)
+>>>>>>> main
 
     def get_feature_importances_for_current_instance(self):
         mega_explainer = self.conversation.get_var('mega_explainer').contents

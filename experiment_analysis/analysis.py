@@ -4,6 +4,7 @@ import psycopg2
 import pandas as pd
 from fuzzywuzzy import fuzz
 
+from experiment_analysis.analyse_final_understanding_q import get_users_failed_final_understanding_check
 from experiment_analysis.analysis_data_holder import AnalysisDataHolder
 from experiment_analysis.calculations import create_predictions_df
 from experiment_analysis.filter_out_participants import filter_by_prolific_users, filter_by_broken_variables
@@ -14,12 +15,14 @@ from parsing.llm_intent_recognition.prompts.explanations_prompt import question_
 
 POSTGRES_USER = "postgres"
 POSTGRES_PASSWORD = "example"
-POSTGRES_DB = "prolific_chat_final"
+#POSTGRES_DB = "prolific_chat_final"
+POSTGRES_DB = "adult"
 POSTGRES_HOST = "localhost"
-prolific_file_name = "prolific_export_llm_combined.csv"
-prolific_file_name1 = "prolific_export_llm_passive.csv"
-prolific_file_name2 = "prolific_export_llm_active.csv"
-result_folder_path = "data_chat_final/"
+prolific_file_name_combined = "prolific_export_llm_combined.csv"
+prolific_file_name1 = "prolific_export_llm_combined.csv"
+#prolific_file_name2 = "prolific_export_chat_01.11.24.csv"
+prolific_file_name2 = "prolific_export_very_last.csv"
+result_folder_path = "data_chat/"
 
 
 def merge_prolific_files():
@@ -27,17 +30,17 @@ def merge_prolific_files():
     df1 = pd.read_csv(prolific_file_name1)
     df2 = pd.read_csv(prolific_file_name2)
 
-    # Append df2 to df1
-    df_combined = df1.append(df2, ignore_index=True)
+    # Add df2 rows to df1 without duplicate prolific_id
+    df_combined = pd.concat([df1, df2]).drop_duplicates(subset="Participant id")
 
-    # Delete old combined file
+    """# Delete old combined file
     try:
-        os.remove('prolific_export_llm_combined.csv')
+        os.remove(prolific_file_name_combined)
     except FileNotFoundError:
-        pass
+        pass"""
 
     # Save the combined dataframe back to a CSV file
-    df_combined.to_csv('prolific_export_llm_combined.csv', index=False)
+    df_combined.to_csv(prolific_file_name_combined, index=False)
 
 
 analysis_steps = ["filter_by_prolific_users",
@@ -45,8 +48,8 @@ analysis_steps = ["filter_by_prolific_users",
                   "filter_by_attention_check",
                   "filter_by_time",
                   "remove_users_that_didnt_ask_questions",
-                  "plot_question_raking",
-                  "remove_users_with_high_ml_knowledge"]
+                  "remove_users_with_high_ml_knowledge",
+                  "remove_users_with_fatal_error"]
 
 
 # Possible steps: remove_users_with_high_ml_knowledge
@@ -167,7 +170,7 @@ def extract_questions(user_events, study_group):
         except KeyError:
             raise KeyError(
                 "No 'text' column found in user_questions_over_time. Maybe you forgot to change change 'active_users' in pg admin?")
-        return user_questions_over_time
+    return user_questions_over_time
 
 
 def analyse_user_questions(questions_df):
@@ -190,17 +193,16 @@ def analyse_user_questions(questions_df):
 
 
 def main():
-    """merge_prolific_files()
-    quit()"""
+    #merge_prolific_files()
     conn = connect_to_db()
     analysis = AnalysisDataHolder(user_df=fetch_data_as_dataframe("SELECT * FROM users", conn),
                                   event_df=fetch_data_as_dataframe("SELECT * FROM events", conn),
                                   user_completed_df=fetch_data_as_dataframe("SELECT * FROM user_completed", conn))
     # if "filter_by_prolific_users" in analysis_steps:
-    filter_by_prolific_users(analysis, prolific_file_name)
+    filter_by_prolific_users(analysis, prolific_file_name_combined)
     analysis.create_time_columns()
 
-    uuid_list = [
+    """uuid_list = [
         "5b20033c-8c81-4fcf-8f98-1b57a0ab2e8f",
         "e9633076-9982-41cb-9e9d-ccc941ec7487",
         "5e8881d1-a3ae-49d6-8220-60926a3a8bc6",
@@ -225,13 +227,13 @@ def main():
     # print them line by line with a comma after the id and a 1 after the comma
     for id in prolific_ids:
         if id in ["64401708880c30ec28b9aef4",
-                      "5f406d28899a9b1a9ddd609a",
-                      "5f653cb18aad310a9ee7c32d",
-                      "57acc170c6bab4000172a42e",
-                      "665a086659c5d96abbd29687",
-                      "65636b8039e7d18bb07ff7b9",
-                      "5e9fd9d1ae42fb18d841f570"]:
-            print(f"{id},1")
+                  "5f406d28899a9b1a9ddd609a",
+                  "5f653cb18aad310a9ee7c32d",
+                  "57acc170c6bab4000172a42e",
+                  "665a086659c5d96abbd29687",
+                  "65636b8039e7d18bb07ff7b9",
+                  "5e9fd9d1ae42fb18d841f570"]:
+            print(f"{id},1")"""
 
     print("Found users: ", len(analysis.user_df))
     print("Found events: ", len(analysis.event_df))
@@ -294,7 +296,7 @@ def main():
         all_questionnaires_df = extract_all_feedback(analysis.user_df, user_id)
         all_q_list.append(all_questionnaires_df)
 
-    # Check how many rows are there where "text" column starts with "Sorry" in user_questions_over_time_list
+    """# Check how many rows are there where "text" column starts with "Sorry" in user_questions_over_time_list
     count = 0
     user_id_set = set()
     for df in user_questions_over_time_list:
@@ -317,26 +319,26 @@ def main():
     latest_created_at = analysis.user_df[analysis.user_df["id"].isin(user_id_set)]["created_at"].max()
     # Get the user id of the user with the latest "created_at"
     latest_user_id = analysis.user_df[analysis.user_df["created_at"] == latest_created_at]["id"].values[0]
+
     # Find that event of the user that has "Sorry" in the text
     for df in user_questions_over_time_list:
         if latest_user_id in df["user_id"].values:
             print(df[df["user_id"] == latest_user_id][df["text"].str.startswith("Sorry")])
             break
-
     # Remove these users from the analysis
-    exclude_user_ids.extend(list(user_id_set))
+    exclude_user_ids.extend(list(user_id_set))"""
 
     # Update analysis dfs and exclude users
     print(f"Users excluded: {len(exclude_user_ids)}")
     analysis.update_dfs(exclude_user_ids)
     analysis.add_self_assessment_value_column()
 
-    # Save wlb_users to a csv file for manual analysis
+    """# Save wlb_users to a csv file for manual analysis
     wlb_users_df = pd.DataFrame(wlb_users, columns=["user_id", "feedback"])
-    wlb_users_df.to_csv(f"wlb_users_{prolific_file_name}.csv", index=False)
+    wlb_users_df.to_csv(f"wlb_users_{prolific_file_name_combined}.csv", index=False)
     # get wlb user ids and exclude them
     wlb_user_ids = wlb_users_df["user_id"].values
-    # analysis.update_dfs(wlb_user_ids)
+    # analysis.update_dfs(wlb_user_ids)"""
 
     print("Amount of users per study group after first filters:")
     print(analysis.user_df.groupby("study_group").size())
@@ -384,12 +386,24 @@ def main():
         # Sort user_ids by created_at and save id and created_at to a df
         # users_to_remove_df = analysis.user_df[analysis.user_df["id"].isin(users_to_remove)][["id", "created_at", "study_group"]]
         analysis.update_dfs(users_to_remove)
-        # Print ml knowledge categories per study group
-        print(analysis.user_df.groupby(["study_group", "ml_knowledge"]).size())
+
+    if "remove_users_with_fatal_error" in analysis_steps:
+        # Filter final check failed.
+        failure_report_active_chat, fatal_error_users_active, understanding_scores_df_active = get_users_failed_final_understanding_check(
+            analysis.user_df, "active_chat")
+        failure_report_chat, fatal_error_users, understanding_scores_df_chat = get_users_failed_final_understanding_check(
+            analysis.user_df, "chat")
+
+        # combine understanding_scores_df_active and understanding_scores_df_chat
+        understanding_scores_df = pd.concat([understanding_scores_df_active, understanding_scores_df_chat])
+        # merge with user_df on id
+        analysis.user_df = analysis.user_df.merge(understanding_scores_df, on='id', how='left')
+
+        analysis.user_df = analysis.user_df[~analysis.user_df["id"].isin(fatal_error_users)]
+        analysis.user_df = analysis.user_df[~analysis.user_df["id"].isin(fatal_error_users_active)]
 
     print("Amount of users per study group after All filters:")
     print(analysis.user_df.groupby("study_group").size())
-
 
     """# Save the dfs to csv
     analysis.user_df.to_csv(result_folder_path + "user_df.csv", index=False)
@@ -401,21 +415,58 @@ def main():
     analysis.questions_over_time_df.to_csv(result_folder_path + "questions_over_time_df.csv", index=False)
     user_accuracy_over_time_df.to_csv(result_folder_path + "user_accuracy_over_time_df.csv", index=False)"""
 
+    # Define the save_unique_to_csv method
+    def save_unique_to_csv(df, file_path, subset=None):
+        """
+        Saves a DataFrame to a CSV file, appending only unique rows if the file exists.
 
-    # Load final_chat_user_ids.csv
-    final_chat_user_ids = pd.read_csv("final_chat_user_ids.csv")
-    # Filter analysis.user_df by final_chat_user_ids
-    analysis.user_df = analysis.user_df[analysis.user_df["id"].isin(final_chat_user_ids["id"])]
+        Parameters:
+        - df (pd.DataFrame): The DataFrame to save.
+        - file_path (str): The path to the CSV file.
+        - subset (list, optional): List of columns to consider for deduplication. If not specified,
+          converts complex columns to strings for deduplication on all columns.
+        """
+        if os.path.exists(file_path):
+            existing_df = pd.read_csv(file_path)
 
+            # Convert complex columns to strings if no subset is specified
+            if subset is None:
+                df = df.applymap(lambda x: str(x) if isinstance(x, dict) or isinstance(x, list) else x)
+                existing_df = existing_df.applymap(
+                    lambda x: str(x) if isinstance(x, dict) or isinstance(x, list) else x)
+
+            # Concatenate with the new DataFrame and remove duplicates
+            combined_df = pd.concat([existing_df, df]).drop_duplicates(subset=subset)
+        else:
+            combined_df = df
+
+        combined_df.to_csv(file_path, index=False)
+
+    """# Use the method to save each DataFrame
+    save_unique_to_csv(analysis.user_df, result_folder_path + "user_df.csv")
+    save_unique_to_csv(analysis.event_df, result_folder_path + "event_df.csv")
+    save_unique_to_csv(analysis.user_completed_df, result_folder_path + "user_completed_df.csv")
+    save_unique_to_csv(analysis.initial_test_preds_df, result_folder_path + "initial_test_preds_df.csv")
+    save_unique_to_csv(analysis.learning_test_preds_df, result_folder_path + "learning_test_preds_df.csv")
+    save_unique_to_csv(analysis.final_test_preds_df, result_folder_path + "final_test_preds_df.csv")
+    save_unique_to_csv(analysis.questions_over_time_df, result_folder_path + "questions_over_time_df.csv")
+    save_unique_to_csv(user_accuracy_over_time_df, result_folder_path + "user_accuracy_over_time_df.csv")"""
+
+    # Get prolific ids of the users in analysis.user_df
+    # load user_df from csv
+    analysis.user_df = pd.read_csv(result_folder_path + "user_df.csv")
+    # print number of people per study group
+    print(analysis.user_df.groupby("study_group").size())
     # Get demographics of the users
     user_prolific_ids = analysis.user_df["prolific_id"].values
-    prolific_df = pd.read_csv(prolific_file_name)
+    prolific_df = pd.read_csv(prolific_file_name_combined)
     prolific_df = prolific_df[prolific_df["Participant id"].isin(user_prolific_ids)]
     # Get Age statistics
     # ignore revoked from analysis for now
     prolific_df = prolific_df[prolific_df["Age"] != "CONSENT_REVOKED"]
-    # turn age to int
+    # turn age to int and fill nan with median
     prolific_df["Age"] = prolific_df["Age"].astype(int)
+    prolific_df["Age"].fillna(prolific_df["Age"].median(), inplace=True)
     print(prolific_df["Age"].describe())
     print()
     # Get Sex statistics
@@ -424,8 +475,9 @@ def main():
     # Turn mL knowledge to int
     analysis.user_df["ml_knowledge"] = analysis.user_df["ml_knowledge"].astype(int)
     print(analysis.user_df["ml_knowledge"].value_counts())
-    # Print ml knowledge categories per study group
-    print(analysis.user_df.groupby(["study_group", "ml_knowledge"]).size())
+    # Print ml knowledge categories
+    print(analysis.user_df["ml_knowledge"].value_counts())
+
 
     print()
 

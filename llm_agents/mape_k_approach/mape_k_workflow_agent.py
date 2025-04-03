@@ -1,6 +1,9 @@
 import csv
 import copy
+<<<<<<< HEAD
 from typing import List
+=======
+>>>>>>> main
 
 from dotenv import load_dotenv
 from llama_index.core import PromptTemplate
@@ -24,7 +27,11 @@ from llm_agents.mape_k_approach.analyze_component.analyze_prompt import get_anal
 from llm_agents.utils.definition_wrapper import DefinitionWrapper
 from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import get_plan_prompt_template, \
     PlanResultModel, \
+<<<<<<< HEAD
     ChosenExplanationModel, ExplanationTarget
+=======
+    ChosenExplanationModel
+>>>>>>> main
 from llm_agents.mape_k_approach.monitor_component.monitor_prompt import get_monitor_prompt_template, MonitorResultModel
 from llm_agents.mape_k_approach.user_model.user_model_fine_grained import UserModelFineGrained as UserModel
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator

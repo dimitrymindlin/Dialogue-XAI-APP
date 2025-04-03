@@ -15,6 +15,10 @@ from flask_cors import CORS
 import gin
 from dotenv import load_dotenv
 import openai
+<<<<<<< HEAD
+=======
+import matplotlib
+>>>>>>> main
 
 from explain.logic import ExplainBot
 
@@ -430,12 +434,16 @@ async def transcribe_audio():
         
         try:
             # Call OpenAI's API to transcribe the audio
+<<<<<<< HEAD
             if not openai.api_key:
                 print("OpenAI API key is not configured!")
                 return jsonify({
                     "text": "API anahtarı yapılandırılmamış. Bu bir test yanıtıdır.",
                     "user_id": user_id
                 })
+=======
+
+>>>>>>> main
             client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             with open(temp_file_path, "rb") as audio:
                 transcript = client.audio.transcriptions.create(
@@ -461,7 +469,11 @@ async def transcribe_audio():
 
 
 @bp.route("/text-to-speech", methods=['POST'])
+<<<<<<< HEAD
 def text_to_speech():
+=======
+async def text_to_speech():
+>>>>>>> main
     """
     Endpoint to convert text to speech using OpenAI's TTS API.
     Accepts text input and returns audio stream.
@@ -524,8 +536,18 @@ if __name__ != '__main__':
     stream_handler.setLevel(logging.INFO)
     app.logger.addHandler(stream_handler)
     app.logger.setLevel(logging.INFO)
+<<<<<<< HEAD
+=======
+    matplotlib.use('Agg')  
+>>>>>>> main
 
 if __name__ == "__main__":
     # clean up storage file on restart
     app.logger.info(f"Launching app from config: {args.config}")
+<<<<<<< HEAD
     app.run(debug=True, port=4001, host='0.0.0.0', use_reloader=False)
+=======
+    matplotlib.use('Agg') 
+    
+    app.run(debug=True, port=4555, host='0.0.0.0', use_reloader=False)
+>>>>>>> main

@@ -1,10 +1,11 @@
 """Generates SHAP explanations."""
 from collections import defaultdict
+<<<<<<< HEAD
 
+=======
+>>>>>>> main
 import numpy as np
-import torch
 import shap
-
 from explain.mega_explainer.base_explainer import BaseExplainer
 
 
@@ -13,7 +14,11 @@ class SHAPExplainer(BaseExplainer):
 
     def __init__(self,
                  model,
+<<<<<<< HEAD
                  data: torch.FloatTensor,
+=======
+                 data: np.ndarray,
+>>>>>>> main
                  link: str = 'identity',
                  method='kernel'):
         """Init.
@@ -40,7 +45,7 @@ class SHAPExplainer(BaseExplainer):
         else:
             self.explainer = shap.KernelExplainer(self.model, self.data, link=link)
 
-    def get_explanation(self, data_x: np.ndarray, label) -> torch.FloatTensor:
+    def get_explanation(self, data_x: np.ndarray, label) -> tuple[np.ndarray, float]:
         """Gets the SHAP explanation.
 
         Args:
@@ -111,25 +116,39 @@ class SHAPExplainer(BaseExplainer):
         if self.method == 'tree':
             transformed_x = self.model[:-1].transform(data_x)
             shap_vals = self.explainer.shap_values(transformed_x)
+<<<<<<< HEAD
             shap_vals = shap_vals[label]  # Select the relevant class
+=======
+            shap_vals = shap_vals[:, :, label]  # Select the relevant class
+>>>>>>> main
 
             # Extract the OneHotEncoder from the ColumnTransformer
             encoder = self.model.named_steps['preprocessor'].named_transformers_['one_hot']
 
             shap_groups = get_shap_group_indices(encoder.get_feature_names_out())
 
+<<<<<<< HEAD
             reshaped_shap_vals = combine_shap_values_reduced(shap_vals, shap_groups)
 
             final_shap_values = torch.FloatTensor(reshaped_shap_vals)
+=======
+            final_shap_values = combine_shap_values_reduced(shap_vals, shap_groups)
+>>>>>>> main
         else:
             shap_vals = self.explainer.shap_values(data_x[0], nsamples=10_000, silent=True)
 
             # Ensure that we select the correct label, if shap values are computed on output prob. distribution
             if len(shap_vals) > 1:
+<<<<<<< HEAD
                 shap_value_at_label = shap_vals[label]
                 final_shap_values = torch.FloatTensor(shap_value_at_label)
             else:
                 final_shap_values = torch.FloatTensor(shap_vals)
+=======
+                final_shap_values = shap_vals[label]
+            else:
+                final_shap_values = shap_vals
+>>>>>>> main
 
         print(self.explainer.expected_value[0])
         return final_shap_values, 1.0

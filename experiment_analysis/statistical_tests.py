@@ -1,8 +1,6 @@
-import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
 from scipy import stats
-from statsmodels.stats.power import TTestIndPower
 from scipy.stats import mannwhitneyu
 
 import matplotlib
@@ -70,19 +68,48 @@ def calculate_effect_size(group1, group2):
     return effect_size, pooled_sd
 
 
-def perform_power_analysis(effect_size=0.5):
+from scipy.stats import t, norm
+import numpy as np
+
+def perform_power_analysis(effect_size=0.5, alpha=0.05, power=0.8, alternative='two-sided'):
     """
-    Perform power analysis for t-test. Calculate sample size needed for 0.8 power.
+    Perform power analysis for an independent two-sample t-test to calculate the required sample size per group.
+
+    Parameters:
+    - effect_size: The expected difference between group means divided by the pooled standard deviation (Cohen's d).
+    - alpha: Significance level (probability of Type I error).
+    - power: Desired power level (1 - probability of Type II error).
+    - alternative: Defines the alternative hypothesis ('two-sided', 'greater', or 'less').
+
+    Returns:
+    - sample_size: Estimated sample size per group.
     """
-    alpha = 0.05
-    for power in [0.8, 0.9, 0.95]:
-        power_analysis = TTestIndPower()
-        sample_size = power_analysis.solve_power(effect_size=effect_size,
-                                                 alpha=alpha,
-                                                 power=power,
-                                                 ratio=1.0,
-                                                 alternative='larger')
-        print(f"Sample size for {power} power: {sample_size}")
+    # Determine the z critical value for the given alpha
+    if alternative == 'two-sided':
+        z_alpha = norm.ppf(1 - alpha / 2)
+    else:
+        z_alpha = norm.ppf(1 - alpha)
+
+    # Initialize sample size
+    sample_size = 2
+
+    # Iteratively compute the sample size needed to achieve the desired power
+    while True:
+        # Degrees of freedom for two-sample t-test
+        df = 2 * (sample_size - 1)
+        # Non-centrality parameter
+        ncp = effect_size * np.sqrt(sample_size / 2)
+        # t critical value for the given power
+        t_beta = t.ppf(1 - power, df, loc=ncp)
+        # Calculate the non-central t distribution's CDF at the critical t value
+        beta = t.cdf(t_beta, df, loc=ncp)
+        # Check if the achieved power is within a small tolerance of the desired power
+        if np.abs(beta - power) < 1e-4:
+            break
+        sample_size += 1
+
+    print(f"Estimated sample size per group for {power*100}% power: {sample_size}")
+    return sample_size
 
 
 def perform_mann_whitney_u_test(group1, group2):

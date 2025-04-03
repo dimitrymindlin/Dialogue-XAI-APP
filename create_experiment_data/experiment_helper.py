@@ -33,6 +33,10 @@ class ExperimentHelper:
 
     def _load_train_instances(self):
         diverse_instances = self.conversation.get_var("diverse_instances").contents
+<<<<<<< HEAD
+=======
+        # Turn into InstanceDatapoint
+>>>>>>> main
         self.instances["train"] = [self._prepare_train_instance(instance) for instance in diverse_instances]
 
     def _load_test_instances(self):
@@ -95,7 +99,12 @@ class ExperimentHelper:
         if self.instances.get(instance_type, None) is None:
             self.load_instances()
 
+<<<<<<< HEAD
         load_instance_methods.get(instance_type, lambda: None)()
+=======
+        if not self.instances.get(instance_type, []):
+            load_instance_methods.get(instance_type, lambda: None)()
+>>>>>>> main
 
         if instance_type != "train":
             instance_id, instance = get_instance_methods[instance_type]()
@@ -200,7 +209,11 @@ class ExperimentHelper:
             # Load training instances if not already loaded
             self._load_train_instances()
 
+<<<<<<< HEAD
         instance_key = "most_complex_instance"  # Same as final test
+=======
+        instance_key = "most_complex_instance"  # Random for now.
+>>>>>>> main
         # Get intro test instance based on train instance id
         train_instance_id = self.instances["train"][datapoint_count].instance_id
         test_instances_dict = self.instances["test"][train_instance_id]
@@ -224,7 +237,11 @@ class ExperimentHelper:
         if not isinstance(original_instance, pd.DataFrame):
             original_instance = pd.DataFrame.from_dict(original_instance["values"], orient="index").transpose()
         cfes = dice_tabular.run_explanation(original_instance, "opposite")
-        original_instance_id = original_instance.index[0]
+        try:
+            original_instance_id = original_instance.index[0]
+        except IndexError:
+            original_instance_id = 0
+
         final_cfs_df = cfes[original_instance_id].cf_examples_list[0].final_cfs_df
         # drop y column
         final_cfs_df = final_cfs_df.drop(columns=["y"])

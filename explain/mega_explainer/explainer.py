@@ -7,7 +7,6 @@ from typing import Union, Any
 import heapq
 import numpy as np
 import pandas as pd
-import torch
 
 from explain.mega_explainer.lime_explainer import Lime
 from explain.mega_explainer.perturbation_methods import NormalPerturbation
@@ -159,48 +158,25 @@ class Explainer:
     @staticmethod
     def _arr(x) -> np.ndarray:
         """Converts x to a numpy array."""
-        if isinstance(x, torch.Tensor):
-            return x.detach().cpu().numpy()
         return np.array(x)
 
     def _compute_faithfulness_auc(self, data, explanation, c_label, k, metric="topk"):
-        """Computes AUC for faithfulness scores, perturbing top k (where k is an array).
-        AKA. Fudge Score in the paper?!
-
-        Args:
-            data:
-            explanation:
-            c_label:
-            k:
-            metric:
-        Returns:
-            faithfulness:
-        """
+        """Computes AUC for faithfulness scores, perturbing top k (where k is an array)."""
         faithfulness = 0
         for k_i in k:
-            # Construct original mask as all true (i.e., all indices are masked and non are perturbed)
-            top_k_map = torch.tensor([True] * len(explanation), dtype=torch.bool)
+            # Create boolean mask for top k features
+            top_k_map = np.ones(len(explanation), dtype=bool)
+            top_k_indices = np.argsort(np.abs(explanation))[-k_i:]
+            top_k_map[top_k_indices] = False
 
-            # Unmask topk instances
-            top_k_map[torch.topk(np.abs(explanation), k=k_i).indices] = False
-
-            # If top-k provide top-k instances
             if metric == "topk":
                 faithfulness += self._compute_faithfulness_topk(data, c_label, top_k_map)
             else:
-                # Otherwise, provide bottom-k indices
                 faithfulness += self._compute_faithfulness_topk(data, c_label, ~top_k_map)
         return faithfulness
 
     def _compute_faithfulness_topk(self, x, label, top_k_mask, num_samples: int = 10_000):
-        """Approximates the expected local faithfulness of the explanation in a neighborhood.
-
-        Args:
-            x: The original sample
-            label:
-            top_k_mask:
-            num_samples: number of perturbations used for Monte Carlo expectation estimate
-        """
+        """Approximates the expected local faithfulness of the explanation in a neighborhood."""
         perturb_args = {
             "original_sample": x[0],
             "feature_mask": top_k_mask,
@@ -208,15 +184,20 @@ class Explainer:
             "max_distance": self.perturbation_max_distance,
             "feature_metadata": self.feature_types
         }
-        # Compute perturbed instance
+
+        # Get perturbed instances
         x_perturbed = self.perturbation_method.get_perturbed_inputs(**perturb_args)
 
+<<<<<<< HEAD
         # TODO(satya): Could you make these lines more readable?
         y = self._arr([i[label] for i in self._arr(self.predict_fn(x.reshape(1, -1)))])
         # Model expects numpy arrays for german dataset. (Dimi)
         y_perturbed = self._arr([i[label] for i in self._arr(self.predict_fn(x_perturbed.float().numpy()))])
+=======
+        y = self._arr([i[label] for i in self._arr(self.predict_fn(x.reshape(1, -1)))])
+        y_perturbed = self._arr([i[label] for i in self._arr(self.predict_fn(x_perturbed))])
+>>>>>>> main
 
-        # Return abs mean
         return np.mean(np.abs(y - y_perturbed), axis=0)
 
     @staticmethod
@@ -293,7 +274,16 @@ class Explainer:
                     cur_explainer = self.explanation_methods[method]
                     cur_expl, score = cur_explainer.get_explanation(formatted_data, label=class_index)
 
+<<<<<<< HEAD
                     explanations[class_index][method] = cur_expl.squeeze(0)
+=======
+                    # Handle both squeezable and non-squeezable arrays
+                    if len(cur_expl.shape) > 1:
+                        explanations[class_index][method] = cur_expl.squeeze()
+                    else:
+                        explanations[class_index][method] = cur_expl
+
+>>>>>>> main
                     scores[class_index][method] = score
                     fidelity_scores_topk[class_index][method] = self._compute_faithfulness_auc(formatted_data,
                                                                                                explanations[class_index][
@@ -306,12 +296,20 @@ class Explainer:
                 method = list(self.explanation_methods.keys())[0]
                 cur_explainer = self.explanation_methods[method]
                 cur_expl, score = cur_explainer.get_explanation(formatted_data, label=class_index)
-
-                explanations[class_index][method] = cur_expl.squeeze(0)
+                
+                # Handle both squeezable and non-squeezable arrays
+                if len(cur_expl.shape) > 1:
+                    explanations[class_index][method] = cur_expl.squeeze()
+                else:
+                    explanations[class_index][method] = cur_expl
+                    
                 scores[class_index][method] = score
+<<<<<<< HEAD
 
         # Iterate over each explanation method and compute fidelity scores of topk
         # and non-topk features per the method
+=======
+>>>>>>> main
 
         if return_fidelities:
             return fidelity_scores_topk
@@ -345,7 +343,11 @@ class Explainer:
                     best_method = "lime_0.75"
                 # Store the best explanation for the class
                 best_explanations_per_class[class_index] = {
+<<<<<<< HEAD
                     'explanation': explanations[class_index][best_method].numpy(),
+=======
+                    'explanation': explanations[class_index][best_method],
+>>>>>>> main
                     'method': best_method,
                     'score': scores[class_index][best_method],
                     'agree': diff <= epsilon if 'diff' in locals() else True
@@ -356,28 +358,29 @@ class Explainer:
             for class_index in explanations.keys():
                 best_method = list(self.explanation_methods.keys())[0]
                 best_explanations_per_class[class_index] = {
+<<<<<<< HEAD
                     'explanation': explanations[class_index][best_method].numpy(),
+=======
+                    'explanation': explanations[class_index][best_method],
+>>>>>>> main
                     'method': best_method,
                     'score': scores[class_index][best_method],
                     'agree': True
                 }
 
         # Format return
-        # TODO(satya,dylan): figure out a way to get a score metric using fidelity
         # Initialize a container for the final explanations for all classes
         final_explanations_for_all_classes = {}
 
         # Iterate over each class in best_explanations_per_class to format the final explanation
         for class_index, best_explanation_info in best_explanations_per_class.items():
             # Extract information for the current class's best explanation
-            best_exp_array = best_explanation_info[
-                'explanation']  # Assuming this is already a numpy array; remove .numpy() if so
+            best_exp_array = best_explanation_info['explanation']
             best_method = best_explanation_info['method']
             best_method_score = best_explanation_info['score']
             agree = best_explanation_info['agree']
 
             # Format the explanation for the current class
-            # Note: You may need to adjust _format_explanation to accept and handle class_index if it doesn't already
             final_explanations_for_all_classes[class_index] = self._format_explanation(best_exp_array,
                                                                                        class_index,
                                                                                        best_method_score,
@@ -389,53 +392,27 @@ class Explainer:
             final_explanations_for_all_classes = final_explanations_for_all_classes[class_indices[0]]
             fidelity_scores_topk = fidelity_scores_topk[class_indices[0]]
 
-        # Assuming best_explanations_per_class is already filled as per the previous code
-        # Final adjustments before return
         if return_fidelities:
-            # If fidelity scores are requested, return them alongside the best explanations
             return final_explanations_for_all_classes, fidelity_scores_topk
         else:
-            # If only explanations are needed, return the formatted explanations for each class
             return final_explanations_for_all_classes
 
     def compute_stability(self, data, baseline_explanation, explainer, label, top_k_inds):
-        """Computes the AUC stability scores.
-
-        Arguments:
-            data: The *single* data point to compute stability for.
-            baseline_explanation: The baseline explanation for data.
-            explainer: The explanation class
-            label: The label to explain
-            top_k_inds: The indices of the top k features to use for the perturbation process.
-        Returns:
-            stability: The AUC stability for the top k indices.
-        """
+        """Computes the AUC stability scores."""
         stability = 0
         for k_i in top_k_inds:
             stability += self.compute_stability_topk(data,
-                                                     baseline_explanation,
-                                                     explainer,
-                                                     label,
-                                                     k_i)
+                                                   baseline_explanation,
+                                                   explainer,
+                                                   label,
+                                                   k_i)
         return stability
 
     def compute_stability_topk(self, data, baseline_explanation, explainer, label, top_k, num_perturbations=100):
-        """Computes the stability score.
-
-        Arguments:
-            data:
-            baseline_explanation:
-            explainer:
-            label:
-            top_k:
-            num_perturbations:
-        Returns:
-            stability_top_k: The top_k stability score
-        """
-
+        """Computes the stability score."""
         perturb_args = {
             "original_sample": data[0],
-            "feature_mask": torch.tensor([False] * len(baseline_explanation), dtype=torch.bool),
+            "feature_mask": np.zeros(len(baseline_explanation), dtype=bool),
             "num_samples": num_perturbations,
             "max_distance": self.perturbation_max_distance,
             "feature_metadata": self.feature_types
@@ -444,22 +421,18 @@ class Explainer:
         # Get the perturbed instances
         x_perturbed = self.perturbation_method.get_perturbed_inputs(**perturb_args)
 
-        # Compute the top k indices of the explanation
-        topk_base = torch.argsort(torch.abs(baseline_explanation), descending=True)[:top_k]
-        np_topk_base = topk_base.numpy()
+        # Get top k indices for baseline explanation
+        topk_base = np.argsort(np.abs(baseline_explanation))[-top_k:]
         stability_value = 0
+        
         for perturbed_sample in x_perturbed:
-            # Explanations return torch tensor
-            explanation_perturbed_input, _ = explainer.get_explanation(perturbed_sample[None, :].numpy(),
-                                                                       label=label)
+            explanation_perturbed_input, _ = explainer.get_explanation(perturbed_sample[None, :],
+                                                                     label=label)
+            abs_expl = np.abs(explanation_perturbed_input)
+            topk_perturbed = np.argsort(abs_expl)[-top_k:]
 
-            abs_expl = torch.abs(explanation_perturbed_input)
-            topk_perturbed = torch.argsort(abs_expl, descending=True)[:top_k]
-
-            np_topk_perturbed = topk_perturbed.numpy()
-
-            jaccard_distance = len(np.intersect1d(np_topk_base, np_topk_perturbed)) / len(
-                np.union1d(np_topk_base, np_topk_perturbed))
+            jaccard_distance = len(np.intersect1d(topk_base, topk_perturbed)) / len(
+                np.union1d(topk_base, topk_perturbed))
             stability_value += jaccard_distance
 
         mean_stability = stability_value / num_perturbations

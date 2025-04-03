@@ -23,6 +23,10 @@ ExplainBot.actionable_features = ["InvestmentOutcome", "EducationLevel", "Occupa
 ExplainBot.feature_ordering = ['Age', 'Education Level', 'Marital Status', 'Occupation', 'Weekly Working Hours', 'Work Life Balance', 'Investment Outcome']
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
+<<<<<<< HEAD
+=======
+ExplainBot.use_static_followup = True
+>>>>>>> main
 ExplainBot.use_llm_agent = "mape_k" # one of False, "simple", "mape_k", "o1"
 
 # Experiment Helper
@@ -43,7 +47,11 @@ TabularDice.final_cfe_amount = 3
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"
+<<<<<<< HEAD
 DiverseInstances.instance_amount = 10
+=======
+DiverseInstances.instance_amount = 15
+>>>>>>> main
 DiverseInstances.dataset_name = "adult"
 
 # Test Instances

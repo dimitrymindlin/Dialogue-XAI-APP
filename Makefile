@@ -25,7 +25,11 @@ run: remove
 	docker run -d --name dialogue-xai-app \
 		-p 4000:4000 \
 		--cpus=2 \
+<<<<<<< HEAD
 		--memory=4g \
+=======
+		--memory=2g \
+>>>>>>> main
 		dialogue-xai-app
 
 # Build and push multi-arch image
