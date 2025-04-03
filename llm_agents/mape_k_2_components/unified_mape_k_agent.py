@@ -19,11 +19,6 @@ from pydantic import BaseModel, Field
 from create_experiment_data.instance_datapoint import InstanceDatapoint
 from llm_agents.base_agent import XAIBaseAgent
 from llm_agents.explanation_state import ExplanationState
-from llm_agents.mape_k_2_components.monitor.monitor_prompt import get_monitor_prompt_template, MonitorResultModel
-from llm_agents.mape_k_2_components.scaffold.scaffold_prompt import get_scaffolding_prompt_template, \
-    ScaffoldingResultModel
-from llm_agents.merged_prompts import get_merged_prompts
-
 from llama_index.core.workflow.retry_policy import ConstantDelayRetryPolicy
 
 import logging
@@ -32,6 +27,7 @@ from llm_agents.utils.definition_wrapper import DefinitionWrapper
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 from llm_agents.mape_k_approach.user_model.user_model_fine_grained import UserModelFineGrained as UserModel
 from llm_agents.utils.postprocess_message import replace_plot_placeholders
+from llm_agents.merged_prompts import get_merged_prompts
 import os
 import datetime
 
@@ -51,7 +47,7 @@ logger = logging.getLogger(__name__)
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Configure a file handler
-file_handler = logging.FileHandler("logfile.txt", mode="w")
+file_handler = logging.FileHandler("unified_logfile.txt", mode="w")
 file_handler.setLevel(logging.INFO)
 
 # Define a custom formatter for more readable output
@@ -60,13 +56,13 @@ formatter = logging.Formatter(
 )
 file_handler.setFormatter(formatter)
 
-LOG_CSV_FILE = "log_table.csv"
+LOG_CSV_FILE = "unified_log_table.csv"
 CSV_HEADERS = ["timestamp", "experiment_id", "datapoint_count", "user_message", "monitor", "analyze", "plan", "execute", "user_model"]
 
 
 def generate_log_file_name(experiment_id: str) -> str:
     timestamp = datetime.datetime.now().strftime("%d.%m.%Y_%H:%M")
-    return os.path.join(LOG_FOLDER, f"{timestamp}_{experiment_id}.csv")
+    return os.path.join(LOG_FOLDER, f"{timestamp}_unified_{experiment_id}.csv")
 
 
 def initialize_csv(log_file: str):
@@ -111,29 +107,7 @@ logger.addHandler(console_handler)
 logger.setLevel(logging.INFO)
 
 
-# Define custom events
-
-class PrepEvent(Event):
-    pass
-
-
-class MonitorDoneEvent(Event):
-    pass
-
-
-class AnalyzeDoneEvent(Event):
-    pass
-
-
-class PlanDoneEvent(Event):
-    pass
-
-
-class AugmentResult(BaseModel):
-    new_user_input: str
-
-
-# Define custom models for unified approach
+# Define custom models to match the outputs from the original components
 class ChosenExplanationModel(BaseModel):
     """
     Data model for a chosen explanation concept to be added to the explanation plan.
@@ -145,6 +119,28 @@ class ChosenExplanationModel(BaseModel):
     is_optional: bool = Field(False, description="Whether this explanation is optional")
 
 
+class UnifiedMapeKResult(BaseModel):
+    """
+    Unified MAPE-K workflow result model.
+    """
+    # Monitor step results
+    understanding_displays: list = Field(default_factory=list, 
+                                       description="A list of explicit understanding displays from the user message")
+    cognitive_state: str = Field("", description="The cognitive mode of engagement from the user message")
+    
+    # Analyze step results
+    updated_explanation_states: dict = Field(default_factory=dict, 
+                                          description="Dictionary of updated explanation states")
+    
+    # Plan step results
+    next_explanations: list = Field(default_factory=list, 
+                                 description="List of next explanations planned")
+    reasoning: str = Field("", description="Reasoning behind the chosen explanations")
+    
+    # Execute step results
+    html_response: str = Field("", description="Final HTML response to the user")
+
+
 class ExecuteResult(BaseModel):
     """
     Model for execution result to maintain compatibility with existing code.
@@ -153,7 +149,7 @@ class ExecuteResult(BaseModel):
     response: str = Field(..., description="The HTML-formatted response to the user.")
 
 
-class MapeK2Component(Workflow, XAIBaseAgent):
+class UnifiedMapeKAgent(Workflow, XAIBaseAgent):
     def __init__(
             self,
             llm: LLM = None,
@@ -161,7 +157,6 @@ class MapeK2Component(Workflow, XAIBaseAgent):
             domain_description="",
             user_ml_knowledge="",
             experiment_id="",
-            use_unified=True,  # New parameter to toggle unified approach
             **kwargs
     ):
         super().__init__(timeout=100.0, **kwargs)
@@ -186,9 +181,6 @@ class MapeK2Component(Workflow, XAIBaseAgent):
             os.path.join(base_dir, "..", "mape_k_approach", "monitor_component",
                          "explanation_questions_definition.json")
         )
-
-        # New parameter to control which approach to use
-        self.use_unified = use_unified
 
         # Mape K specific setup user understanding notepad
         self.user_model = UserModel(user_ml_knowledge)
@@ -247,6 +239,7 @@ class MapeK2Component(Workflow, XAIBaseAgent):
         # Optionally, retrieve as a dictionary
         populated_yaml_json = self.populator.get_populated_json(as_dict=True)
         self.user_model.set_model_from_summary(populated_yaml_json)
+        logger.info(f"User model after initialization: {self.user_model.get_state_summary(as_dict=True)}.\n")
         self.visual_explanations_dict = xai_visual_explanations
         self.last_shown_explanations = []
 
@@ -420,20 +413,15 @@ class MapeK2Component(Workflow, XAIBaseAgent):
             for next_explanation in plan_result["next_response"]:
                 exp = next_explanation.explanation_name
                 exp_step = next_explanation.step_name
-                try:
-                    self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.UNDERSTOOD.value)
-                    self.last_shown_explanations.append(next_explanation)
-                except Exception as e:
-                    logger.error(f"Error updating explanation step state: {e}")
-                    # Continue with other explanation steps
-                    continue
+                self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.UNDERSTOOD.value)
+                self.last_shown_explanations.append(next_explanation)
             
             # Log updated user model
             self.current_log_row["user_model"] = self.user_model.get_state_summary(as_dict=True)
             update_last_log_row(self.current_log_row, self.log_file)
             logger.info(f"User model after unified MAPE-K: {self.user_model.get_state_summary(as_dict=False)}.\n")
             
-            # Create final result for the workflow
+            # Create final result object for the workflow
             final_result = ExecuteResult(
                 reasoning="Unified MAPE-K workflow completed successfully",
                 response=response_with_plots
@@ -450,147 +438,22 @@ class MapeK2Component(Workflow, XAIBaseAgent):
             )
             return StopEvent(result=fallback_result)
 
-    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=2))
-    async def monitor(self, ctx: Context, ev: StartEvent) -> MonitorDoneEvent:
-        user_message = ev.input
-        await ctx.set("user_message", user_message)
-
-        self.current_log_row = {
-            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "experiment_id": self.experiment_id,
-            "datapoint_count": self.datapoint_count,
-            "user_message": user_message,
-            "monitor": "",
-            "analyze": "",
-            "plan": "",
-            "execute": "",
-            "user_model": ""
-        }
-
-        append_new_log_row(self.current_log_row, self.log_file)
-
-        monitor_prompt = PromptTemplate(get_monitor_prompt_template().format(
-            domain_description=self.domain_description,
-            feature_names=self.feature_names,
-            instance=self.instance,
-            predicted_class_name=self.predicted_class_name,
-            understanding_displays=self.understanding_displays.as_text(),
-            modes_of_engagement=self.modes_of_engagement.as_text(),
-            explanation_plan=self.user_model.get_complete_explanation_collection(as_dict=False),
-            chat_history=self.chat_history,
-            user_model=self.user_model.get_state_summary(as_dict=False),
-            last_shown_explanations=self.last_shown_explanations,
-            user_message=user_message,
-        ))
-        monitor_result = await self.llm.astructured_predict(MonitorResultModel, monitor_prompt)
-        logger.info(f"Monitor result: {monitor_result}.\n")
-        if monitor_result.mode_of_engagement != "":
-            self.user_model.cognitive_state = self.modes_of_engagement.get_differentiating_description(
-                monitor_result.mode_of_engagement)
-
-        self.user_model.explicit_understanding_signals = monitor_result.explicit_understanding_displays
-
-        for change_entry in monitor_result.model_changes:
-            if isinstance(change_entry, tuple):
-                exp, change, step = change_entry
-            elif isinstance(change_entry, dict):
-                exp = change_entry.get("explanation_name")
-                change = change_entry.get("state")
-                step = change_entry.get("step")
-            if exp is None or change is None or step is None:
-                raise ValueError(f"Invalid change entry: {change_entry}")
-            self.user_model.update_explanation_step_state(exp, step, change)
-        await ctx.set("monitor_result", monitor_result)
-        self.current_log_row["monitor"] = monitor_result
-        update_last_log_row(self.current_log_row, self.log_file)
-        return MonitorDoneEvent()
-
-    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=2))
-    async def scaffolding(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
-        user_message = await ctx.get("user_message")
-        last_ex = self.last_shown_explanations[-1] if self.last_shown_explanations else ""
-        # Use a default next explanation focus if none is available.
-        next_exp_content = "explain the concept further"
-        scaffolding_prompt = PromptTemplate(get_scaffolding_prompt_template().format(
-            domain_description=self.domain_description,
-            feature_names=self.feature_names,
-            instance=self.instance,
-            predicted_class_name=self.predicted_class_name,
-            user_model=self.user_model.get_state_summary(as_dict=False),
-            explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
-            chat_history=self.chat_history,
-            user_message=user_message,
-            previous_plan=self.explanation_plan if self.explanation_plan else "",
-            last_explanation=last_ex,
-            next_exp_content=next_exp_content,
-        ))
-        scaffolding_result = await self.llm.astructured_predict(ScaffoldingResultModel, scaffolding_prompt)
-        logger.info(f"Scaffolding result: {scaffolding_result}.\n")
-        if scaffolding_result.explanation_plan:
-            self.explanation_plan = scaffolding_result.explanation_plan
-        # Update user model using the generated next explanation target:
-        explanation_target = scaffolding_result.next_explanation
-        if explanation_target.communication_goals:
-            next_goal = explanation_target.communication_goals[0]
-            extended_content = next_goal.goal + "->" + scaffolding_result.summary_sentence
-            self.user_model.update_explanation_step_state(
-                explanation_target.explanation_name,
-                explanation_target.step_name,
-                ExplanationState.SHOWN.value,
-                extended_content
-            )
-            explanation_target.communication_goals.pop(0)
-            if not explanation_target.communication_goals:
-                self.complete_explanation_step(explanation_target.explanation_name, explanation_target.step_name)
-            self.last_shown_explanations.append(
-                (explanation_target.explanation_name, explanation_target.step_name, extended_content))
-        self.append_to_history("user", user_message)
-        self.append_to_history("agent", scaffolding_result.response)
-        scaffolding_result.response = replace_plot_placeholders(scaffolding_result.response,
-                                                                 self.visual_explanations_dict)
-        self.user_model.new_datapoint()
-        await ctx.set("scaffolding_result", scaffolding_result)
-        self.current_log_row["scaffolding"] = scaffolding_result
-        self.current_log_row["user_model"] = self.user_model.get_state_summary(as_dict=False)
-        update_last_log_row(self.current_log_row, self.log_file)
-        return StopEvent(result=scaffolding_result)
-
-    # Method to answer user question
+    # Method to answer user question - maintains compatibility with existing interface
     async def answer_user_question(self, user_question):
+        """
+        Public method to answer a user question using the unified MAPE-K workflow.
+        """
         start_time = datetime.datetime.now()
+        result = await self.run(input=user_question)
+        end_time = datetime.datetime.now()
+        logger.info(f"Total time for Unified MAPE-K workflow: {end_time - start_time}")
         
-        # If using unified approach, use the unified step
-        if self.use_unified:
-            result = await self.run(input=user_question)
-            end_time = datetime.datetime.now()
-            logger.info(f"Time taken for Unified MAPE-K: {end_time - start_time}")
-            # For unified mode, we expect a result with reasoning and response
-            if isinstance(result, ScaffoldingResultModel):
-                analysis = result.plan_reasoning if hasattr(result, 'plan_reasoning') else "Reasoning unavailable"
-                response = result.response if hasattr(result, 'response') else "Response unavailable"
-            else:
-                analysis = result.reasoning if hasattr(result, 'reasoning') else "Reasoning unavailable"
-                response = result.response if hasattr(result, 'response') else "Response unavailable"
-        else:
-            # Otherwise use the original multi-step approach
-            ret = await self.run(input=user_question)
-            end_time = datetime.datetime.now()
-            logger.info(f"Time taken for Multi-step MAPE-K: {end_time - start_time}")
-            # For traditional mode, we need to handle different result types
-            if isinstance(ret, ScaffoldingResultModel):
-                analysis = ret.plan_reasoning if hasattr(ret, 'plan_reasoning') else "Reasoning unavailable"
-                response = ret.response if hasattr(ret, 'response') else "Response unavailable"
-            else:
-                analysis = ret.reasoning if hasattr(ret, 'reasoning') else "Reasoning unavailable"
-                response = ret.response if hasattr(ret, 'response') else "Response unavailable"
-            
-        return analysis, response
+        # Return analysis and response to maintain compatibility with caller
+        return result.reasoning, result.response
 
 
-from llama_index.utils.workflow import (
-    draw_all_possible_flows,
-)
-
+# For testing/visualization purposes
 if __name__ == "__main__":
-    # Draw all
-    draw_all_possible_flows(MapeK2Component, filename="mapek_2comp_flow_all.html")
+    from llama_index.utils.workflow import draw_all_possible_flows
+    # Draw workflow diagram
+    draw_all_possible_flows(UnifiedMapeKAgent, filename="unified_mape_k_flow.html") 
