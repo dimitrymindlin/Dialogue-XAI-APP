@@ -156,6 +156,8 @@ class ExperimentHelper:
         instances_dict_new = {}
         instance_dicts = {comp: pd.DataFrame(data).to_dict('records')[0] for comp, data in instances_dict.items()}
         for instance_naming, instance_dict in instance_dicts.items():
+            if "label" in instance_dict:
+                del instance_dict["label"]
             class_probabilities = self.conversation.get_var("model_prob_predict").contents(
                 pd.DataFrame(instance_dict, index=[0]))
             predicted_label_index = np.argmax(class_probabilities)

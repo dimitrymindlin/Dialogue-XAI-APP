@@ -160,6 +160,9 @@ class DiverseInstances:
         diverse_instances_pandas_indices.remove(123)"""
 
         if save_to_cache:
-            with open(self.cache_location, 'wb') as file:
-                pkl.dump(self.diverse_instances, file)
+            self.save_diverse_instances(self.diverse_instances)
         return self.diverse_instances
+
+    def save_diverse_instances(self, diverse_instances):
+        with open(self.cache_location, 'wb') as file:
+            pkl.dump(diverse_instances, file)

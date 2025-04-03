@@ -434,7 +434,11 @@ class ExplainBot:
                                                                                     y_values=test_data_y,
                                                                                     submodular_pick=False)
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
-        diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
+        if isinstance(diverse_instance_ids, list) and all(isinstance(i, int) for i in diverse_instance_ids):
+            diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
+        else:
+            diverse_instances = diverse_instance_ids.copy()
+            diverse_instance_ids = [instance['id'] for instance in diverse_instances]
         app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")
 
         # Compute explanations for diverse instances
