@@ -547,6 +547,7 @@ class ExplainBot:
                 pdp_explainer.cache = {k: v for k, v in pdp_explainer.cache.items() if k != instance_id}
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
+        diverse_instances_explainer.save_diverse_instances(diverse_instances)
 
     def load_model(self, filepath: str):
         """Loads a model.
