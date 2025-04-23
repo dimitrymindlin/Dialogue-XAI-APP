@@ -24,7 +24,7 @@ ExplainBot.feature_ordering = ['Age', 'Education Level', 'Marital Status', 'Occu
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
-ExplainBot.use_llm_agent = "mape_k" # one of False, "simple", "mape_k", "o1"
+ExplainBot.use_llm_agent = "unified_mape_k" # one of False, "simple", "mape_k", "o1", "mape_k_2", "unified_mape_k"
 
 # Experiment Helper
 ExperimentHelper.actionable_features = ['Age', 'EducationLevel', 'MaritalStatus', 'Occupation', 'WeeklyWorkingHours', 'InvestmentOutcome']
@@ -66,7 +66,7 @@ Conversation.question_bank_path =  "./data/question_bank.csv"
 # Dataset description
 DatasetDescription.dataset_objective = "Predict whether an individual earns more than 50k a years or less."
 ## Dataset description for context for llm agent
-DatasetDescription.dataset_description = "Adult Census Income Dataset, commonly used for binary classification tasks in machine learning. The goal is to predict whether an individual’s income exceeds $50K/year based on demographic and employment-related features. It is based on US Census data and is often used to explore income distribution patterns, discrimination, or bias in predictive models."
+DatasetDescription.dataset_description = "Adult Census Income Dataset, commonly used for binary classification tasks in machine learning. The goal is to predict whether an individual's income exceeds $50K/year based on demographic and employment-related features. It is based on US Census data and is often used to explore income distribution patterns, discrimination, or bias in predictive models."
 DatasetDescription.model_description = "random forest model"
 DatasetDescription.user_study_objective = "guess the model's prediction for the shown individual"
 

@@ -225,6 +225,8 @@ class ExplainBot:
                 from llm_agents.mape_k_approach.mape_k_workflow_agent import MapeKXAIWorkflowAgent as Agent
             elif self.use_llm_agent == "mape_k_2":
                 from llm_agents.mape_k_2_components.mape_k_workflow_agent import MapeK2Component as Agent
+            elif self.use_llm_agent == "unified_mape_k":
+                from llm_agents.mape_k_2_components.unified_mape_k_agent import UnifiedMapeKAgent as Agent
             self.agent = Agent(feature_names=self.feature_ordering,
                                domain_description=self.conversation.describe.get_dataset_description(),
                                user_ml_knowledge=self.ml_knowledge,
