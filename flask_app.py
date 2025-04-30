@@ -520,11 +520,11 @@ if __name__ != '__main__':
     stream_handler.setLevel(logging.INFO)
     app.logger.addHandler(stream_handler)
     app.logger.setLevel(logging.INFO)
-    matplotlib.use('Agg')  
+    matplotlib.use('Agg')
 
 if __name__ == "__main__":
     # clean up storage file on restart
     app.logger.info(f"Launching app from config: {args.config}")
     matplotlib.use('Agg') 
     
-    app.run(debug=True, port=4555, host='0.0.0.0', use_reloader=False)
+    app.run(debug=True, port=5000, host='0.0.0.0', use_reloader=False)
