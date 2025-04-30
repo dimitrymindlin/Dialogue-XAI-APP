@@ -19,6 +19,8 @@ from llm_agents.mape_k_approach.monitor_component.monitor_prompt import get_moni
 from llm_agents.mape_k_approach.analyze_component.analyze_prompt import get_analyze_prompt_template, AnalyzeResult
 from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import get_plan_prompt_template, PlanResultModel, ChosenExplanationModel
 from llm_agents.mape_k_approach.execute_component.execute_prompt import get_execute_prompt_template, ExecuteResult
+# Import the new combined monitor-analyze model and prompt
+from llm_agents.mape_k_approach.monitor_analyze_combined import get_monitor_analyze_prompt_template, MonitorAnalyzeResultModel
 
 # Configure logging
 LOG_FOLDER = "mape-k-logs"
@@ -452,35 +454,68 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
             }
         }]
         
-        # Use the aclient instance with the updated API format
-        response = await aclient.chat.completions.create(
-            model=OPENAI_MODEL_NAME,
-            messages=messages,
-            functions=functions,
-            function_call={"name": "plan_result"}
-        )
-        
-        # Extract and parse the function call result - updated to match the new API format
-        function_call = response.choices[0].message.function_call
-        plan_result = PlanResultModel.parse_raw(function_call.arguments)
-        
-        end_time = datetime.datetime.now()
-        logger.info(f"Time taken for Plan: {end_time - start_time}")
-        logger.info(f"Plan result: {plan_result}.\n")
-        
-        # Update Explanation Plan
-        if len(plan_result.explanation_plan) > 0:
-            self.explanation_plan = plan_result.explanation_plan
-
-        # Add new explanations if any
-        if len(plan_result.new_explanations) > 0:
-            self.user_model.add_explanations_from_plan_result(plan_result.new_explanations)
+        try:
+            # Use the aclient instance with the updated API format
+            response = await aclient.chat.completions.create(
+                model=OPENAI_MODEL_NAME,
+                messages=messages,
+                functions=functions,
+                function_call={"name": "plan_result"}
+            )
             
-        # Update the 'plan' cell - use json() to properly serialize the Pydantic object
-        self.current_log_row["plan"] = plan_result.json()
-        update_last_log_row(self.current_log_row, self.log_file)
-        
-        return plan_result
+            # Extract the function call result
+            function_call = response.choices[0].message.function_call
+            function_args = json.loads(function_call.arguments)
+            
+            # Add default values for any missing dependencies and is_optional fields
+            for exp in function_args.get("new_explanations", []):
+                for step in exp.get("explanation_steps", []):
+                    if "dependencies" not in step:
+                        step["dependencies"] = []
+                    if "is_optional" not in step:
+                        step["is_optional"] = False
+            
+            # Convert back to JSON string
+            fixed_args = json.dumps(function_args)
+            
+            # Parse with the Pydantic model
+            plan_result = PlanResultModel.parse_raw(fixed_args)
+            
+            end_time = datetime.datetime.now()
+            logger.info(f"Time taken for Plan: {end_time - start_time}")
+            logger.info(f"Plan result: {plan_result}.\n")
+            
+            # Update Explanation Plan
+            if len(plan_result.explanation_plan) > 0:
+                self.explanation_plan = plan_result.explanation_plan
+
+            # Add new explanations if any
+            if len(plan_result.new_explanations) > 0:
+                self.user_model.add_explanations_from_plan_result(plan_result.new_explanations)
+                
+            # Update the 'plan' cell - use json() to properly serialize the Pydantic object
+            self.current_log_row["plan"] = plan_result.json()
+            update_last_log_row(self.current_log_row, self.log_file)
+            
+            return plan_result
+            
+        except Exception as e:
+            logger.error(f"Error in plan step: {str(e)}")
+            # Return a minimal valid plan result as fallback
+            fallback_plan = PlanResultModel(
+                reasoning="Error occurred during planning. Using fallback.",
+                new_explanations=[],
+                explanation_plan=[],
+                next_response=[{
+                    "reasoning": "Using fallback response due to error.",
+                    "explanation_name": "ErrorHandling",
+                    "step_name": "Fallback",
+                    "communication_goals": [{"goal": "Provide a general response to the user."}]
+                }]
+            )
+            self.current_log_row["plan"] = fallback_plan.json()
+            update_last_log_row(self.current_log_row, self.log_file)
+            return fallback_plan
 
     async def execute(self, user_message, plan_result):
         """Execute step: Determining realization of explanation moves, performing selected action"""
@@ -592,31 +627,131 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
 
         return execute_result
 
-    # Main method to run the full MAPE-K workflow
+    async def monitor_analyze(self, user_message):
+        """Combined Monitor and Analyze steps: Process the user's cognitive state in a single API call"""
+        
+        self.current_log_row = {
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "experiment_id": self.experiment_id,
+            "datapoint_count": self.datapoint_count,
+            "user_message": user_message,
+            "monitor": "",
+            "analyze": "",
+            "plan": "",
+            "execute": "",
+            "user_model": ""
+        }
+
+        append_new_log_row(self.current_log_row, self.log_file)
+
+        # Create the combined prompt
+        monitor_analyze_prompt = get_monitor_analyze_prompt_template().format(
+            domain_description=self.domain_description,
+            feature_names=self.feature_names,
+            instance=self.instance,
+            predicted_class_name=self.predicted_class_name,
+            chat_history=self.chat_history,
+            understanding_displays=self.understanding_displays.as_text(),
+            modes_of_engagement=self.modes_of_engagement.as_text(),
+            user_model=self.user_model.get_state_summary(as_dict=False),
+            last_shown_explanations=self.last_shown_explanations,
+            user_message=user_message,
+            explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
+        )
+
+        start_time = datetime.datetime.now()
+        
+        # Use OpenAI API directly
+        messages = [
+            {"role": "system", "content": "You are an AI agent analyzing user understanding. Perform both monitor and analyze tasks."},
+            {"role": "user", "content": monitor_analyze_prompt}
+        ]
+        
+        # Define the function calling format for structured output
+        functions = [{
+            "name": "monitor_analyze_result",
+            "description": "Return the combined monitoring and analysis results",
+            "parameters": MonitorAnalyzeResultModel.schema()
+        }]
+        
+        response = await aclient.chat.completions.create(
+            model=OPENAI_MODEL_NAME,  # Use the full model for the combined call
+            messages=messages,
+            functions=functions,
+            function_call={"name": "monitor_analyze_result"}
+        )
+        
+        # Extract and parse the function call result
+        function_call = response.choices[0].message.function_call
+        combined_result = MonitorAnalyzeResultModel.parse_raw(function_call.arguments)
+        
+        end_time = datetime.datetime.now()
+        logger.info(f"Time taken for Combined Monitor-Analyze: {end_time - start_time}")
+        logger.info(f"Combined Monitor-Analyze result: {combined_result}.\n")
+        
+        # Update the user model based on monitor results
+        if combined_result.mode_of_engagement != "":
+            self.user_model.cognitive_state = self.modes_of_engagement.get_differentiating_description(
+                combined_result.mode_of_engagement)
+
+        if len(combined_result.explicit_understanding_displays) > 0:
+            self.user_model.explicit_understanding_signals = combined_result.explicit_understanding_displays
+
+        # Update the user model based on analyze results
+        for change_entry in combined_result.model_changes:
+            try:
+                exp = change_entry["explanation_name"]
+                change = change_entry["state"]
+                step = change_entry["step"]
+                self.user_model.update_explanation_step_state(exp, step, change)
+            except KeyError:
+                logger.error(f"Invalid change entry: {change_entry}")
+                continue
+        
+        # Create separate results for logging purposes
+        monitor_result = MonitorResultModel(
+            reasoning=combined_result.reasoning,
+            explicit_understanding_displays=combined_result.explicit_understanding_displays,
+            mode_of_engagement=combined_result.mode_of_engagement
+        )
+        
+        analyze_result = AnalyzeResult(
+            reasoning=combined_result.analysis_reasoning,
+            model_changes=combined_result.model_changes
+        )
+        
+        # Update the log cells
+        self.current_log_row["monitor"] = monitor_result.json()
+        self.current_log_row["analyze"] = analyze_result.json()
+        update_last_log_row(self.current_log_row, self.log_file)
+        
+        # Log new user model
+        logger.info(f"User model after combined monitor-analyze: {self.user_model.get_state_summary(as_dict=True)}.\n")
+        
+        return monitor_result, analyze_result
+
+    # Main method to run the full MAPE-K workflow using the combined monitor-analyze step
     async def answer_user_question(self, user_question):
-        """Run the full MAPE-K workflow to answer a user question"""
+        """Run the optimized MAPE-K workflow to answer a user question, combining monitor and analyze steps"""
         start_time = datetime.datetime.now()
 
         # Append user message to chat history at the beginning of the workflow
         # This ensures all components have access to the updated chat history
         self.append_to_history("user", user_question)
 
-        # Step 1: Monitor
-        monitor_result = await self.monitor(user_question)
-
-        # Step 2: Analyze
-        analyze_result = await self.analyze(user_message=user_question, monitor_result=monitor_result)
-
-        # Step 3: Plan
-        plan_result = await self.plan(user_message=user_question)
-
-        # Step 4: Execute
-        execute_result = await self.execute(user_message=user_question, plan_result=plan_result)
-
+        # Step 1: Combined Monitor and Analyze in a single API call
+        monitor_result, analyze_result = await self.monitor_analyze(user_question)
+        
+        # Step 2: Plan
+        plan_result = await self.plan(user_question)
+        
+        # Step 3: Execute
+        execute_result = await self.execute(user_question, plan_result)
+        
         end_time = datetime.datetime.now()
-        logger.info(f"Time taken for full MAPE-K Loop: {end_time - start_time}")
-
+        logger.info(f"Time taken for optimized MAPE-K Loop with combined Monitor-Analyze: {end_time - start_time}")
+        
         analysis = execute_result.reasoning
         response = execute_result.response
-
+        
         return analysis, response
