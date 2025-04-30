@@ -76,14 +76,13 @@ def init():
     if not user_id:
         return jsonify({"error": "No user_id provided"}), 400
 
-    # API isteği ile gelen agent_type değeri varsa, gin.bind_parameter ile geçici olarak değiştir
+
     agent_type = request.args.get('use_llm_agent', None)
     if agent_type and agent_type != 'false':
         gin.bind_parameter("ExplainBot.use_llm_agent", agent_type)
     elif agent_type == 'false':
         gin.bind_parameter("ExplainBot.use_llm_agent", False)
-        
-    # Create the bot - Parametreler Gin config'ten otomatik olarak enjekte edilecek
+
     bot = ExplainBot(study_group=study_group,
                     ml_knowledge=ml_knowledge,
                     user_id=user_id)

@@ -6,10 +6,10 @@ from llama_index.llms.openai import OpenAI
 from llm_agents.mape_k_2_components.unified_mape_k_agent import UnifiedMapeKAgent
 from create_experiment_data.instance_datapoint import InstanceDatapoint
 
-# API anahtarlarını yükle
+
 load_dotenv()
 
-# Örnek veri
+
 INSTANCE_DATA = {
     "age": 38,
     "workclass": "Private", 
@@ -56,10 +56,10 @@ async def main():
     """Basit bir test çalıştır"""
     print("Unified MAPE-K Agent Testi Başlıyor...")
     
-    # LLM modelini başlat
+ 
     llm = OpenAI(model=os.getenv('OPENAI_MODEL_NAME', 'gpt-3.5-turbo'))
     
-    # Instance datapoint oluştur
+ 
     instance = InstanceDatapoint(
         instance_id=1,
         instance_as_dict=INSTANCE_DATA,
@@ -69,10 +69,10 @@ async def main():
         instance_type="test"
     )
     
-    # Görüntülenebilir özellikleri ayarla
+  
     instance.displayable_features = INSTANCE_DATA
     
-    # Unified agent'ı başlat
+   
     agent = UnifiedMapeKAgent(
         llm=llm,
         feature_names=FEATURE_NAMES,
@@ -80,8 +80,7 @@ async def main():
         user_ml_knowledge="Başlangıç",
         experiment_id="basit_test"
     )
-    
-    # Datapoint'i başlat
+ 
     agent.initialize_new_datapoint(
         instance=instance,
         xai_explanations=XAI_EXPLANATIONS,
@@ -91,7 +90,7 @@ async def main():
         datapoint_count=0
     )
     
-    # Basit soru testi
+
     print("\nİlk soru testi:")
     analiz, cevap = await agent.answer_user_question("Can you give me some example about the project?")
     
