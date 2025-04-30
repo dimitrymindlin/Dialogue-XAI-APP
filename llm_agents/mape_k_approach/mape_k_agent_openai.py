@@ -309,10 +309,10 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
 
     async def plan(self, user_message):
         """Plan step: General adaptation plans, choosing explanation strategy and moves"""
-
+        
         # Get last explanation if available
         last_exp = self.last_shown_explanations[-1] if len(self.last_shown_explanations) > 0 else None
-
+        
         # Create the plan prompt
         plan_prompt = get_plan_prompt_template().format(
             domain_description=self.domain_description,
@@ -326,35 +326,148 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
             previous_plan=self.explanation_plan,
             last_explanation=last_exp
         )
-
+        
         start_time = datetime.datetime.now()
-
+        
         # Use OpenAI API directly
         messages = [
             {"role": "system", "content": "You are an AI planning agent. Create a plan for explaining concepts to the user."},
             {"role": "user", "content": plan_prompt}
         ]
-
-        # Define the function calling format for structured output
+        
+        # Define the function calling format for structured output, using nested schemas for the ExplanationTarget model
         functions = [{
             "name": "plan_result",
             "description": "Return the planning results",
-            "parameters": PlanResultModel.schema()
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "The reasoning behind the decision for new explanations and which explanations to include in the next steps."
+                    },
+                    "new_explanations": {
+                        "type": "array",
+                        "description": "List of new explanations to be added to the explanation plan.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "explanation_name": {
+                                    "type": "string",
+                                    "description": "The name of the new explanation concept."
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "description": "Description of the new explanation concept."
+                                },
+                                "explanation_steps": {
+                                    "type": "array",
+                                    "description": "List of steps for the new explanation concept.",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "step_name": {
+                                                "type": "string",
+                                                "description": "The name of the explanation step."
+                                            },
+                                            "description": {
+                                                "type": "string",
+                                                "description": "Description of the explanation step."
+                                            },
+                                            "dependencies": {
+                                                "type": "array",
+                                                "description": "List of dependencies for the explanation step.",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "is_optional": {
+                                                "type": "boolean",
+                                                "description": "Whether the explanation step is optional or not."
+                                            }
+                                        },
+                                        "required": ["step_name", "description", "dependencies", "is_optional"]
+                                    }
+                                }
+                            },
+                            "required": ["explanation_name", "description", "explanation_steps"]
+                        }
+                    },
+                    "explanation_plan": {
+                        "type": "array",
+                        "description": "List of explanations or scaffolding indicating long term steps to explain to the user.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "explanation_name": {
+                                    "type": "string",
+                                    "description": "The name of the explanation concept."
+                                },
+                                "step": {
+                                    "type": "string", 
+                                    "description": "The name or label of the step of the explanation."
+                                }
+                            },
+                            "required": ["explanation_name", "step"]
+                        }
+                    },
+                    "next_response": {
+                        "type": "array",
+                        "description": "A list of explanations and steps to include in the next response to answer the user's question.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "reasoning": {
+                                    "type": "string",
+                                    "description": "The reasoning behind the choice of the current explanandum."
+                                },
+                                "explanation_name": {
+                                    "type": "string",
+                                    "description": "The name of the current explanation concept."
+                                },
+                                "step_name": {
+                                    "type": "string",
+                                    "description": "Step name that is the current explanandum."
+                                },
+                                "communication_goals": {
+                                    "type": "array",
+                                    "description": "List of atomic goals while communicating the complete explanation to the user",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "goal": {
+                                                "type": "string",
+                                                "description": "Each goal should focus on a specific aspect"
+                                            }
+                                        },
+                                        "required": ["goal"]
+                                    }
+                                }
+                            },
+                            "required": ["reasoning", "explanation_name", "step_name", "communication_goals"]
+                        }
+                    }
+                },
+                "required": ["reasoning", "new_explanations", "explanation_plan", "next_response"]
+            }
         }]
-
-        response = await aclient.chat.completions.create(model=OPENAI_MODEL_NAME,
-        messages=messages,
-        functions=functions,
-        function_call={"name": "plan_result"})
-
-        # Extract and parse the function call result
+        
+        # Use the aclient instance with the updated API format
+        response = await aclient.chat.completions.create(
+            model=OPENAI_MODEL_NAME,
+            messages=messages,
+            functions=functions,
+            function_call={"name": "plan_result"}
+        )
+        
+        # Extract and parse the function call result - updated to match the new API format
         function_call = response.choices[0].message.function_call
         plan_result = PlanResultModel.parse_raw(function_call.arguments)
-
+        
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Plan: {end_time - start_time}")
         logger.info(f"Plan result: {plan_result}.\n")
-
+        
         # Update Explanation Plan
         if len(plan_result.explanation_plan) > 0:
             self.explanation_plan = plan_result.explanation_plan
@@ -362,11 +475,11 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
         # Add new explanations if any
         if len(plan_result.new_explanations) > 0:
             self.user_model.add_explanations_from_plan_result(plan_result.new_explanations)
-
+            
         # Update the 'plan' cell - use json() to properly serialize the Pydantic object
         self.current_log_row["plan"] = plan_result.json()
         update_last_log_row(self.current_log_row, self.log_file)
-
+        
         return plan_result
 
     async def execute(self, user_message, plan_result):
@@ -407,17 +520,37 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
             {"role": "user", "content": execute_prompt}
         ]
 
-        # Define the function calling format for structured output
+        # Define the function calling format for structured output using explicit schema
         functions = [{
             "name": "execute_result",
             "description": "Return the execution results",
-            "parameters": ExecuteResult.schema()
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "The reasoning behind the response generation."
+                    },
+                    "response": {
+                        "type": "string",
+                        "description": "The response to the user's question about the shown instance and prediction."
+                    },
+                    "success": {
+                        "type": "boolean",
+                        "description": "Whether the execution was successful.",
+                        "default": True
+                    }
+                },
+                "required": ["reasoning", "response"]
+            }
         }]
 
-        response = await aclient.chat.completions.create(model=OPENAI_MODEL_NAME,
-        messages=messages,
-        functions=functions,
-        function_call={"name": "execute_result"})
+        response = await aclient.chat.completions.create(
+            model=OPENAI_MODEL_NAME,
+            messages=messages,
+            functions=functions,
+            function_call={"name": "execute_result"}
+        )
 
         # Extract and parse the function call result
         function_call = response.choices[0].message.function_call
@@ -472,13 +605,13 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
         monitor_result = await self.monitor(user_question)
 
         # Step 2: Analyze
-        analyze_result = await self.analyze(user_question, monitor_result)
+        analyze_result = await self.analyze(user_message=user_question, monitor_result=monitor_result)
 
         # Step 3: Plan
-        plan_result = await self.plan(user_question)
+        plan_result = await self.plan(user_message=user_question)
 
         # Step 4: Execute
-        execute_result = await self.execute(user_question, plan_result)
+        execute_result = await self.execute(user_message=user_question, plan_result=plan_result)
 
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for full MAPE-K Loop: {end_time - start_time}")
