@@ -1,4 +1,5 @@
 import json
+import os
 
 from data.response_templates.feature_display_names import FeatureDisplayNames
 
@@ -7,12 +8,29 @@ class TemplateManager:
     def __init__(self,
                  conversation,
                  encoded_col_mapping_path=None,
-                 categorical_mapping=None):
+                 categorical_mapping=None,
+                 feature_name_mapping_path=None):
         self.conversation = conversation
-        self.feature_display_names = FeatureDisplayNames(self.conversation)
+        self.feature_name_mapping = self._load_feature_name_mapping(feature_name_mapping_path)
+        self.feature_display_names = FeatureDisplayNames(self.conversation, feature_name_mapping=self.feature_name_mapping)
         self.encoded_col_mapping = self._load_label_encoded_feature_dict(encoded_col_mapping_path)
         self.categorical_mapping = categorical_mapping
         self.rounding_precision = 2
+
+    def _load_feature_name_mapping(self, feature_name_mapping_path):
+        """
+        Load the mapping between original and renamed feature names
+        :param feature_name_mapping_path: path to the feature name mapping JSON file
+        :return: dictionary with original_to_renamed and renamed_to_original mappings
+        """
+        if feature_name_mapping_path is None or not os.path.exists(feature_name_mapping_path):
+            return None
+        try:
+            with open(feature_name_mapping_path, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Warning: Could not load feature name mapping from {feature_name_mapping_path}: {e}")
+            return None
 
     def _load_label_encoded_feature_dict(self, encoded_col_mapping_path):
         """
@@ -52,7 +70,7 @@ class TemplateManager:
         :param feature_name: feature name
         :return: display feature name
         """
-        return self.feature_display_names.get_by_name(feature_name)
+        return self.feature_display_names.get_display_name(feature_name)
 
     def decode_numeric_columns_to_names(self, df):
         """
@@ -70,7 +88,8 @@ class TemplateManager:
 
     def apply_categorical_mapping(self, instance, is_dataframe=False):
         """
-        Apply categorical mapping to instances.
+        Apply categorical mapping to instances, using the mapping provided in the categorical_mapping.
+        This replaces numeric encoded values with their categorical string values.
 
         Args:
             instance (dict or DataFrame): The instance to apply categorical mapping on.
@@ -86,45 +105,54 @@ class TemplateManager:
                 return instance
 
         if is_dataframe:
-            # Iterate only over columns that have a categorical mapping.
-            for column_index, column_mapping in self.categorical_mapping.items():
-                column_name = instance.columns[column_index]
-                old_values_copy = int(instance[column_name].values)
-                if column_name in instance.columns:
-                    # Prepare a mapping dictionary for the current column.
-                    mapping_dict = {i: category for i, category in enumerate(column_mapping)}
-                    # Replace the entire column values based on mapping_dict.
-                    instance[column_name] = instance[column_name].replace(mapping_dict)
-                    if old_values_copy == instance[column_name].values[0]:
-                        raise ValueError(f"Column {column_name} was not replaced with categorical mapping.")
+            # Handle DataFrame instances
+            for column_index_str, column_mapping in self.categorical_mapping.items():
+                try:
+                    column_index = int(column_index_str)
+                    if column_index < len(instance.columns):
+                        column_name = instance.columns[column_index]
+                        if column_name in instance.columns:
+                            # Create a mapping dictionary for this column
+                            mapping_dict = {i: category for i, category in enumerate(column_mapping)}
+                            # Replace values using the mapping
+                            instance[column_name] = instance[column_name].map(lambda x: mapping_dict.get(int(x), x))
+                except (ValueError, IndexError) as e:
+                    print(f"Warning: Error mapping column {column_index_str}: {e}")
         else:
-            for i, (feature_name, val) in enumerate(instance.items()):
+            # Handle dictionary instances
+            # We need to map features by their position in the instance, not necessarily by direct key lookup
+            feature_names = list(instance.keys())
+            
+            for i, feature_name in enumerate(feature_names):
                 index_as_str = str(i)
                 if index_as_str in self.categorical_mapping:
                     mapping = self.categorical_mapping[index_as_str]
-                    if isinstance(val, dict):
+                    value = instance[feature_name]
+                    
+                    if isinstance(value, dict):
+                        # Handle case where value is a dict (e.g., {'current': 1, 'old': 0})
                         for key in ['current', 'old']:
-                            if key in val:
+                            if key in value:
                                 try:
-                                    val[key] = mapping[int(val[key])]
-                                except KeyError:
-                                    raise ValueError(
-                                        f"Value {val[key]} not found in categorical mapping for feature {feature_name} under key '{key}'."
-                                    )
-                        instance[feature_name] = val
+                                    # Map the numeric value to its categorical equivalent
+                                    value[key] = mapping[int(value[key])]
+                                except (KeyError, ValueError):
+                                    print(f"Warning: Value {value[key]} not found in mapping for feature {feature_name} under key '{key}'.")
+                        instance[feature_name] = value
                     else:
                         try:
-                            instance[feature_name] = mapping[int(val)]
-                        except KeyError:
-                            raise ValueError(
-                                f"Value {int(val)} not found in categorical mapping for feature {feature_name}."
-                            )
+                            # Map the numeric value to its categorical equivalent
+                            mapped_value = mapping[int(value)]
+                            instance[feature_name] = mapped_value
+                        except (KeyError, ValueError):
+                            # If mapping fails, leave the value as is
+                            print(f"Warning: Value {value} not found in mapping for feature {feature_name}.")
 
         return instance
 
     def replace_feature_names_by_display_names(self, instance):
         """
-        Replace feature names by display names in instance.
+        Replace feature names by display names in instance, preventing duplicate entries.
 
         Args:
             instance (dict): The instance to replace feature names by display names.
@@ -132,14 +160,46 @@ class TemplateManager:
         Returns:
             The instance with replaced feature names by display names.
         """
-        keys = list(instance.keys())
-        for feature_name in keys:
-            feature_value = instance[feature_name]
+        # Create a new dictionary to hold the display names and values
+        display_instance = {}
+        processed_display_names = set()  # Track display names we've already seen
+        
+        # Get a list of features in the preferred display order
+        feature_ordering = None
+        try:
+            feature_ordering = self.conversation.get_var("feature_ordering")
+        except:
+            feature_ordering = []
+            
+        # Process features in the order specified by feature_ordering if available
+        if feature_ordering:
+            # First process features in the specified order
+            for display_name in feature_ordering:
+                # Find the original feature name that maps to this display name
+                found = False
+                for feature_name in instance.keys():
+                    if self.get_feature_display_name_by_name(feature_name) == display_name:
+                        display_instance[display_name] = instance[feature_name]
+                        processed_display_names.add(display_name)
+                        found = True
+                        break
+                
+                if not found:
+                    # This can happen if feature_ordering includes a feature not in this instance
+                    continue
+        
+        # Process any remaining features not in the ordering
+        for feature_name in instance.keys():
             display_name = self.get_feature_display_name_by_name(feature_name)
-            if display_name != feature_name:  # Avoids deleting a col when name is the same as display name
-                instance[display_name] = feature_value
-                del instance[feature_name]
-        return instance
+            
+            # Skip if we've already processed this display name
+            if display_name in processed_display_names:
+                continue
+                
+            display_instance[display_name] = instance[feature_name]
+            processed_display_names.add(display_name)
+            
+        return display_instance
 
     def get_feature_display_value(self, feature_value):
         """

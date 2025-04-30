@@ -15,20 +15,18 @@ ExplainBot.seed = 0
 ExplainBot.dataset_index_column = 0
 ExplainBot.instance_type_naming = "Person"
 ExplainBot.target_variable_name = "Income"
-ExplainBot.categorical_features = ['MaritalStatus', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
+ExplainBot.categorical_features = ['Marital.status', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
 ExplainBot.ordinary_features = ['InvestmentOutcome','EducationLevel', 'WorkLifeBalance']
-ExplainBot.numerical_features = ['Age', 'WeeklyWorkingHours']
+ExplainBot.numerical_features = ['Age', 'Hours.per.week']
 ExplainBot.remove_underscores = True
 ExplainBot.actionable_features = ["InvestmentOutcome", "EducationLevel", "Occupation"]
-ExplainBot.feature_ordering = ['Age', 'Education Level', 'Marital Status', 'Occupation', 'Weekly Working Hours', 'Work Life Balance', 'Investment Outcome']
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
 ExplainBot.use_llm_agent = "mape_k" # one of False, "simple", "mape_k", "o1"
 
 # Experiment Helper
-ExperimentHelper.actionable_features = ['Age', 'EducationLevel', 'MaritalStatus', 'Occupation', 'WeeklyWorkingHours', 'InvestmentOutcome']
-
+ExperimentHelper.actionable_features = ['Age', 'EducationLevel', 'Marital.status', 'Occupation', 'Hours.per.week', 'InvestmentOutcome']
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
@@ -45,7 +43,7 @@ TabularDice.final_cfe_amount = 3
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"
 DiverseInstances.instance_amount = 15
-DiverseInstances.dataset_name = "adult"
+
 
 # Test Instances
 TestInstances.cache_location = "./cache/adult-test-instances.pkl"
@@ -64,6 +62,7 @@ Conversation.class_names = {0: "under 50k", 1: "over 50k"}
 Conversation.question_bank_path =  "./data/question_bank.csv"
 
 # Dataset description
+DatasetDescription.dataset_name = "adult"
 DatasetDescription.dataset_objective = "Predict whether an individual earns more than 50k a years or less."
 ## Dataset description for context for llm agent
 DatasetDescription.dataset_description = "Adult Census Income Dataset, commonly used for binary classification tasks in machine learning. The goal is to predict whether an individual’s income exceeds $50K/year based on demographic and employment-related features. It is based on US Census data and is often used to explore income distribution patterns, discrimination, or bias in predictive models."
@@ -83,13 +82,13 @@ ExplainBot.feature_tooltip_mapping = {
 
 # Feature Units
 ExplainBot.feature_units_mapping = {
-    "age": "years",
-    "education": "",
-    "gender": "",
-    "weekly working hours": "hours",
-    "marital status": "",
-    "work life balance": "",
-    "occupation": "",
-    "workclass": "",
-    "investment outcome": ""
+    "Age": "years",
+    "Education": "",
+    "Gender": "",
+    "Weekly Working Hours": "hours",
+    "Marital Status": "",
+    "Work Life Balance": "",
+    "Occupation": "",
+    "Workclass": "",
+    "Investment Outcome": ""
 }

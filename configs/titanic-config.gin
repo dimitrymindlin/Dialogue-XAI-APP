@@ -1,63 +1,68 @@
 # ExplainBot Params
-# Name of the parsing model: {ucinlp/german-t5-small, ucinlp/german-t5-large}
-ExplainBot.parsing_model_name = "nearest-neighbor"
-
-# Set skip_prompts to true for quicker startup for finetuned models
-# make sure to set to false using few-shot models
-ExplainBot.skip_prompts = True
-
-ExplainBot.t5_config = "./parsing/t5/gin_configs/t5-large.gin"
-ExplainBot.seed = 0
-
-ExplainBot.model_file_path = "./data/titanic_model_short_grad_tree.pkl"
-ExplainBot.background_dataset_file_path = "./data/titanic_train.csv"
-ExplainBot.dataset_file_path = "./data/titanic_test.csv"
+# User provided prediction model file path
+ExplainBot.model_file_path = "./data/titanic/titanic_model_rf.pkl"
+ExplainBot.encoded_col_mapping_path = "./data/titanic/encoded_col_mapping.json"
+ExplainBot.categorical_mapping_path = "./data/titanic/categorical_mapping.json"
+ExplainBot.feature_name_mapping_path = "./data/titanic/feature_name_mapping.json"
+ExplainBot.background_dataset_file_path = "./data/titanic/titanic_train.csv"
+ExplainBot.dataset_file_path = "./data/titanic/titanic_test.csv"
 
 ExplainBot.name = "titanic"
 
+# Seed
+ExplainBot.seed = 0
+
+# Dataset feature information
 ExplainBot.dataset_index_column = 0
+ExplainBot.instance_type_naming = "Passenger"
 ExplainBot.target_variable_name = "Survived"
-# ExplainBot.categorical_features = ["gender", "foreignworker", "single", "hastelephone", "checkingaccountbalancegreaterorequalto0", "checkingaccountbalancegreaterorequalthan200", "savingsaccountbalancegreaterorequalthan200", "savingsaccountbalancegreaterorequalthan500", "missedpayments", "nocurrentloan", "criticalaccountorloanselsewhere", "otherloansatbank", "otherloansatstore", "hascoapplicant", "hasguarantor", "ownshouse", "rentshouse", "unemployed", "yearsatcurrentjoblessthan1", "yearsatcurrentjobgreaterorequalthan4", "jobclassisskilled"]
-# ExplainBot.numerical_features = ["age", "loanduration", "loanamount", "yearsatcurrenthome", "loanrateaspercentofincome", "numberofotherloansatbank", "numberofliableindividuals", 'loanpurposebusiness', 'loanpurposeeducation', 'loanpurposeelectronics', 'loanpurposefurniture', 'loanpurposehomeappliances', 'loanpurposenewcar', 'loanpurposeother', 'loanpurposerepairs', 'loanpurposeretraining', 'loanpurposeusedcar']
-ExplainBot.categorical_features = ['Age', 'Sex', 'Embarked', 'Title', 'Fare']
+ExplainBot.categorical_features = ['Age', 'Sex', 'Embarked', 'Fare', 'Title']
+ExplainBot.ordinary_features = ['Age', 'Fare', 'Pclass']
 ExplainBot.numerical_features = ['SibSp', 'Parch']
 ExplainBot.remove_underscores = True
-ExplainBot.categorical_mapping_path = "./data/titanic_column_id_to_values_mapping.json"
+ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
+ExplainBot.use_active_dialogue_manager = False
+ExplainBot.use_static_followup = True
+ExplainBot.use_llm_agent = "mape_k_openai" # one of False, "simple", "mape_k", "o1", "mape_k_openai"
 
-ExplainBot.prompt_metric = "cosine"
-ExplainBot.prompt_ordering = "ascending"
-
-# Prompt params
-Prompts.prompt_cache_size = 1_000_000
-Prompts.prompt_cache_location = "./cache/titanic-prompts.pkl"
-Prompts.max_values_per_feature = 2
-Prompts.sentence_transformer_model_name = "all-mpnet-base-v2"
-Prompts.prompt_folder = "./explain/prompts"
-
-Prompts.num_per_knn_prompt_template = 1
-Prompts.num_prompt_template = 7
+# Experiment Helper - update to use original feature names
+ExperimentHelper.actionable_features = ['Age', 'Sex', 'Embarked', 'Fare', 'Title', 'SibSp', 'Parch', 'Pclass']
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
 
 # MegaExplainer Params
-MegaExplainer.cache_location = "./cache/titanic-mega-explainer-tabular-logistic-regression.pkl"
-MegaExplainer.use_selection = True
+MegaExplainer.cache_location = "./cache/titanic-mega-explainer-tabular.pkl"
+MegaExplainer.use_selection = False
+MegaExplainer.use_tree_shap = True
 
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/titanic-dice-tabular.pkl"
+TabularDice.final_cfe_amount = 3
+
+# Diverse Instances
+DiverseInstances.cache_location = "./cache/titanic-diverse-instances.pkl"
+DiverseInstances.instance_amount = 15
+
+# Test Instances
+TestInstances.cache_location = "./cache/titanic-test-instances.pkl"
+TestInstances.max_features_to_vary = 2
+TestInstances.instance_amount = 10
+
+# Ceteris Paribus
+CeterisParibus.cache_location = "./cache/titanic-ceteris-paribus.pkl"
+PdpExplanation.cache_location = "./cache/titanic-pdp.pkl"
 
 # Tabular Anchor Params
 TabularAnchor.cache_location = "./cache/titanic-anchor-tabular.pkl"
 
-# Diverse Instances
-DiverseInstances.cache_location = "./cache/titanic-diverse-instances.pkl"
-
 # Conversation params
 Conversation.class_names = {0: "died", 1: "survived"}
-Conversation.question_bank_path =  "./data/question_bank.csv"
+Conversation.question_bank_path = "./data/question_bank.csv"
 
 # Dataset description
-DatasetDescription.dataset_objective = "predict whether someone survived the titanic or not"
-DatasetDescription.dataset_description = "titanic dataset"
-DatasetDescription.model_description = "gradient boosted tree"
+DatasetDescription.dataset_name = "titanic"
+DatasetDescription.dataset_objective = "predict whether a passenger survived the sinking of the Titanic or not"
+DatasetDescription.dataset_description = "Titanic dataset containing passenger information from the ill-fated maiden voyage of the RMS Titanic in 1912. The data includes demographics and passenger information such as age, gender, ticket class, and survival status."
+DatasetDescription.model_description = "random forest model"
+DatasetDescription.user_study_objective = "guess the model's prediction for the shown passenger"

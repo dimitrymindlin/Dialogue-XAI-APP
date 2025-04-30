@@ -78,11 +78,9 @@ class ExplainBot:
                  feature_definitions: dict = None,
                  skip_prompts: bool = False,
                  categorical_mapping_path: str = None,
-                 feature_tooltip_mapping=None,
-                 actionable_features=None,
                  instance_type_naming: str = "instance",
-                 feature_units_mapping=None,
                  encoded_col_mapping_path: dict = None,
+                 feature_name_mapping_path: str = None,
                  feature_ordering: List[str] = None,
                  use_selection: bool = False,
                  use_intent_recognition: bool = False,
@@ -121,13 +119,12 @@ class ExplainBot:
             skip_prompts: Whether to skip prompt generation. This is mostly useful for running fine-tuned
                           models where generating prompts is not necessary.
             categorical_mapping_path: Path to json mapping for each col that assigns a categorical var to an int.
-            feature_tooltip_mapping: A mapping from feature names to tooltips. This is used to display tooltips
-                                        in the UI.
             actionable_features: A list of features that can be changed (actionable features)
             feature_units_mapping: A mapping from feature names to units. This is used to display units in the UI.
             instance_type_naming: The naming of the instance type. This is used to display the instance type such as
                                     "person" or "house" in the UI.
             encoded_col_mapping_path: Path to the encoded column mapping file.
+            feature_name_mapping_path: Path to the feature name mapping file.
         """
 
         # Set seeds
@@ -145,11 +142,9 @@ class ExplainBot:
         self.categorical_features = categorical_features
         self.ordinary_features = ordinary_features
         self.numerical_features = numerical_features
-        self.feature_tooltip_mapping = feature_tooltip_mapping
-        self.feature_units_mapping = feature_units_mapping
-        self.actionable_features = actionable_features
         self.instance_type_naming = instance_type_naming
         self.encoded_col_mapping_path = encoded_col_mapping_path
+        self.feature_name_mapping_path = feature_name_mapping_path
         self.feature_ordering = feature_ordering
         self.use_selection = use_selection
         self.use_intent_recognition = use_intent_recognition
@@ -234,7 +229,8 @@ class ExplainBot:
         # Load Template Manager
         template_manager = TemplateManager(self.conversation,
                                            encoded_col_mapping_path=encoded_col_mapping_path,
-                                           categorical_mapping=categorical_mapping)
+                                           categorical_mapping=categorical_mapping,
+                                           feature_name_mapping_path=self.feature_name_mapping_path)
         self.conversation.add_var('template_manager', template_manager, 'template_manager')
 
         # Load Experiment Helper
@@ -323,13 +319,15 @@ class ExplainBot:
         """
         Returns the feature tooltips for the current dataset.
         """
-        return self.feature_tooltip_mapping
+        template_manager = self.conversation.get_var("template_manager").contents
+        return template_manager.feature_display_names.feature_tooltips
 
     def get_feature_units(self):
         """
         Returns the feature units for the current dataset.
         """
-        return self.feature_units_mapping
+        template_manager = self.conversation.get_var("template_manager").contents
+        return template_manager.feature_display_names.feature_units
 
     def get_feature_names(self):
         template_manager = self.conversation.get_var("template_manager").contents
@@ -338,10 +336,10 @@ class ExplainBot:
         original_feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
 
         # Sort
-        feature_names_ordering = [feature.replace(" ", "") for feature in
-                                  self.feature_ordering]  # From display names to feature names
         if self.feature_ordering is not None:
             # Sort feature names by feature_ordering
+            feature_names_ordering = [feature.replace(" ", "") for feature in
+                                      self.feature_ordering]  # From display names to feature names
             feature_names = sorted(feature_names, key=lambda k: feature_names_ordering)
         else:
             feature_names = sorted(feature_names)
@@ -428,7 +426,9 @@ class ExplainBot:
             lime_for_submodular = mega_explainer.mega_explainer.explanation_methods['lime_0.75']
         else:
             lime_for_submodular = None
-        diverse_instances_explainer = DiverseInstances(lime_explainer=lime_for_submodular)
+        diverse_instances_explainer = DiverseInstances(
+            dataset_name=self.conversation.describe.dataset_name,
+            lime_explainer=lime_for_submodular)
         diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=test_data,
                                                                                     model=model,
                                                                                     y_values=test_data_y,
@@ -502,8 +502,7 @@ class ExplainBot:
                                        feature_names=list(test_data.columns),
                                        categorical_features=self.categorical_features,
                                        numerical_features=self.numerical_features,
-                                       categorical_mapping=self.categorical_mapping
-                                       )
+                                       categorical_mapping=self.categorical_mapping)
         pdp_explainer.get_explanations()
         self.conversation.add_var('pdp', pdp_explainer, 'explanation')
 
@@ -514,7 +513,7 @@ class ExplainBot:
                                                                   feature_names=list(background_ds_x.columns),
                                                                   rounding_precision=self.conversation.rounding_precision,
                                                                   categorical_mapping=self.categorical_mapping,
-                                                                  feature_units=self.feature_units_mapping)
+                                                                  feature_units=self.get_feature_units())
         self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
         # Add all the explanations to the conversation
@@ -527,7 +526,8 @@ class ExplainBot:
         test_instance_explainer = TestInstances(test_data, model, mega_explainer,
                                                 self.conversation.get_var("experiment_helper").contents,
                                                 diverse_instance_ids=diverse_instance_ids,
-                                                actionable_features=self.actionable_features)
+                                                actionable_features=self.conversation.get_var(
+                                                    "experiment_helper").contents.actionable_features)
         test_instances, remove_instances_from_experiment = test_instance_explainer.get_test_instances()
         # given the list of remove_instances_from_experiment, remove them from the experiment in all explanations
         if len(remove_instances_from_experiment) > 0:
@@ -542,7 +542,8 @@ class ExplainBot:
                 # Remove instance from anchor
                 tabular_anchor.cache = {k: v for k, v in tabular_anchor.cache.items() if k != instance_id}
                 # Remove instance from ceteris paribus
-                ceteris_paribus_explainer.cache = {k: v for k, v in ceteris_paribus_explainer.cache.items() if k != instance_id}
+                ceteris_paribus_explainer.cache = {k: v for k, v in ceteris_paribus_explainer.cache.items() if
+                                                   k != instance_id}
                 # Remove instance from pdp
                 pdp_explainer.cache = {k: v for k, v in pdp_explainer.cache.items() if k != instance_id}
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
@@ -643,7 +644,6 @@ class ExplainBot:
             return [{"question_id": method_id, "question": question, "feature_id": ""}]
         except (KeyError, TypeError):
             return []
-
 
     def update_state_new(self,
                          question_id: str = None,

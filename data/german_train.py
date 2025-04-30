@@ -11,6 +11,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from data import load_config, create_folder_if_not_exists
 from data.ml_utilities import label_encode_and_save_classes, construct_pipeline, train_model
+from data.feature_mapping_utils import create_feature_name_mapping
 
 DATASET_NAME = "german"
 config_path = f"./{DATASET_NAME}_model_config.json"
@@ -161,6 +162,10 @@ def main():
 
     data = pd.read_csv(config["dataset_path"])
     create_folder_if_not_exists(save_path)
+    
+    # Store original column names before preprocessing
+    original_columns = list(data.columns)
+    
     X, y, encoded_classes = preprocess_data_specific(data, config)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
@@ -171,6 +176,27 @@ def main():
     X_test[target_col] = y_test
     X_train.to_csv(os.path.join(save_path, f"{DATASET_NAME}_train.csv"))
     X_test.to_csv(os.path.join(save_path, f"{DATASET_NAME}_test.csv"))
+    
+    # Create feature name mapping
+    if "rename_columns" in config:
+        # Create a feature name mapping using the rename dictionary from config
+        create_feature_name_mapping(
+            original_columns=original_columns,
+            rename_dict=config["rename_columns"],
+            save_path=save_path,
+            dataset_name="feature",
+            target_col=target_col
+        )
+    else:
+        # Create a feature name mapping using the current column names
+        create_feature_name_mapping(
+            original_columns=original_columns,
+            renamed_columns=list(X_train.columns),
+            save_path=save_path,
+            dataset_name="feature",
+            target_col=target_col
+        )
+    
     X_train.drop(columns=[target_col], inplace=True)
     X_test.drop(columns=[target_col], inplace=True)
 

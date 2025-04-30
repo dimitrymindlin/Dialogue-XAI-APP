@@ -1,71 +1,184 @@
 """Train titanic model."""
 import sys
+import os
+import json
 from os.path import dirname, abspath
 
 import numpy as np
 import pickle as pkl
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.model_selection import RandomizedSearchCV
 
 from sklearn import metrics
 from sklearn.pipeline import Pipeline
-#import random forest classifier
 from sklearn.ensemble import RandomForestClassifier as clf
+
+from data import load_config
 
 np.random.seed(0)
 parent = dirname(dirname(abspath(__file__)))
 sys.path.append(parent)
 
 from data.processing_functions import get_and_preprocess_titanic
+from data.ml_utilities import label_encode_and_save_classes
+# Replace feature_mapping_utils import with FeatureDisplayNames
+from data.response_templates.feature_display_names import FeatureDisplayNames
 
+# Define dataset name and paths
+DATASET_NAME = "titanic"
+save_path = f"./{DATASET_NAME}"
+config_path = f"./{DATASET_NAME}_model_config.json"
+save_flag = True
+target_col = "Survived"
+
+# Create folder if it doesn't exist
+if not os.path.exists(save_path):
+    os.makedirs(save_path)
+
+config = load_config(config_path)
+
+# Load and preprocess data
 titanic_data, categorical_mapping = get_and_preprocess_titanic()
 
 # Split df in x and y values
-y_train = titanic_data['train']['Survived'].values
+y_train = titanic_data['train'][target_col].values
 X_train = titanic_data['train']
-y_test = titanic_data['test']['Survived'].values
+y_test = titanic_data['test'][target_col].values
 X_test = titanic_data['test']
 
-# Save to CSV
-X_train.to_csv('titanic_train.csv')
-X_test.to_csv('titanic_test.csv')
+# Save to CSV in the dedicated folder
+X_train.to_csv(os.path.join(save_path, f"{DATASET_NAME}_train.csv"))
+X_test.to_csv(os.path.join(save_path, f"{DATASET_NAME}_test.csv"))
 
-X_train.pop("Survived")
-X_test.pop("Survived")
+# Create mapping for categorical values
+config["save_path"] = save_path
+
+# Store original column names before any renaming
+original_columns = list(X_train.columns)
+
+# Create FeatureDisplayNames instance and update config with it
+feature_display_names = FeatureDisplayNames(feature_names=original_columns)
+feature_display_names.update_config(original_columns, target_col=target_col)
+config = feature_display_names.save_to_config(config)
+
+# Apply the column renaming to dataframes
+X_train = feature_display_names.apply_column_renaming(X_train)
+X_test = feature_display_names.apply_column_renaming(X_test)
+
+# Update the columns_to_encode with display names
+if "columns_to_encode" in config:
+    config["columns_to_encode"] = [feature_display_names.get_display_name(col) for col in config["columns_to_encode"]]
+
+# Add encoded mappings to config for saving
+X_train_for_encoding = X_train.copy()
+X_train_for_encoding.pop(target_col)
+
+# Call label_encode_and_save_classes to generate encoded_col_mapping.json
+_, encoded_classes = label_encode_and_save_classes(X_train_for_encoding, config)
+
+# Copy the config file to the save path
+if save_flag:
+    with open(os.path.join(save_path, f"{DATASET_NAME}_model_config.json"), 'w') as file:
+        json.dump(config, file)
+
+# Save categorical mapping from preprocess function (different from encoded_classes)
+with open(os.path.join(save_path, "categorical_mapping.json"), 'w') as f:
+    json.dump(categorical_mapping, f)
+
+# Copy the config file to the save path
+if save_flag:
+    with open(os.path.join(save_path, f"{DATASET_NAME}_model_config.json"), 'w') as file:
+        json.dump(config, file)
+
+# Create a copy of dataframes before removing target
+X_train_with_names = X_train.copy()
+X_test_with_names = X_test.copy()
+
+X_train.pop(target_col)
+X_test.pop(target_col)
+
+# Store feature names for later use
+feature_names = list(X_train.columns)
+
+# Convert to numpy arrays
 X_train = X_train.values
 X_test = X_test.values
 
+# Get column indices for categorical features
+column_indices = {col: i for i, col in enumerate(feature_names)}
+categorical_indices = [column_indices[col] for col in config["columns_to_encode"]]
 
-data_columns = titanic_data['column_names']
+# Create a ColumnTransformer with better feature names
 preprocessor = ColumnTransformer(
-    [
-        ('onehot_sex', OneHotEncoder(categories=[[0, 1]]), [data_columns.index('Sex')]),
-        ('onehot_embarked', OneHotEncoder(categories=[[0, 1, 2]]), [data_columns.index('Embarked')]),
-    ]
+    transformers=[
+        ('one_hot', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_indices)
+    ],
+    remainder='passthrough',
+    verbose_feature_names_out=False  # Prevents prefixing feature names
 )
-lr_pipeline = Pipeline([('preprocessing', preprocessor),
-                        ('lr', clf(max_depth=4, n_estimators=10, random_state=42))])
-lr_pipeline.fit(X_train, y_train)
 
-print("Train Score:", lr_pipeline.score(X_train, y_train))
-print("Test Score:", lr_pipeline.score(X_test, y_test))
-print("Portion y==1:", np.sum(y_test == 1)
-      * 1. / y_test.shape[0])
+# Define the full pipeline
+pipeline = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('model', clf())
+])
 
-x_test_pred = lr_pipeline.predict(X_test)
-fpr, tpr, thresholds = metrics.roc_curve(y_test, x_test_pred, pos_label=1)
+# Set the feature names to be used
+preprocessor.set_output(transform="pandas")
+
+# Extract hyperparameter search configuration
+model_params = config["model_params"]
+search_params = config["random_search_params"]
+
+# Randomized search for hyperparameter tuning
+random_search = RandomizedSearchCV(pipeline, param_distributions=model_params, **search_params)
+random_search.fit(X_train, y_train)
+best_model = random_search.best_estimator_
+best_params = random_search.best_params_
+
+# Fit the best model
+best_model.fit(X_train, y_train)
+
+print("Train Score:", best_model.score(X_train, y_train))
+print("Test Score:", best_model.score(X_test, y_test))
+print("Portion y==1:", np.sum(y_test == 1) * 1. / y_test.shape[0])
+
+# Calculate ROC AUC
+y_test_pred = best_model.predict(X_test)
+fpr, tpr, thresholds = metrics.roc_curve(y_test, y_test_pred, pos_label=1)
 print("AUC_test", metrics.auc(fpr, tpr))
+print("Best Parameters:", best_params)
 
-with open("titanic_model_short_grad_tree.pkl", "wb") as f:
-    pkl.dump(lr_pipeline, f)
+# Save the best model
+if save_flag:
+    with open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), "wb") as f:
+        pkl.dump(best_model, f)
 
-# Print feature importances for random forest with feature names
-feature_importances = lr_pipeline.named_steps['lr'].feature_importances_
-feature_names = lr_pipeline.named_steps['preprocessing'].get_feature_names()
-feature_names = np.array(feature_names)
-print("Feature importances:")
-for name, importance in zip(feature_names, feature_importances):
-    print(name, "=", importance)
+    # Also save the feature names for later interpretation
+    with open(os.path.join(save_path, f"{DATASET_NAME}_feature_names.json"), "w") as f:
+        json.dump({
+            "feature_names": feature_names,
+            "categorical_features": config["columns_to_encode"]
+        }, f)
 
+# Get feature names after transformation
+feature_names_out = []
+# Get categorical feature names (after one-hot encoding)
+for feature in config["columns_to_encode"]:
+    # Get unique values for this feature
+    unique_values = categorical_mapping.get(feature, {}).keys()
+    for value in unique_values:
+        feature_names_out.append(f"{feature}_{value}")
+# Add numeric features
+for feature in feature_names:
+    if feature not in config["columns_to_encode"]:
+        feature_names_out.append(feature)
+
+# Print feature importances with actual feature names
+feature_importances = best_model.named_steps['model'].feature_importances_
+print("\nFeature importances:")
+for name, importance in zip(feature_names_out, feature_importances):
+    print(f"{name} = {importance}")
 
 print("Saved model!")

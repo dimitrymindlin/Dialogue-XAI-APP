@@ -2,7 +2,7 @@
   "target_col": "Income",
   "columns_to_encode": [
     "Occupation",
-    "MaritalStatus"
+    "Marital.status"
   ],
   "ordinal_mapping": {
     "Income": {
@@ -29,9 +29,9 @@
     ]
   },
   "rename_columns": {
-    "Hours.per.week": "WeeklyWorkingHours",
+    "Hours.per.week": "Weekly Working Hours",
     "Education.num": "Education",
-    "Marital.status": "MaritalStatus"
+    "Marital.status": "Marital Status"
   },
   "drop_columns": [
     "fnlwgt",

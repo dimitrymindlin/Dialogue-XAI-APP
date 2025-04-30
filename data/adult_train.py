@@ -319,8 +319,22 @@ def main():
 
     data = pd.read_csv(config["dataset_path"])
     create_folder_if_not_exists(save_path)
+    
+    # Store original column names before any preprocessing
+    original_columns = list(data.columns)
 
+    # Perform preprocessing without applying rename_columns
+    saved_rename_columns = None
+    if "rename_columns" in config:
+        # Temporarily save and remove rename_columns to prevent premature renaming
+        saved_rename_columns = config["rename_columns"]
+        config["rename_columns"] = {}
+        
     X, y, encoded_classes = preprocess_data_specific(data, config)
+    
+    # Restore rename_columns
+    if saved_rename_columns is not None:
+        config["rename_columns"] = saved_rename_columns
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
@@ -328,8 +342,40 @@ def main():
     # Add labels to X and save train and test data
     X_train[target_col] = y_train
     X_test[target_col] = y_test
+    
+    # Save CSV files with original column names (before renaming)
     X_train.to_csv(os.path.join(save_path, f"{DATASET_NAME}_train.csv"))
     X_test.to_csv(os.path.join(save_path, f"{DATASET_NAME}_test.csv"))
+    
+    # Initialize or update the rename_columns in config if not present
+    if "rename_columns" not in config or not config["rename_columns"]:
+        config["rename_columns"] = {}
+    
+    # Get current column names (post-processing but before renaming)
+    current_columns = list(X_train.columns)
+    current_columns.remove(target_col)  # Remove target column from feature list
+    
+    # Import our feature display names class
+    from data.response_templates.feature_display_names import FeatureDisplayNames
+    
+    # Create FeatureDisplayNames instance and update config with it
+    feature_display_names = FeatureDisplayNames(feature_names=current_columns)
+    feature_display_names.update_config(current_columns, target_col=target_col)
+    config = feature_display_names.save_to_config(config)
+    
+    # Now apply the column renaming to the dataframes (after saving)
+    X_train = feature_display_names.apply_column_renaming(X_train)
+    X_test = feature_display_names.apply_column_renaming(X_test)
+    
+    # Update the columns_to_encode with display names if needed
+    if "columns_to_encode" in config:
+        config["columns_to_encode"] = [feature_display_names.get_display_name(col) for col in config["columns_to_encode"]]
+    
+    # Save the updated config with rename_columns
+    config_save_path = os.path.join(save_path, f"{DATASET_NAME}_model_config.json")
+    with open(config_save_path, 'w') as file:
+        json.dump(config, file)
+    
     X_train.drop(columns=[target_col], inplace=True)
     X_test.drop(columns=[target_col], inplace=True)
 
@@ -337,11 +383,6 @@ def main():
     if X_train.isna().sum().sum() > 0:
         print(X_train.isna().sum())
         raise ValueError("There are NaN values in the training data.")
-
-    # Copy the config file to the save path
-    if save_flag:
-        with open(os.path.join(save_path, f"{DATASET_NAME}_model_config.json"), 'w') as file:
-            json.dump(config, file)
 
     # Change list of column names to be encoded to a list of column indices
     columns_to_encode = [X_train.columns.get_loc(col) for col in config["columns_to_encode"]]
