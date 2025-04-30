@@ -23,9 +23,10 @@ from explain.logic import ExplainBot
 # gunicorn doesn't have command line flags, using a gin file to pass command line args
 @gin.configurable
 class GlobalArgs:
-    def __init__(self, config, baseurl):
+    def __init__(self, config, baseurl, use_llm_agent="unified_mape_k"):
         self.config = config
         self.baseurl = baseurl
+        self.use_llm_agent = use_llm_agent
 
 
 # Parse gin global config
@@ -33,6 +34,10 @@ gin.parse_config_file("global_config.gin")
 
 # Get args
 args = GlobalArgs()
+
+# Komut satırından gelen parametreyi gin_config'e aktarma
+if args.use_llm_agent != "unified_mape_k":  # varsayılan değer değişmişse
+    gin.bind_parameter("ExplainBot.use_llm_agent", args.use_llm_agent)
 
 bp = Blueprint('host', __name__, template_folder='templates')
 
@@ -62,36 +67,31 @@ def home():
 
 @bp.route('/init', methods=['GET'])
 def init():
-    """Load the explanation interface."""
-    user_id = request.args.get("user_id")
-    study_group = request.args.get("study_group")
-    ml_knowledge = request.args.get("ml_knowledge")
-    if user_id is None or "":
-        user_id = "TEST"
-    if study_group is None or "":
-        study_group = "interactive"
-    if ml_knowledge is None or "":
-        ml_knowledge = "low"
-    BOT = ExplainBot(study_group, ml_knowledge, user_id)
-    bot_dict[user_id] = BOT
-    app.logger.info("Loaded Login and created bot")
+    """Initialize the bot."""
+    user_id = request.args.get('user_id')
+    study_group = request.args.get('study_group', "compare")
+    ml_knowledge = request.args.get('ml_knowledge', "")
+    log_message = f"Creating bot with {study_group}, {ml_knowledge}"
+    print(log_message)
+    if not user_id:
+        return jsonify({"error": "No user_id provided"}), 400
 
-    # Feature tooltip and units
-    feature_tooltip = bot_dict[user_id].get_feature_tooltips()
-    feature_units = bot_dict[user_id].get_feature_units()
-    questions = bot_dict[user_id].get_questions_attributes_featureNames()
-    ordered_feature_names = bot_dict[user_id].get_feature_names()
-    user_experiment_prediction_choices = bot_dict[user_id].conversation.class_names
-    user_study_task_description = bot_dict[user_id].conversation.describe.get_user_study_objective()
-    result = {
-        "feature_tooltips": feature_tooltip,
-        "feature_units": feature_units,
-        'questions': questions,
-        'feature_names': ordered_feature_names,
-        'prediction_choices': user_experiment_prediction_choices,
-        'user_study_task_description': user_study_task_description
-    }
-    return result
+    # API isteği ile gelen agent_type değeri varsa, gin.bind_parameter ile geçici olarak değiştir
+    agent_type = request.args.get('use_llm_agent', None)
+    if agent_type and agent_type != 'false':
+        gin.bind_parameter("ExplainBot.use_llm_agent", agent_type)
+    elif agent_type == 'false':
+        gin.bind_parameter("ExplainBot.use_llm_agent", False)
+        
+    # Create the bot - Parametreler Gin config'ten otomatik olarak enjekte edilecek
+    bot = ExplainBot(study_group=study_group,
+                    ml_knowledge=ml_knowledge,
+                    user_id=user_id)
+
+    # Store the bot 
+    bot_dict[user_id] = bot
+    # Return success
+    return jsonify({"status": "OK", "message": "Bot initialized"}), 200
 
 
 @bp.route('/finish', methods=['DELETE'])
@@ -116,11 +116,19 @@ def get_datapoint(user_id, datapoint_type, datapoint_count, return_probability=F
     """
     Get a datapoint from the dataset based on the datapoint type.
     """
+    # Önce user_id kontrolü
+    if not user_id:
+        raise ValueError("No user_id provided")
+    
+    if user_id not in bot_dict:
+        raise ValueError(f"User ID '{user_id}' not initialized")
+    
     # convert to 0-indexed count
-    datapoint_count = int(datapoint_count) - 1
+    try:
+        datapoint_count = int(datapoint_count) - 1
+    except (TypeError, ValueError):
+        raise ValueError(f"Invalid datapoint_count: {datapoint_count}")
 
-    if user_id is None:
-        user_id = "TEST"
     instance = bot_dict[user_id].get_next_instance(datapoint_type,
                                                    datapoint_count,
                                                    return_probability=return_probability)
@@ -134,6 +142,12 @@ def get_train_datapoint():
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
+    if not user_id:
+        return jsonify({"error": "No user_id provided"}), 400
+    
+    if user_id not in bot_dict:
+        return jsonify({"error": f"User ID '{user_id}' not initialized. Call /init first."}), 404
+    
     datapoint_count = request.args.get("datapoint_count")
     user_study_group = bot_dict[user_id].get_study_group()
     result_dict = get_datapoint(user_id, "train", datapoint_count)
@@ -154,6 +168,12 @@ def get_test_datapoint():
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
+    if not user_id:
+        return jsonify({"error": "No user_id provided"}), 400
+    
+    if user_id not in bot_dict:
+        return jsonify({"error": f"User ID '{user_id}' not initialized. Call /init first."}), 404
+        
     datapoint_count = request.args.get("datapoint_count")
     return get_datapoint(user_id, "test", datapoint_count)
 
@@ -164,6 +184,12 @@ def get_final_test_datapoint():
     Get a final test datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
+    if not user_id:
+        return jsonify({"error": "No user_id provided"}), 400
+    
+    if user_id not in bot_dict:
+        return jsonify({"error": f"User ID '{user_id}' not initialized. Call /init first."}), 404
+        
     datapoint_count = request.args.get("datapoint_count")
     return get_datapoint(user_id, "final-test", datapoint_count)
 
@@ -174,6 +200,12 @@ def get_intro_test_datapoint():
     Get a final test datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
+    if not user_id:
+        return jsonify({"error": "No user_id provided"}), 400
+    
+    if user_id not in bot_dict:
+        return jsonify({"error": f"User ID '{user_id}' not initialized. Call /init first."}), 404
+        
     datapoint_count = request.args.get("datapoint_count")
     return get_datapoint(user_id, "intro-test", datapoint_count)
 
@@ -183,11 +215,17 @@ def set_user_prediction():
     """Set the user prediction and get the initial message if in teaching phase."""
     data = request.get_json()  # Get JSON data from request body
     user_id = data.get("user_id")
+    
+    if not user_id:
+        return jsonify({"error": "No user_id provided"}), 400
+    
+    if user_id not in bot_dict:
+        return jsonify({"error": f"User ID '{user_id}' not initialized. Call /init first."}), 404
+
     experiment_phase = data.get("experiment_phase")
     datapoint_count = int(data.get("datapoint_count")) - 1  # 0 indexed for backend
     user_prediction = data.get("user_prediction")
-    if user_id is None:
-        user_id = "TEST"  # Default user_id for testing
+    
     bot = bot_dict[user_id]
     if experiment_phase == "teaching":  # Called differently in the frontend
         experiment_phase = "train"
@@ -244,8 +282,12 @@ def set_user_prediction():
 @bp.route("/get_user_correctness", methods=['GET'])
 def get_user_correctness():
     user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
+    if not user_id:
+        return jsonify({"error": "No user_id provided"}), 400
+    
+    if user_id not in bot_dict:
+        return jsonify({"error": f"User ID '{user_id}' not initialized. Call /init first."}), 404
+        
     bot = bot_dict[user_id]
     correctness_string = bot.get_user_correctness()
     response = {"correctness_string": correctness_string}
@@ -255,8 +297,12 @@ def get_user_correctness():
 @bp.route("/get_proceeding_okay", methods=['GET'])
 def get_proceeding_okay():
     user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
+    if not user_id:
+        return jsonify({"error": "No user_id provided"}), 400
+    
+    if user_id not in bot_dict:
+        return jsonify({"error": f"User ID '{user_id}' not initialized. Call /init first."}), 404
+        
     bot = bot_dict[user_id]
     proceeding_okay, follow_up_questions, response_text = bot.get_proceeding_okay()
     # Make it a message dict
@@ -313,8 +359,12 @@ def generate_audio_from_text(text, voice="alloy"):
 def get_bot_response():
     """Load the box response."""
     user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
+    if not user_id:
+        return jsonify({"error": "No user_id provided"}), 400
+    
+    if user_id not in bot_dict:
+        return jsonify({"error": f"User ID '{user_id}' not initialized. Call /init first."}), 404
+        
     if request.method == "POST":
         app.logger.info("generating the bot response")
         try:
@@ -361,8 +411,12 @@ def get_bot_response():
 async def get_bot_response_from_nl():
     """Load the box response."""
     user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
+    if not user_id:
+        return jsonify({"error": "No user_id provided"}), 400
+    
+    if user_id not in bot_dict:
+        return jsonify({"error": f"User ID '{user_id}' not initialized. Call /init first."}), 404
+        
     if request.method == "POST":
         app.logger.info("generating the bot response for nl input")
         try:
