@@ -1,6 +1,4 @@
-import asyncio, logging, csv, yaml, json, os, datetime, copy
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional, Union
+import logging, csv, json, os, datetime
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
@@ -89,6 +87,10 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
             domain_description="",
             user_ml_knowledge="",
             experiment_id="",
+            include_monitor_reasoning=False,
+            include_analyze_reasoning=False, 
+            include_plan_reasoning=False,
+            include_execute_reasoning=False,
             **kwargs
     ):
         self.experiment_id = experiment_id
@@ -109,6 +111,12 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
         self.explanation_questions = DefinitionWrapper(
             os.path.join(base_dir, "monitor_component", "explanation_questions_definition.json")
         )
+
+        # Flags to control reasoning inclusion in responses
+        self.include_monitor_reasoning = include_monitor_reasoning
+        self.include_analyze_reasoning = include_analyze_reasoning
+        self.include_plan_reasoning = include_plan_reasoning
+        self.include_execute_reasoning = include_execute_reasoning
 
         # Mape K specific setup user understanding notepad
         self.user_model = UserModel(user_ml_knowledge)
@@ -475,6 +483,14 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
                     if "is_optional" not in step:
                         step["is_optional"] = False
             
+            # Check if reasoning should be included
+            if not self.include_plan_reasoning:
+                function_args["reasoning"] = "[reasoning excluded]"
+                # Also remove reasoning from next_response items
+                for item in function_args.get("next_response", []):
+                    if "reasoning" in item:
+                        item["reasoning"] = "[reasoning excluded]"
+            
             # Convert back to JSON string
             fixed_args = json.dumps(function_args)
             
@@ -483,7 +499,17 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
             
             end_time = datetime.datetime.now()
             logger.info(f"Time taken for Plan: {end_time - start_time}")
-            logger.info(f"Plan result: {plan_result}.\n")
+            
+            # Conditionally log the result based on reasoning inclusion flag
+            if self.include_plan_reasoning:
+                logger.info(f"Plan result: {plan_result}.\n")
+            else:
+                # Create a modified version without reasoning for logging
+                log_result = plan_result.dict()
+                log_result["reasoning"] = "[reasoning excluded]"
+                for item in log_result.get("next_response", []):
+                    item["reasoning"] = "[reasoning excluded]"
+                logger.info(f"Plan result (filtered reasoning): {log_result}.\n")
             
             # Update Explanation Plan
             if len(plan_result.explanation_plan) > 0:
@@ -503,11 +529,11 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
             logger.error(f"Error in plan step: {str(e)}")
             # Return a minimal valid plan result as fallback
             fallback_plan = PlanResultModel(
-                reasoning="Error occurred during planning. Using fallback.",
+                reasoning="Error occurred during planning. Using fallback." if self.include_plan_reasoning else "[reasoning excluded]",
                 new_explanations=[],
                 explanation_plan=[],
                 next_response=[{
-                    "reasoning": "Using fallback response due to error.",
+                    "reasoning": "Using fallback response due to error." if self.include_plan_reasoning else "[reasoning excluded]",
                     "explanation_name": "ErrorHandling",
                     "step_name": "Fallback",
                     "communication_goals": [{"goal": "Provide a general response to the user."}]
@@ -580,52 +606,84 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
             }
         }]
 
-        response = await aclient.chat.completions.create(
-            model=OPENAI_MODEL_NAME,
-            messages=messages,
-            functions=functions,
-            function_call={"name": "execute_result"}
-        )
+        try:
+            response = await aclient.chat.completions.create(
+                model=OPENAI_MODEL_NAME,
+                messages=messages,
+                functions=functions,
+                function_call={"name": "execute_result"}
+            )
 
-        # Extract and parse the function call result
-        function_call = response.choices[0].message.function_call
-        execute_result = ExecuteResult.parse_raw(function_call.arguments)
+            # Extract the function call result
+            function_call = response.choices[0].message.function_call
+            function_args = json.loads(function_call.arguments)
+            
+            # Remove reasoning if it shouldn't be included
+            if not self.include_execute_reasoning and "reasoning" in function_args:
+                function_args["reasoning"] = "[reasoning excluded]"
+                
+            # Convert back to JSON string
+            fixed_args = json.dumps(function_args)
+            
+            # Parse with the Pydantic model
+            execute_result = ExecuteResult.parse_raw(fixed_args)
 
-        end_time = datetime.datetime.now()
-        logger.info(f"Time taken for Execute: {end_time - start_time}")
-        logger.info(f"Execute result: {execute_result}.\n")
+            end_time = datetime.datetime.now()
+            logger.info(f"Time taken for Execute: {end_time - start_time}")
+            
+            # Conditionally log the result based on reasoning inclusion flag
+            if self.include_execute_reasoning:
+                logger.info(f"Execute result: {execute_result}.\n")
+            else:
+                # Create a modified version without reasoning for logging
+                log_result = execute_result.dict()
+                log_result["reasoning"] = "[reasoning excluded]"
+                logger.info(f"Execute result (filtered reasoning): {log_result}.\n")
 
-        # Log and save history before replacing placeholders
-        self.current_log_row["execute"] = execute_result.json()
-        update_last_log_row(self.current_log_row, self.log_file)
+            # Log and save history before replacing placeholders
+            self.current_log_row["execute"] = execute_result.json()
+            update_last_log_row(self.current_log_row, self.log_file)
 
-        # Only append the agent's response to chat history (user message was added at the beginning)
-        self.append_to_history("agent", execute_result.response)
+            # Only append the agent's response to chat history (user message was added at the beginning)
+            self.append_to_history("agent", execute_result.response)
 
-        # Check if result has placeholders and replace them
-        execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
+            # Check if result has placeholders and replace them
+            execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
 
-        # Update Explanandum state and User Model
-        # Update user model based on next explanations
-        for next_explanation in plan_result.next_response:
-            explanation_target = next_explanation
-            exp = explanation_target.explanation_name
-            exp_step = explanation_target.step_name
-            self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.UNDERSTOOD.value)
+            # Update Explanandum state and User Model
+            # Update user model based on next explanations
+            for next_explanation in plan_result.next_response:
+                explanation_target = next_explanation
+                exp = explanation_target.explanation_name
+                exp_step = explanation_target.step_name
+                self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.UNDERSTOOD.value)
 
-        # Add next explanations to last shown explanations
-        for next_explanation in plan_result.next_response:
-            self.last_shown_explanations.append(next_explanation)
+            # Add next explanations to last shown explanations
+            for next_explanation in plan_result.next_response:
+                self.last_shown_explanations.append(next_explanation)
 
-        # Use json.dumps for user_model since it's not a Pydantic object but returns a dict from get_state_summary
-        self.current_log_row["user_model"] = json.dumps(self.user_model.get_state_summary(as_dict=True))
-        update_last_log_row(self.current_log_row, self.log_file)
-        self.user_model.new_datapoint()
+            # Use json.dumps for user_model since it's not a Pydantic object but returns a dict from get_state_summary
+            self.current_log_row["user_model"] = json.dumps(self.user_model.get_state_summary(as_dict=True))
+            update_last_log_row(self.current_log_row, self.log_file)
+            self.user_model.new_datapoint()
 
-        # Log new user model
-        logger.info(f"User model after execute: {self.user_model.get_state_summary(as_dict=False)}.\n")
+            # Log new user model
+            logger.info(f"User model after execute: {self.user_model.get_state_summary(as_dict=False)}.\n")
 
-        return execute_result
+            return execute_result
+            
+        except Exception as e:
+            logger.error(f"Error in execute step: {str(e)}")
+            # Return a minimal valid execute result as fallback
+            fallback_execute = ExecuteResult(
+                reasoning="Error occurred during execution. Using fallback." if self.include_execute_reasoning else "[reasoning excluded]",
+                response="I'm sorry, I wasn't able to process your question properly. Could you please rephrase or try asking something else?",
+                success=False
+            )
+            self.current_log_row["execute"] = fallback_execute.json()
+            update_last_log_row(self.current_log_row, self.log_file)
+            self.append_to_history("agent", fallback_execute.response)
+            return fallback_execute
 
     async def monitor_analyze(self, user_message):
         """Combined Monitor and Analyze steps: Process the user's cognitive state in a single API call"""
@@ -687,7 +745,18 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
         
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Combined Monitor-Analyze: {end_time - start_time}")
-        logger.info(f"Combined Monitor-Analyze result: {combined_result}.\n")
+        
+        # Conditionally log the result based on reasoning inclusion flags
+        if self.include_monitor_reasoning and self.include_analyze_reasoning:
+            logger.info(f"Combined Monitor-Analyze result: {combined_result}.\n")
+        else:
+            # Create a modified version without reasoning if it should be excluded
+            log_result = combined_result.dict()
+            if not self.include_monitor_reasoning:
+                log_result["reasoning"] = "[reasoning excluded]"
+            if not self.include_analyze_reasoning:
+                log_result["analysis_reasoning"] = "[reasoning excluded]"
+            logger.info(f"Combined Monitor-Analyze result (filtered reasoning): {log_result}.\n")
         
         # Update the user model based on monitor results
         if combined_result.mode_of_engagement != "":
@@ -708,15 +777,15 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
                 logger.error(f"Invalid change entry: {change_entry}")
                 continue
         
-        # Create separate results for logging purposes
+        # Create separate results for logging purposes with optional reasoning
         monitor_result = MonitorResultModel(
-            reasoning=combined_result.reasoning,
+            reasoning=combined_result.reasoning if self.include_monitor_reasoning else "[reasoning excluded]",
             explicit_understanding_displays=combined_result.explicit_understanding_displays,
             mode_of_engagement=combined_result.mode_of_engagement
         )
         
         analyze_result = AnalyzeResult(
-            reasoning=combined_result.analysis_reasoning,
+            reasoning=combined_result.analysis_reasoning if self.include_analyze_reasoning else "[reasoning excluded]",
             model_changes=combined_result.model_changes
         )
         
