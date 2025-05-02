@@ -12,7 +12,7 @@ class TemplateManager:
                  feature_name_mapping_path=None):
         self.conversation = conversation
         self.feature_name_mapping = self._load_feature_name_mapping(feature_name_mapping_path)
-        self.feature_display_names = FeatureDisplayNames(self.conversation, feature_name_mapping=self.feature_name_mapping)
+        self.feature_display_names = FeatureDisplayNames(conversation=self.conversation, feature_name_mapping=self.feature_name_mapping)
         self.encoded_col_mapping = self._load_label_encoded_feature_dict(encoded_col_mapping_path)
         self.categorical_mapping = categorical_mapping
         self.rounding_precision = 2

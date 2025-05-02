@@ -1,11 +1,10 @@
 import json
-import logging
 import os
 import re
 
 
 class FeatureDisplayNames:
-    def __init__(self, conversation=None, feature_names=None, feature_name_mapping=None):
+    def __init__(self, config=None, conversation=None, feature_names=None, feature_name_mapping=None):
         """
         Initialize the FeatureDisplayNames class using the column_details from model config.
         
@@ -16,7 +15,7 @@ class FeatureDisplayNames:
         """
         self.conversation = conversation
         self.dataset_name = None
-        self.config = {}
+        self.config = config if config else {}
 
         # Initialize mappings
         self.feature_name_to_display_name = {}  # Maps original_name -> display_name (string only)
@@ -25,7 +24,8 @@ class FeatureDisplayNames:
         self.feature_tooltips = {}  # Maps original_name -> tooltip
 
         # Load dataset name if conversation is provided
-        if conversation:
+        # check if config is empty
+        if not self.config and conversation:
             try:
                 self.dataset_name = self.conversation.describe.dataset_name
                 # Load config to get column_details
@@ -48,11 +48,16 @@ class FeatureDisplayNames:
         
         Args:
             data: List of [original_name, value] pairs, where value is either a display name string or a [display_name, unit, tooltip] list
+                 OR a dictionary mapping original_name -> [display_name, unit, tooltip]
         """
-        # Expect list-of-pairs format for column_details
-        if not isinstance(data, list):
+        # Handle dictionary format (convert to list for processing)
+        if isinstance(data, dict):
+            items = [[orig_name, value] for orig_name, value in data.items()]
+        # Handle list-of-pairs format
+        elif isinstance(data, list):
+            items = data
+        else:
             return
-        items = data
 
         for item in items:
             # Unpack original name and associated value
@@ -247,18 +252,42 @@ class FeatureDisplayNames:
         Returns:
             Updated config dictionary
         """
-        # Create column_details with proper structure [display_name, unit, tooltip]
-        column_details = {}
+        # Create column_details as a list to preserve order
+        column_details = []
 
-        for orig_name in self.feature_name_to_display_name:
+        # Get all original feature names
+        feature_names = list(self.feature_name_to_display_name.keys())
+        
+        # If there's an existing column_details list, try to preserve its order
+        if "column_details" in config and isinstance(config["column_details"], list):
+            # Extract the original feature names in their original order
+            existing_features = [item[0] for item in config["column_details"] 
+                                if isinstance(item, (list, tuple)) and len(item) > 0]
+            
+            # Add features in the original order first
+            for orig_name in existing_features:
+                if orig_name in self.feature_name_to_display_name:
+                    display_name = self.feature_name_to_display_name[orig_name]
+                    unit = self.feature_units.get(orig_name, "")
+                    tooltip = self.feature_tooltips.get(orig_name, "")
+                    
+                    # Append as a list to preserve the structure
+                    column_details.append([orig_name, [display_name, unit, tooltip]])
+                    
+                    # Remove from feature_names to avoid duplication
+                    if orig_name in feature_names:
+                        feature_names.remove(orig_name)
+        
+        # Add any remaining features
+        for orig_name in feature_names:
             display_name = self.feature_name_to_display_name[orig_name]
             unit = self.feature_units.get(orig_name, "")
             tooltip = self.feature_tooltips.get(orig_name, "")
+            
+            # Append as a list to preserve the structure
+            column_details.append([orig_name, [display_name, unit, tooltip]])
 
-            # Store as a list with the triple structure
-            column_details[orig_name] = [display_name, unit, tooltip]
-
-        # Update config with our structured data
+        # Update config with our list data structure
         config["column_details"] = column_details
 
         if save_path:

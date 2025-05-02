@@ -28,11 +28,64 @@
       3
     ]
   },
-  "rename_columns": {
-    "Hours.per.week": "Weekly Working Hours",
-    "Education.num": "Education",
-    "Marital.status": "Marital Status"
-  },
+  "column_details": [
+    [
+      "Age",
+      [
+        "Age",
+        "years",
+        "The individual's age, in years."
+      ]
+    ],
+    [
+      "MaritalStatus",
+      [
+        "Marital Status",
+        "",
+        "The individual's marital status, indicating whether they are Married or Single. This simplification may encompass a broader range of legal statuses."
+      ]
+    ],
+    [
+      "Occupation",
+      [
+        "Occupation",
+        "",
+        "The category of the individual's occupation, such as Admin (Administrative and clerical roles: office clerks and secretaries), Military (Personnel serving in the army), Blue‑Collar (Manual labor occupations: craft workers, machine operators, farmers, handlers, cleaners), White‑Collar (Executive and managerial positions involving strategic planning), Professional (Specialized professions requiring advanced education: doctors, lawyers, engineers, and educators), Sales (Roles related to selling products or services: sales representatives, retail personnel), Service (Occupations providing services to individuals or communities: protective services e.g., law enforcement officers, firefighters, technical support)."
+      ]
+    ],
+    [
+      "Hours.per.week",
+      [
+        "Hours Per Week",
+        "hours",
+        "The total number of hours the individual works in a typical week."
+      ]
+    ],
+    [
+      "WorkLifeBalance",
+      [
+        "Work Life Balance",
+        "",
+        "A self‑reported assessment of the individual's work‑life balance, ranging from poor to excellent. This subjective measure reflects the individual's satisfaction with their ability to balance work and personal life."
+      ]
+    ],
+    [
+      "EducationLevel",
+      [
+        "Education Level",
+        "",
+        "Highest level of education attained by the individual, categorized as: Dropout, High School grad, Associates, Bachelors grad, Masters grad, Professional Degree or Doctorate/Prof Level."
+      ]
+    ],
+    [
+      "InvestmentOutcome",
+      [
+        "Investment Outcome",
+        "",
+        "The result of the individual's investment activities, categorized as: No investment, Loss, or Gain. This reflects whether the individual has investments and if so, whether they have made a profit or a loss."
+      ]
+    ]
+  ],
   "drop_columns": [
     "fnlwgt",
     "education",

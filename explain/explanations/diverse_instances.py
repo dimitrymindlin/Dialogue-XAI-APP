@@ -56,7 +56,7 @@ class DiverseInstances:
             filtered = []
             last_marital_status = -1
             for i in indices:
-                current_marital_status = data.loc[i, "Marital.status"]
+                current_marital_status = data.loc[i, "MaritalStatus"]
                 if current_marital_status != last_marital_status:
                     filtered.append(i)
                     last_marital_status = current_marital_status

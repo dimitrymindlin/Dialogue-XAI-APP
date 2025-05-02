@@ -1,15 +1,16 @@
 # Import necessary libraries
-import json
-import os
-import pickle
-from sklearn.metrics import roc_auc_score
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
-from data import load_config, create_folder_if_not_exists
 from data.ml_utilities import label_encode_and_save_classes, construct_pipeline, train_model
+from data.train_utils import (
+    setup_training_environment, save_train_test_data, setup_feature_display_names,
+    apply_display_names, save_config_file, save_categorical_mapping,
+    save_model_and_features, evaluate_model, update_config_with_metrics,
+    print_feature_importances, generate_feature_names_output, check_nan_values
+)
 
 DATASET_NAME = "adult"
 config_path = f"./{DATASET_NAME}_model_config.json"
@@ -25,24 +26,6 @@ category_to_int = {
     'Masters Level': 5,
     'Doctorate/Prof Level': 6
 }
-
-"""def map_education_levels(data):
-    new_bins = {
-        0: ('Primary Education', [1, 2, 3, 4, 5]),
-        1: ('Secondary Education', [6, 7, 8, 9]),
-        2: ('Postsecondary Education', [10, 11, 12, 13]),
-        3: ('Graduate Education', [14, 15, 16])
-    }
-
-    def transform_num(edu_num):
-        for rank, (bin_name, levels) in new_bins.items():
-            if edu_num in levels:
-                return rank
-        return -1
-
-    data['Education.num'] = data['Education.num'].apply(transform_num)
-    # Rename col to 'Education'
-    data.rename(columns={'Education.num': 'Education'}, inplace=True)"""
 
 
 def map_capital_col(data, config):
@@ -281,7 +264,8 @@ def preprocess_data_specific(data, config):
     if "drop_columns" in config:
         data.drop(columns=config["drop_columns"], inplace=True)
 
-    standardize_column_names(data)
+    from data.train_utils import standardize_column_names
+    data = standardize_column_names(data)
 
     # Following functions assume capitalized col names
     config["ordinal_mapping"]['WorkLifeBalance'] = add_work_life_balance(data)
@@ -302,9 +286,6 @@ def preprocess_data_specific(data, config):
     X = data.drop(columns=[target_col])
     y = data[target_col]
 
-    if "rename_columns" in config:
-        X = X.rename(columns=config["rename_columns"])
-
     if "columns_to_encode" in config:
         X, encoded_classes = label_encode_and_save_classes(X, config)
     else:
@@ -314,12 +295,11 @@ def preprocess_data_specific(data, config):
 
 
 def main():
-    config = load_config(config_path)
-    config["save_path"] = save_path
+    # Set up environment and load config
+    config, save_path = setup_training_environment(DATASET_NAME, config_path)
 
     data = pd.read_csv(config["dataset_path"])
-    create_folder_if_not_exists(save_path)
-    
+
     # Store original column names before any preprocessing
     original_columns = list(data.columns)
 
@@ -329,9 +309,9 @@ def main():
         # Temporarily save and remove rename_columns to prevent premature renaming
         saved_rename_columns = config["rename_columns"]
         config["rename_columns"] = {}
-        
+
     X, y, encoded_classes = preprocess_data_specific(data, config)
-    
+
     # Restore rename_columns
     if saved_rename_columns is not None:
         config["rename_columns"] = saved_rename_columns
@@ -342,82 +322,74 @@ def main():
     # Add labels to X and save train and test data
     X_train[target_col] = y_train
     X_test[target_col] = y_test
-    
-    # Save CSV files with original column names (before renaming)
-    X_train.to_csv(os.path.join(save_path, f"{DATASET_NAME}_train.csv"))
-    X_test.to_csv(os.path.join(save_path, f"{DATASET_NAME}_test.csv"))
-    
-    # Initialize or update the rename_columns in config if not present
-    if "rename_columns" not in config or not config["rename_columns"]:
-        config["rename_columns"] = {}
-    
-    # Get current column names (post-processing but before renaming)
-    current_columns = list(X_train.columns)
-    current_columns.remove(target_col)  # Remove target column from feature list
-    
-    # Import our feature display names class
-    from data.response_templates.feature_display_names import FeatureDisplayNames
-    
-    # Create FeatureDisplayNames instance and update config with it
-    feature_display_names = FeatureDisplayNames(feature_names=current_columns)
-    feature_display_names.update_config(current_columns, target_col=target_col)
-    config = feature_display_names.save_to_config(config)
-    
-    # Now apply the column renaming to the dataframes (after saving)
-    X_train = feature_display_names.apply_column_renaming(X_train)
-    X_test = feature_display_names.apply_column_renaming(X_test)
-    
-    # Update the columns_to_encode with display names if needed
-    if "columns_to_encode" in config:
-        config["columns_to_encode"] = [feature_display_names.get_display_name(col) for col in config["columns_to_encode"]]
-    
-    # Save the updated config with rename_columns
-    config_save_path = os.path.join(save_path, f"{DATASET_NAME}_model_config.json")
-    with open(config_save_path, 'w') as file:
-        json.dump(config, file)
-    
+
+    # Save training and test data
+    save_train_test_data(X_train, X_test, DATASET_NAME, save_path)
+
+    # Set up feature display names and update config
+    feature_display_names, config = setup_feature_display_names(X_train, config, target_col)
+
+    # Apply display names to the dataframes
+    X_train, X_test = apply_display_names(X_train, X_test, feature_display_names)
+
+    # Save the updated config
+    save_config_file(config, save_path, DATASET_NAME)
+
+    # Create a copy of dataframes for later reference
+    X_train_with_names = X_train.copy()
+    X_test_with_names = X_test.copy()
+
+    # Save categorical mapping from preprocess function
+    categorical_mapping = {}
+    for feature in config["columns_to_encode"]:
+        # Create mappings based on encoded_classes
+        if feature in encoded_classes:
+            categorical_mapping[feature] = {str(v): k for k, v in encoded_classes[feature].items()}
+
+    # Save categorical mapping
+    save_categorical_mapping(categorical_mapping, save_path)
+
+    # Remove target column for model training
     X_train.drop(columns=[target_col], inplace=True)
     X_test.drop(columns=[target_col], inplace=True)
 
-    # Check if there are nan values in the data and raise an error if there are
-    if X_train.isna().sum().sum() > 0:
-        print(X_train.isna().sum())
-        raise ValueError("There are NaN values in the training data.")
+    # Check for NaN values
+    check_nan_values(X_train)
 
     # Change list of column names to be encoded to a list of column indices
     columns_to_encode = [X_train.columns.get_loc(col) for col in config["columns_to_encode"]]
     pipeline = construct_pipeline(columns_to_encode, RandomForestClassifier())
 
-    model_params = {("model__" + key if not key.startswith("model__") else key): value for key, value in
-                    config["model_params"].items()}
+    # Set up model parameters
+    model_params = {("model__" + key if not key.startswith("model__") else key): value
+                    for key, value in config["model_params"].items()}
     search_params = config.get("random_search_params", {"n_iter": 10, "cv": 5, "random_state": 42})
 
+    # Train model
     best_model, best_params = train_model(X_train, y_train, pipeline, model_params, search_params)
-
     best_model.fit(X_train, y_train)
 
-    # Predict probabilities for the train set
-    y_train_pred = best_model.predict_proba(X_train)[:, 1]
+    # Evaluate model
+    train_score, test_score = evaluate_model(best_model, X_train, X_test, y_train, y_test)
+    print("Best Parameters:", best_params)
 
-    # Compute ROC AUC score for the train set
-    train_score = roc_auc_score(y_train, y_train_pred)
-    print("Best Model Score Train:", train_score)
+    # Update config with metrics
+    config = update_config_with_metrics(config, train_score, test_score)
 
-    # Predict probabilities for the test set
-    y_test_pred = best_model.predict_proba(X_test)[:, 1]
+    # Save updated config with metrics
+    save_config_file(config, save_path, DATASET_NAME)
 
-    # Compute ROC AUC score for the test set
-    test_score = roc_auc_score(y_test, y_test_pred)
-    print("Best Model Score Test:", test_score)
-
-    # Print evaluation metrics on train and test
-    # print("Best Model Score Train:", best_model.score(X_train, y_train, metric="roc_auc"))
-    # print("Best Model Score Test:", best_model.score(X_test, y_test,  metric="roc_auc"))
-    # print("Best Parameters:", best_params)
-
-    # Save the best model
+    # Save model and feature information
     if save_flag:
-        pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
+        save_model_and_features(best_model, X_train, config, save_path, DATASET_NAME)
+
+    # Generate feature names output after transformation
+    feature_names_out = generate_feature_names_output(X_train, config, categorical_mapping)
+
+    # Print feature importances
+    print_feature_importances(best_model, feature_names_out)
+
+    print("Saved model!")
 
 
 if __name__ == "__main__":

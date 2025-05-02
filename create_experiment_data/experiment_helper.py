@@ -11,11 +11,12 @@ from create_experiment_data.instance_datapoint import InstanceDatapoint
 
 @gin.configurable
 class ExperimentHelper:
-    def __init__(self, conversation,
-                 categorical_mapping,
-                 categorical_features,
-                 template_manager,
-                 actionable_features=None):
+    def __init__(self,
+                 actionable_features=None,
+                 conversation=None,
+                 categorical_mapping=None,
+                 categorical_features=None,
+                 template_manager=None):
         self.conversation = conversation
         self.categorical_mapping = categorical_mapping
         self.categorical_features = categorical_features
@@ -73,20 +74,20 @@ class ExperimentHelper:
             # This ensures no duplicates and proper ordering
             ordered_features = {}
             seen_features = set()  # Keep track of features we've already processed
-            
+
             for feature in self.feature_ordering:
                 if feature in instance.displayable_features and feature not in seen_features:
                     ordered_features[feature] = instance.displayable_features[feature]
                     seen_features.add(feature)
                 elif feature not in instance.displayable_features:
                     print(f"Warning: Feature '{feature}' from feature_ordering not found in instance")
-            
+
             # Only add features that weren't in the ordering if needed
             for feature, value in instance.displayable_features.items():
                 if feature not in seen_features:
                     ordered_features[feature] = value
                     seen_features.add(feature)
-                    
+
             instance.displayable_features = ordered_features
         else:  # alphabetically order features
             instance.displayable_features = dict(sorted(instance.displayable_features.items()))

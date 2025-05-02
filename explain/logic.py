@@ -81,7 +81,6 @@ class ExplainBot:
                  instance_type_naming: str = "instance",
                  encoded_col_mapping_path: dict = None,
                  feature_name_mapping_path: str = None,
-                 feature_ordering: List[str] = None,
                  use_selection: bool = False,
                  use_intent_recognition: bool = False,
                  use_active_dialogue_manager: bool = False,
@@ -145,7 +144,7 @@ class ExplainBot:
         self.instance_type_naming = instance_type_naming
         self.encoded_col_mapping_path = encoded_col_mapping_path
         self.feature_name_mapping_path = feature_name_mapping_path
-        self.feature_ordering = feature_ordering
+        self.feature_ordering = None
         self.use_selection = use_selection
         self.use_intent_recognition = use_intent_recognition
         self.use_active_dialogue_manager = use_active_dialogue_manager
@@ -158,11 +157,6 @@ class ExplainBot:
         self.manual_var_filename = None
 
         self.decoding_model_name = parsing_model_name
-
-        # Initialize completion + parsing modules
-        self.intent_recognition_model = None
-        if self.use_intent_recognition == "openAI":
-            self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
 
         self.decoder = None
 
@@ -211,6 +205,26 @@ class ExplainBot:
                                                                     remove_underscores,
                                                                     store_to_conversation=False)
 
+        # Load Template Manager
+        template_manager = TemplateManager(self.conversation,
+                                           encoded_col_mapping_path=encoded_col_mapping_path,
+                                           categorical_mapping=categorical_mapping,
+                                           feature_name_mapping_path=self.feature_name_mapping_path)
+        self.conversation.add_var('template_manager', template_manager, 'template_manager')
+        self.feature_ordering = list(template_manager.feature_display_names.feature_name_to_display_name.keys())
+
+        # Load Experiment Helper
+        helper = ExperimentHelper(conversation=self.conversation,
+                                  categorical_mapping=self.categorical_mapping,
+                                  categorical_features=self.categorical_features,
+                                  template_manager=template_manager)
+        self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
+
+        # Initialize completion + parsing modules
+        self.intent_recognition_model = None
+        if self.use_intent_recognition == "openAI":
+            self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
+
         if use_llm_agent is not False:
             if self.use_llm_agent == "o1":
                 from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant as Agent
@@ -225,21 +239,6 @@ class ExplainBot:
                                user_ml_knowledge=self.ml_knowledge,
                                experiment_id=self.experiment_id,
                                verbose=True)
-
-        # Load Template Manager
-        template_manager = TemplateManager(self.conversation,
-                                           encoded_col_mapping_path=encoded_col_mapping_path,
-                                           categorical_mapping=categorical_mapping,
-                                           feature_name_mapping_path=self.feature_name_mapping_path)
-        self.conversation.add_var('template_manager', template_manager, 'template_manager')
-
-        # Load Experiment Helper
-        helper = ExperimentHelper(self.conversation,
-                                  self.categorical_mapping,
-                                  self.categorical_features,
-                                  template_manager,
-                                  self.feature_ordering)
-        self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
 
         # Load the explanations
         self.load_explanations(background_ds_x=background_dataset,

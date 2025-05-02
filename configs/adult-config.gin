@@ -4,29 +4,26 @@ ExplainBot.encoded_col_mapping_path = "./data/adult/encoded_col_mapping.json"
 ExplainBot.categorical_mapping_path = "./data/adult/categorical_mapping.json"
 ExplainBot.background_dataset_file_path = "./data/adult/adult_train.csv"
 ExplainBot.dataset_file_path = "./data/adult/adult_test.csv"
-
 ExplainBot.name = "adult census dataset"
 
 # Seed
 ExplainBot.seed = 0
 
-
 # Dataset feature information
 ExplainBot.dataset_index_column = 0
 ExplainBot.instance_type_naming = "Person"
 ExplainBot.target_variable_name = "Income"
-ExplainBot.categorical_features = ['Marital.status', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
+ExplainBot.categorical_features = ['MaritalStatus', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
 ExplainBot.ordinary_features = ['InvestmentOutcome','EducationLevel', 'WorkLifeBalance']
-ExplainBot.numerical_features = ['Age', 'Hours.per.week']
+ExplainBot.numerical_features = ['Age', 'WeeklyWorkingHours']
 ExplainBot.remove_underscores = True
-ExplainBot.actionable_features = ["InvestmentOutcome", "EducationLevel", "Occupation"]
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
 ExplainBot.use_llm_agent = "mape_k" # one of False, "simple", "mape_k", "o1"
 
 # Experiment Helper
-ExperimentHelper.actionable_features = ['Age', 'EducationLevel', 'Marital.status', 'Occupation', 'Hours.per.week', 'InvestmentOutcome']
+ExperimentHelper.actionable_features = ['Age', 'EducationLevel', 'MaritalStatus', 'Occupation', 'WeeklyWorkingHours', 'InvestmentOutcome']
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
@@ -68,27 +65,3 @@ DatasetDescription.dataset_objective = "Predict whether an individual earns more
 DatasetDescription.dataset_description = "Adult Census Income Dataset, commonly used for binary classification tasks in machine learning. The goal is to predict whether an individual’s income exceeds $50K/year based on demographic and employment-related features. It is based on US Census data and is often used to explore income distribution patterns, discrimination, or bias in predictive models."
 DatasetDescription.model_description = "random forest model"
 DatasetDescription.user_study_objective = "guess the model's prediction for the shown individual"
-
-# Feature Tooltip
-ExplainBot.feature_tooltip_mapping = {
-    "age": "The individual's age, in years.",
-    "education level": "Highest level of education attained by the individual, categorized as: Dropout, High School grad, Associates, Bachelors grad, Masters grad, Professional Degree or Doctorate/Prof Level.",
-    "weekly working hours": "The total number of hours the individual works in a typical week.",
-    "marital status": "The individual's marital status, indicating whether they are Married or Single. This simplification may encompass a broader range of legal statuses.",
-    "work life balance": "A self-reported assessment of the individual's work-life balance, ranging from poor to excellent. This subjective measure reflects the individual's satisfaction with their ability to balance work and personal life.",
-    "occupation": "The category of the individual's occupation, such as Admin (Administrative and clerical roles: office clerks and secretaries), Military (Personnel serving in the army), Blue-Collar (Manual labor occupations: craft workers, machine operators, farmers, handlers, cleaners), White-Collar (Executive and managerial positions involving strategic planning), Professional (Specialized professions requiring advanced education: doctors, lawyers, engineers, and educators), Sales (Roles related to selling products or services: sales representatives, retail personnel), Service (Occupations providing services to individuals or communities: protective services e.g., law enforcement officers, firefighters, technical support)","workclass": "The work class of the person: Government, Private Sector, Self-Employed / Entrepreneurial, Unemployed and Other.",
-    "investment outcome": "The result of the individual's investment activities, categorized as: No investment, Loss, or Gain. This reflects whether the individual has investments and if so, whether they have made a profit or a loss."
-}
-
-# Feature Units
-ExplainBot.feature_units_mapping = {
-    "Age": "years",
-    "Education": "",
-    "Gender": "",
-    "Weekly Working Hours": "hours",
-    "Marital Status": "",
-    "Work Life Balance": "",
-    "Occupation": "",
-    "Workclass": "",
-    "Investment Outcome": ""
-}
