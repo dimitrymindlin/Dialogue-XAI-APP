@@ -18,7 +18,7 @@ from llm_agents.mape_k_approach.analyze_component.analyze_prompt import get_anal
 from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import get_plan_prompt_template, PlanResultModel, ChosenExplanationModel
 from llm_agents.mape_k_approach.execute_component.execute_prompt import get_execute_prompt_template, ExecuteResult
 # Import the new combined monitor-analyze model and prompt
-from llm_agents.mape_k_approach.monitor_analyze_combined import get_monitor_analyze_prompt_template, MonitorAnalyzeResultModel
+from llm_agents.mape_k_2_components.monitor_analyze_combined import get_monitor_analyze_prompt_template, MonitorAnalyzeResultModel
 
 # Configure logging
 LOG_FOLDER = "mape-k-logs"
@@ -345,121 +345,11 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
             {"role": "user", "content": plan_prompt}
         ]
         
-        # Define the function calling format for structured output, using nested schemas for the ExplanationTarget model
+        # Define the function calling format for structured output
         functions = [{
             "name": "plan_result",
             "description": "Return the planning results",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "reasoning": {
-                        "type": "string",
-                        "description": "The reasoning behind the decision for new explanations and which explanations to include in the next steps."
-                    },
-                    "new_explanations": {
-                        "type": "array",
-                        "description": "List of new explanations to be added to the explanation plan.",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "explanation_name": {
-                                    "type": "string",
-                                    "description": "The name of the new explanation concept."
-                                },
-                                "description": {
-                                    "type": "string",
-                                    "description": "Description of the new explanation concept."
-                                },
-                                "explanation_steps": {
-                                    "type": "array",
-                                    "description": "List of steps for the new explanation concept.",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "step_name": {
-                                                "type": "string",
-                                                "description": "The name of the explanation step."
-                                            },
-                                            "description": {
-                                                "type": "string",
-                                                "description": "Description of the explanation step."
-                                            },
-                                            "dependencies": {
-                                                "type": "array",
-                                                "description": "List of dependencies for the explanation step.",
-                                                "items": {
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "is_optional": {
-                                                "type": "boolean",
-                                                "description": "Whether the explanation step is optional or not."
-                                            }
-                                        },
-                                        "required": ["step_name", "description", "dependencies", "is_optional"]
-                                    }
-                                }
-                            },
-                            "required": ["explanation_name", "description", "explanation_steps"]
-                        }
-                    },
-                    "explanation_plan": {
-                        "type": "array",
-                        "description": "List of explanations or scaffolding indicating long term steps to explain to the user.",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "explanation_name": {
-                                    "type": "string",
-                                    "description": "The name of the explanation concept."
-                                },
-                                "step": {
-                                    "type": "string", 
-                                    "description": "The name or label of the step of the explanation."
-                                }
-                            },
-                            "required": ["explanation_name", "step"]
-                        }
-                    },
-                    "next_response": {
-                        "type": "array",
-                        "description": "A list of explanations and steps to include in the next response to answer the user's question.",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "reasoning": {
-                                    "type": "string",
-                                    "description": "The reasoning behind the choice of the current explanandum."
-                                },
-                                "explanation_name": {
-                                    "type": "string",
-                                    "description": "The name of the current explanation concept."
-                                },
-                                "step_name": {
-                                    "type": "string",
-                                    "description": "Step name that is the current explanandum."
-                                },
-                                "communication_goals": {
-                                    "type": "array",
-                                    "description": "List of atomic goals while communicating the complete explanation to the user",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "goal": {
-                                                "type": "string",
-                                                "description": "Each goal should focus on a specific aspect"
-                                            }
-                                        },
-                                        "required": ["goal"]
-                                    }
-                                }
-                            },
-                            "required": ["reasoning", "explanation_name", "step_name", "communication_goals"]
-                        }
-                    }
-                },
-                "required": ["reasoning", "new_explanations", "explanation_plan", "next_response"]
-            }
+            "parameters": PlanResultModel.schema()
         }]
         
         try:
@@ -475,13 +365,67 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
             function_call = response.choices[0].message.function_call
             function_args = json.loads(function_call.arguments)
             
-            # Add default values for any missing dependencies and is_optional fields
-            for exp in function_args.get("new_explanations", []):
-                for step in exp.get("explanation_steps", []):
-                    if "dependencies" not in step:
-                        step["dependencies"] = []
-                    if "is_optional" not in step:
-                        step["is_optional"] = False
+            # Fix new_explanations field if it's missing or None
+            if "new_explanations" not in function_args or function_args["new_explanations"] is None:
+                function_args["new_explanations"] = []
+                
+            # Process each explanation to ensure it has required fields
+            if function_args["new_explanations"]:
+                fixed_explanations = []
+                for exp in function_args["new_explanations"]:
+                    # Skip invalid explanations
+                    if not isinstance(exp, dict) or "explanation_name" not in exp or "description" not in exp:
+                        logger.warning(f"Skipping invalid new explanation: {exp}")
+                        continue
+                    
+                    # If explanation_steps is missing, create a default one
+                    if "explanation_steps" not in exp or not isinstance(exp["explanation_steps"], list) or not exp["explanation_steps"]:
+                        # Create a default explanation step with Concept
+                        exp["explanation_steps"] = [
+                            {
+                                "step_name": "Concept",
+                                "description": f"Basic concept of {exp['explanation_name']}",
+                                "dependencies": [],
+                                "is_optional": False
+                            }
+                        ]
+                    else:
+                        # Ensure each step has all required fields
+                        fixed_steps = []
+                        for step in exp["explanation_steps"]:
+                            if not isinstance(step, dict):
+                                continue
+                                
+                            # Ensure step has required fields
+                            fixed_step = {
+                                "step_name": step.get("step_name", "Concept"),
+                                "description": step.get("description", f"Step for {exp['explanation_name']}"),
+                                "dependencies": step.get("dependencies", []),
+                                "is_optional": step.get("is_optional", False)
+                            }
+                            
+                            # Check mandatory fields
+                            if not fixed_step["step_name"] or not fixed_step["description"]:
+                                continue
+                                
+                            fixed_steps.append(fixed_step)
+                            
+                        if fixed_steps:
+                            exp["explanation_steps"] = fixed_steps
+                        else:
+                            # No valid steps were found, create a default one
+                            exp["explanation_steps"] = [
+                                {
+                                    "step_name": "Concept",
+                                    "description": f"Basic concept of {exp['explanation_name']}",
+                                    "dependencies": [],
+                                    "is_optional": False
+                                }
+                            ]
+                    
+                    fixed_explanations.append(exp)
+                
+                function_args["new_explanations"] = fixed_explanations
             
             # Check if reasoning should be included
             if not self.include_plan_reasoning:
@@ -542,148 +486,6 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
             self.current_log_row["plan"] = fallback_plan.json()
             update_last_log_row(self.current_log_row, self.log_file)
             return fallback_plan
-
-    async def execute(self, user_message, plan_result):
-        """Execute step: Determining realization of explanation moves, performing selected action"""
-
-        # Validate plan result structure
-        if not hasattr(plan_result, 'explanation_plan') or not all(isinstance(exp, ChosenExplanationModel) for exp in plan_result.explanation_plan):
-            logger.warning(f"Invalid plan result structure: {plan_result}")
-            # Handle gracefully by creating empty list if needed
-            if not hasattr(plan_result, 'explanation_plan'):
-                plan_result.explanation_plan = []
-
-        plan_reasoning = plan_result.reasoning
-
-        # Get explanations from the plan
-        xai_explanations_from_plan = self.user_model.get_string_explanations_from_plan(
-            plan_result.explanation_plan)
-
-        # Create the execute prompt
-        execute_prompt = get_execute_prompt_template().format(
-            domain_description=self.domain_description,
-            feature_names=self.feature_names,
-            instance=self.instance,
-            predicted_class_name=self.predicted_class_name,
-            chat_history=self.chat_history,
-            user_model=self.user_model.get_state_summary(as_dict=False),
-            user_message=user_message,
-            plan_result=xai_explanations_from_plan,
-            plan_reasoning=plan_reasoning,
-            next_exp_content=plan_result.next_response,
-        )
-
-        start_time = datetime.datetime.now()
-
-        # Use OpenAI API directly
-        messages = [
-            {"role": "system", "content": "You are an AI execution agent. Generate a response to the user."},
-            {"role": "user", "content": execute_prompt}
-        ]
-
-        # Define the function calling format for structured output using explicit schema
-        functions = [{
-            "name": "execute_result",
-            "description": "Return the execution results",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "reasoning": {
-                        "type": "string",
-                        "description": "The reasoning behind the response generation."
-                    },
-                    "response": {
-                        "type": "string",
-                        "description": "The response to the user's question about the shown instance and prediction."
-                    },
-                    "success": {
-                        "type": "boolean",
-                        "description": "Whether the execution was successful.",
-                        "default": True
-                    }
-                },
-                "required": ["reasoning", "response"]
-            }
-        }]
-
-        try:
-            response = await aclient.chat.completions.create(
-                model=OPENAI_MODEL_NAME,
-                messages=messages,
-                functions=functions,
-                function_call={"name": "execute_result"}
-            )
-
-            # Extract the function call result
-            function_call = response.choices[0].message.function_call
-            function_args = json.loads(function_call.arguments)
-            
-            # Remove reasoning if it shouldn't be included
-            if not self.include_execute_reasoning and "reasoning" in function_args:
-                function_args["reasoning"] = "[reasoning excluded]"
-                
-            # Convert back to JSON string
-            fixed_args = json.dumps(function_args)
-            
-            # Parse with the Pydantic model
-            execute_result = ExecuteResult.parse_raw(fixed_args)
-
-            end_time = datetime.datetime.now()
-            logger.info(f"Time taken for Execute: {end_time - start_time}")
-            
-            # Conditionally log the result based on reasoning inclusion flag
-            if self.include_execute_reasoning:
-                logger.info(f"Execute result: {execute_result}.\n")
-            else:
-                # Create a modified version without reasoning for logging
-                log_result = execute_result.dict()
-                log_result["reasoning"] = "[reasoning excluded]"
-                logger.info(f"Execute result (filtered reasoning): {log_result}.\n")
-
-            # Log and save history before replacing placeholders
-            self.current_log_row["execute"] = execute_result.json()
-            update_last_log_row(self.current_log_row, self.log_file)
-
-            # Only append the agent's response to chat history (user message was added at the beginning)
-            self.append_to_history("agent", execute_result.response)
-
-            # Check if result has placeholders and replace them
-            execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
-
-            # Update Explanandum state and User Model
-            # Update user model based on next explanations
-            for next_explanation in plan_result.next_response:
-                explanation_target = next_explanation
-                exp = explanation_target.explanation_name
-                exp_step = explanation_target.step_name
-                self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.UNDERSTOOD.value)
-
-            # Add next explanations to last shown explanations
-            for next_explanation in plan_result.next_response:
-                self.last_shown_explanations.append(next_explanation)
-
-            # Use json.dumps for user_model since it's not a Pydantic object but returns a dict from get_state_summary
-            self.current_log_row["user_model"] = json.dumps(self.user_model.get_state_summary(as_dict=True))
-            update_last_log_row(self.current_log_row, self.log_file)
-            self.user_model.new_datapoint()
-
-            # Log new user model
-            logger.info(f"User model after execute: {self.user_model.get_state_summary(as_dict=False)}.\n")
-
-            return execute_result
-            
-        except Exception as e:
-            logger.error(f"Error in execute step: {str(e)}")
-            # Return a minimal valid execute result as fallback
-            fallback_execute = ExecuteResult(
-                reasoning="Error occurred during execution. Using fallback." if self.include_execute_reasoning else "[reasoning excluded]",
-                response="I'm sorry, I wasn't able to process your question properly. Could you please rephrase or try asking something else?",
-                success=False
-            )
-            self.current_log_row["execute"] = fallback_execute.json()
-            update_last_log_row(self.current_log_row, self.log_file)
-            self.append_to_history("agent", fallback_execute.response)
-            return fallback_execute
 
     async def monitor_analyze(self, user_message):
         """Combined Monitor and Analyze steps: Process the user's cognitive state in a single API call"""
@@ -766,16 +568,44 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
         if len(combined_result.explicit_understanding_displays) > 0:
             self.user_model.explicit_understanding_signals = combined_result.explicit_understanding_displays
 
-        # Update the user model based on analyze results
+        # Process and validate model changes
+        validated_model_changes = []
         for change_entry in combined_result.model_changes:
-            try:
-                exp = change_entry["explanation_name"]
-                change = change_entry["state"]
-                step = change_entry["step"]
-                self.user_model.update_explanation_step_state(exp, step, change)
-            except KeyError:
-                logger.error(f"Invalid change entry: {change_entry}")
-                continue
+            if isinstance(change_entry, dict):
+                # Fix the step_name vs step issue
+                if "step_name" in change_entry and not "step" in change_entry:
+                    # Handle case where step_name contains a state name (invalid)
+                    states = ["not_yet_explained", "understood", "not_understood", "partially_understood"]
+                    if change_entry["step_name"] in states:
+                        # Use "Concept" as a default step when receiving a state as step_name
+                        change_entry["step"] = "Concept"
+                    else:
+                        # Otherwise use the provided step_name as step
+                        change_entry["step"] = change_entry["step_name"]
+                    del change_entry["step_name"]
+                
+                # Ensure all required fields exist with non-empty values
+                if (("explanation_name" in change_entry and change_entry["explanation_name"]) and
+                    ("state" in change_entry and change_entry["state"]) and
+                    ("step" in change_entry and change_entry["step"])):
+                    
+                    # Skip entries where step is actually a state name
+                    states = ["not_yet_explained", "understood", "not_understood", "partially_understood"]
+                    if change_entry["step"] not in states:
+                        validated_model_changes.append(change_entry)
+                    else:
+                        logger.error(f"Invalid step value (contains state name): {change_entry}")
+                else:
+                    logger.error(f"Missing required fields in model change: {change_entry}")
+            else:
+                logger.error(f"Invalid model change type: {type(change_entry)}")
+        
+        # Apply only valid changes to the user model
+        for change_entry in validated_model_changes:
+            exp = change_entry["explanation_name"]
+            change = change_entry["state"]
+            step = change_entry["step"]
+            self.user_model.update_explanation_step_state(exp, step, change)
         
         # Create separate results for logging purposes with optional reasoning
         monitor_result = MonitorResultModel(
@@ -798,29 +628,3 @@ class MapeKXAIWorkflowAgent(XAIBaseAgent):
         logger.info(f"User model after combined monitor-analyze: {self.user_model.get_state_summary(as_dict=True)}.\n")
         
         return monitor_result, analyze_result
-
-    # Main method to run the full MAPE-K workflow using the combined monitor-analyze step
-    async def answer_user_question(self, user_question):
-        """Run the optimized MAPE-K workflow to answer a user question, combining monitor and analyze steps"""
-        start_time = datetime.datetime.now()
-
-        # Append user message to chat history at the beginning of the workflow
-        # This ensures all components have access to the updated chat history
-        self.append_to_history("user", user_question)
-
-        # Step 1: Combined Monitor and Analyze in a single API call
-        monitor_result, analyze_result = await self.monitor_analyze(user_question)
-        
-        # Step 2: Plan
-        plan_result = await self.plan(user_question)
-        
-        # Step 3: Execute
-        execute_result = await self.execute(user_question, plan_result)
-        
-        end_time = datetime.datetime.now()
-        logger.info(f"Time taken for optimized MAPE-K Loop with combined Monitor-Analyze: {end_time - start_time}")
-        
-        analysis = execute_result.reasoning
-        response = execute_result.response
-        
-        return analysis, response
