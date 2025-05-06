@@ -21,6 +21,7 @@ xai_explanations:
       - step_name: "Concept"
         description: >
           Feature importance explanations show how individual features influence predictions, either toward over or under 50k, with varying strength. This helps identify key drivers behind the model’s decisions.
+          After listing the features, ask if the user would like to see a plot visualizing the feature importance and influence on the model’s decision.
           dependencies: [ ]
 
       - step_name: "FeatureInfluencesPlot"
