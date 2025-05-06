@@ -1,0 +1,15 @@
+{
+  "feature_names": [
+    "Age",
+    "Marital Status",
+    "Occupation",
+    "Hours Per Week",
+    "Work Life Balance",
+    "Education Level",
+    "Investment Outcome"
+  ],
+  "categorical_features": [
+    "Occupation",
+    "Marital Status"
+  ]
+}
