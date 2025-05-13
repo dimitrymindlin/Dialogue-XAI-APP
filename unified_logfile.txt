@@ -1,12 +1,12 @@
-2025-05-06 10:13:03,564 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
-Initialized mape-k-logs\06.05.2025_10:13_unified_.csv with headers.
+2025-05-13 05:10:01,795 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+Initialized mape-k-logs\13.05.2025_05:10_unified_.csv with headers.
 
 
-2025-05-06 10:13:05,145 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+2025-05-13 05:10:03,076 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
 User model after initialization: {'NOT_YET_EXPLAINED': {'Counterfactuals': [('Concept', []), ('ImpactMultipleFeatures', []), ('ImpactSingleFeature', [])], 'FeatureImportances': [('Concept', []), ('FeatureInfluencesPlot', []), ('FeaturesInFavourOfOver50k', []), ('FeaturesInFavourOfUnder50k', []), ('WhyThisFeatureImportant', [])], 'AnchorExplanation': [('Concept', []), ('Anchor', [])], 'FeatureStatistics': [('Concept', []), ('Feature Statistics', [])], 'TextualPartialDependence': [('Concept', []), ('PDPDescription', [])], 'PossibleClarifications': [('Concept', []), ('ClarificationsList', [])], 'ModelPredictionConfidence': [('Concept', []), ('Confidence', [])], 'CeterisParibus': [('Concept', []), ('PossibleClassFlips', []), ('ImpossibleClassFlips', [])]}, 'User Info': {'Cognitive State': '', 'ML Knowledge': 'Low, which means that the user may have a basic understanding of AI from casual exposure or news reports. Explanations should focus on simple ideas and relatable examples, avoiding technical jargon or complex interpretability methods.', 'Explicit Understanding Signals': []}}.
 
 
-2025-05-06 10:13:13,807 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+2025-05-13 05:10:11,285 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
 Raw LLM response: ```json
 {
   "Monitor": {
@@ -20,23 +20,23 @@ Raw LLM response: ```json
     "next_explanations": [
       {
         "name": "Counterfactuals",
-        "description": "Introduce the concept of counterfactuals to explain how changing certain features can alter the prediction.",
+        "description": "Introduce the concept of counterfactuals to explain how changes in features can alter predictions.",
         "dependencies": [],
         "is_optional": false
       }
     ],
-    "reasoning": "Since the user has not yet engaged with any explanations and has a low ML knowledge level, starting with a simple and relatable concept like counterfactuals can help build foundational understanding. This explanation does not require prior knowledge and can be easily understood."
+    "reasoning": "Since the user has not yet been introduced to any explanations and has a low ML knowledge level, starting with the basic concept of counterfactuals is logical. This explanation is simple and foundational, helping the user understand how feature changes impact predictions."
   },
   "Execute": {
-    "html_response": "<p>Welcome! Let's start by exploring how changing certain features can affect predictions. This is known as <b>counterfactuals</b>. For example, if we change the <b>Weekly Working Hours</b> from 60 to 43, it might alter the income prediction. Would you like to know more about how this works?</p>"
+    "html_response": "<p>Welcome! Let's start by exploring how changes in certain features can affect predictions. This is known as <b>counterfactual explanations</b>. They show what needs to change to alter the model's prediction. Would you like to know more about this?</p>"
   }
 }
 ```
 
-2025-05-06 10:13:13,818 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
-Time taken for Unified MAPE-K: 0:00:05.036423
+2025-05-13 05:10:11,296 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+Time taken for Unified MAPE-K: 0:00:04.939957
 
-2025-05-06 10:13:13,827 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+2025-05-13 05:10:11,303 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
 User model after unified MAPE-K: The user's cognitive state is active, characterized by straightforward participation through repetition or acknowledgment without contributing additional ideas; this is the lowest form of engagement compared to both the idea-generating constructive state and the dynamic, collaborative interactive state..
 The user's ML knowledge is Low, which means that the user may have a basic understanding of AI from casual exposure or news reports. Explanations should focus on simple ideas and relatable examples, avoiding technical jargon or complex interpretability methods..
  The user's understanding about the explanations is detailed here with the keys what the user UNDERSTOOD, NOT_UNDERSTOOD, or NOT_YET_EXPLAINED
@@ -51,6 +51,108 @@ State: NOT_YET_EXPLAINED
   - Explanation: CeterisParibus, Explanation Steps: [Concept (), PossibleClassFlips (), ImpossibleClassFlips ()].
 
 
-2025-05-06 10:13:13,829 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
-Total time for Unified MAPE-K workflow: 0:00:05.050513
+2025-05-13 05:10:11,305 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+Total time for Unified MAPE-K workflow: 0:00:04.950915
+
+2025-05-13 05:10:52,758 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+Raw LLM response: ```json
+{
+  "Monitor": {
+    "understanding_displays": ["signal_non_understanding"],
+    "cognitive_state": "active"
+  },
+  "Analyze": {
+    "updated_explanation_states": {
+      "Counterfactuals": "NOT_UNDERSTOOD"
+    }
+  },
+  "Plan": {
+    "next_explanations": [
+      {
+        "name": "Counterfactuals",
+        "description": "Introduce the concept of counterfactuals to explain how changes in features can alter predictions.",
+        "dependencies": [],
+        "is_optional": false
+      }
+    ],
+    "reasoning": "The user explicitly asked for an explanation of the concept of counterfactuals, indicating a lack of understanding. Providing a simple and clear explanation of this concept is necessary to address the user's non-understanding and to build foundational knowledge."
+  },
+  "Execute": {
+    "html_response": "<p>Counterfactual explanations help us understand how changing certain features can alter the model's prediction. For example, if the model predicts an income over $50k, a counterfactual explanation might show that reducing weekly working hours could change the prediction to under $50k. Would you like to see more examples of how features can be adjusted to change predictions?</p>"
+  }
+}
+```
+
+2025-05-13 05:10:52,767 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+Time taken for Unified MAPE-K: 0:00:05.540914
+
+2025-05-13 05:10:52,773 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+User model after unified MAPE-K: The user's cognitive state is active, characterized by straightforward participation through repetition or acknowledgment without contributing additional ideas; this is the lowest form of engagement compared to both the idea-generating constructive state and the dynamic, collaborative interactive state..
+The user's ML knowledge is Low, which means that the user may have a basic understanding of AI from casual exposure or news reports. Explanations should focus on simple ideas and relatable examples, avoiding technical jargon or complex interpretability methods..
+With the last message they signalled ['signal_non_understanding'].
+ The user's understanding about the explanations is detailed here with the keys what the user UNDERSTOOD, NOT_UNDERSTOOD, or NOT_YET_EXPLAINED
+State: NOT_YET_EXPLAINED
+  - Explanation: Counterfactuals, Explanation Steps: [Concept (), ImpactMultipleFeatures (), ImpactSingleFeature ()]
+  - Explanation: FeatureImportances, Explanation Steps: [Concept (), FeatureInfluencesPlot (), FeaturesInFavourOfOver50k (), FeaturesInFavourOfUnder50k (), WhyThisFeatureImportant ()]
+  - Explanation: AnchorExplanation, Explanation Steps: [Concept (), Anchor ()]
+  - Explanation: FeatureStatistics, Explanation Steps: [Concept (), Feature Statistics ()]
+  - Explanation: TextualPartialDependence, Explanation Steps: [Concept (), PDPDescription ()]
+  - Explanation: PossibleClarifications, Explanation Steps: [Concept (), ClarificationsList ()]
+  - Explanation: ModelPredictionConfidence, Explanation Steps: [Concept (), Confidence ()]
+  - Explanation: CeterisParibus, Explanation Steps: [Concept (), PossibleClassFlips (), ImpossibleClassFlips ()].
+
+
+2025-05-13 05:10:52,774 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+Total time for Unified MAPE-K workflow: 0:00:05.550937
+
+2025-05-13 05:12:57,416 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+Raw LLM response: ```json
+{
+  "Monitor": {
+    "understanding_displays": ["signal_non_understanding"],
+    "cognitive_state": "active"
+  },
+  "Analyze": {
+    "updated_explanation_states": {
+      "Counterfactuals": "NOT_UNDERSTOOD"
+    }
+  },
+  "Plan": {
+    "next_explanations": [
+      {
+        "name": "Counterfactuals",
+        "description": "Re-explain the concept of counterfactuals with simpler language and examples to address the user's non-understanding.",
+        "dependencies": [],
+        "is_optional": false
+      }
+    ],
+    "reasoning": "The user signaled non-understanding about the prediction, indicating confusion about the counterfactual explanation. Re-explaining this concept with simpler language and examples is necessary to build foundational understanding."
+  },
+  "Execute": {
+    "html_response": "<p>It seems there might be some confusion about the prediction. Let's revisit the concept of <b>counterfactual explanations</b>. These explanations show how changing certain features, like reducing weekly working hours, could alter the model's prediction from over $50k to under $50k. Would you like to see more examples of how features can be adjusted to change predictions?</p>"
+  }
+}
+```
+
+2025-05-13 05:12:57,425 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+Time taken for Unified MAPE-K: 0:00:04.854564
+
+2025-05-13 05:12:57,432 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+User model after unified MAPE-K: The user's cognitive state is active, characterized by straightforward participation through repetition or acknowledgment without contributing additional ideas; this is the lowest form of engagement compared to both the idea-generating constructive state and the dynamic, collaborative interactive state..
+The user's ML knowledge is Low, which means that the user may have a basic understanding of AI from casual exposure or news reports. Explanations should focus on simple ideas and relatable examples, avoiding technical jargon or complex interpretability methods..
+With the last message they signalled ['signal_non_understanding'].
+ The user's understanding about the explanations is detailed here with the keys what the user UNDERSTOOD, NOT_UNDERSTOOD, or NOT_YET_EXPLAINED
+State: NOT_YET_EXPLAINED
+  - Explanation: Counterfactuals, Explanation Steps: [Concept (), ImpactMultipleFeatures (), ImpactSingleFeature ()]
+  - Explanation: FeatureImportances, Explanation Steps: [Concept (), FeatureInfluencesPlot (), FeaturesInFavourOfOver50k (), FeaturesInFavourOfUnder50k (), WhyThisFeatureImportant ()]
+  - Explanation: AnchorExplanation, Explanation Steps: [Concept (), Anchor ()]
+  - Explanation: FeatureStatistics, Explanation Steps: [Concept (), Feature Statistics ()]
+  - Explanation: TextualPartialDependence, Explanation Steps: [Concept (), PDPDescription ()]
+  - Explanation: PossibleClarifications, Explanation Steps: [Concept (), ClarificationsList ()]
+  - Explanation: ModelPredictionConfidence, Explanation Steps: [Concept (), Confidence ()]
+  - Explanation: CeterisParibus, Explanation Steps: [Concept (), PossibleClassFlips (), ImpossibleClassFlips ()].
+
+
+2025-05-13 05:12:57,433 - llm_agents.mape_k_2_components.unified_mape_k_agent - INFO:
+Total time for Unified MAPE-K workflow: 0:00:04.864977
 
