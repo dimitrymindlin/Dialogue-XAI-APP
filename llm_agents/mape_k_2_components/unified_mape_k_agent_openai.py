@@ -179,9 +179,9 @@ class NewExplanationModel(BaseModel):
     Data model for a new explanation concept to be added.
     """
     name: str = Field(..., description="The name of the explanation concept")
-    description: str = Field("", description="Brief justification for this explanation")
-    dependencies: List[str] = Field(default_factory=list, description="List of dependencies")
-    is_optional: bool = Field(False, description="Whether this explanation is optional")
+    description: str = Field(None, description="Brief justification for this explanation")
+    dependencies: List[str] = Field(None, description="List of dependencies")
+    is_optional: bool = Field(None, description="Whether this explanation is optional")
 
 
 class ChosenExplanationModel(BaseModel):
@@ -190,9 +190,9 @@ class ChosenExplanationModel(BaseModel):
     """
     explanation_name: str = Field(..., description="The name of the explanation concept.")
     step: str = Field(..., description="The name or label of the step of the explanation.")
-    description: str = Field("", description="Brief justification for this explanation")
-    dependencies: List[str] = Field(default_factory=list, description="List of dependencies")
-    is_optional: bool = Field(False, description="Whether this explanation is optional")
+    description: str = Field(None, description="Brief justification for this explanation")
+    dependencies: List[str] = Field(None, description="List of dependencies")
+    is_optional: bool = Field(None, description="Whether this explanation is optional")
 
 
 class CommunicationGoal(BaseModel):
@@ -210,7 +210,7 @@ class ExplanationTarget(BaseModel):
     reasoning: str = Field(..., description="Reasoning for this explanation target")
     explanation_name: str = Field(..., description="Name of the explanation")
     step_name: str = Field(..., description="Step name of the explanation")
-    communication_goals: List[CommunicationGoal] = Field(default_factory=list, description="Communication goals for this explanation")
+    communication_goals: List[CommunicationGoal] = Field(None, description="Communication goals for this explanation")
 
 
 class ModelChange(BaseModel):
@@ -227,23 +227,23 @@ class MAPE_K_ResultModel(BaseModel):
     Complete MAPE-K workflow result model.
     """
     # Monitor stage
-    monitor_reasoning: str = Field("", description="Reasoning about the user's understanding")
-    explicit_understanding_displays: List[str] = Field(default_factory=list, description="List of explicit understanding displays from the user message")
-    mode_of_engagement: str = Field("", description="The cognitive mode of engagement from the user message")
+    monitor_reasoning: str = Field(None, description="Reasoning about the user's understanding")
+    explicit_understanding_displays: List[str] = Field(None, description="List of explicit understanding displays from the user message")
+    mode_of_engagement: str = Field(None, description="The cognitive mode of engagement from the user message")
     
     # Analyze stage
-    analyze_reasoning: str = Field("", description="Reasoning behind analyzing user model changes")
-    model_changes: List[ModelChange] = Field(default_factory=list, description="List of changes to make to the user model")
+    analyze_reasoning: str = Field(None, description="Reasoning behind analyzing user model changes")
+    model_changes: List[ModelChange] = Field(None, description="List of changes to make to the user model")
     
     # Plan stage
-    plan_reasoning: str = Field("", description="Reasoning behind the explanation plan")
-    new_explanations: List[NewExplanationModel] = Field(default_factory=list, description="List of new explanations to add")
-    explanation_plan: List[ChosenExplanationModel] = Field(default_factory=list, description="List of chosen explanations for the plan")
-    next_response: List[ExplanationTarget] = Field(default_factory=list, description="List of explanation targets for the next response")
+    plan_reasoning: str = Field(None, description="Reasoning behind the explanation plan")
+    new_explanations: List[NewExplanationModel] = Field(None, description="List of new explanations to add")
+    explanation_plan: List[ChosenExplanationModel] = Field(None, description="List of chosen explanations for the plan")
+    next_response: List[ExplanationTarget] = Field(None, description="List of explanation targets for the next response")
     
     # Execute stage
-    execute_reasoning: str = Field("", description="Reasoning behind the constructed response")
-    response: str = Field("", description="The HTML-formatted response to the user")
+    execute_reasoning: str = Field(None, description="Reasoning behind the constructed response")
+    response: str = Field(None, description="The HTML-formatted response to the user")
 
 
 class ExecuteResult(BaseModel):
@@ -449,38 +449,38 @@ class UnifiedMapeKOpenAIAgent(XAIBaseAgent):
             # Convert to dictionary format for compatibility with existing code
             result_json = {
                 "Monitor": {
-                    "monitor_reasoning": result.monitor_reasoning,
-                    "understanding_displays": result.explicit_understanding_displays,
-                    "cognitive_state": result.mode_of_engagement
+                    "monitor_reasoning": result.monitor_reasoning or "",
+                    "understanding_displays": result.explicit_understanding_displays or [],
+                    "cognitive_state": result.mode_of_engagement or "active"
                 },
                 "Analyze": {
-                    "analyze_reasoning": result.analyze_reasoning,
+                    "analyze_reasoning": result.analyze_reasoning or "",
                     "updated_explanation_states": {
-                        change.explanation_name: change.state for change in result.model_changes
+                        change.explanation_name: change.state for change in (result.model_changes or [])
                     }
                 },
                 "Plan": {
-                    "reasoning": result.plan_reasoning,
+                    "reasoning": result.plan_reasoning or "",
                     "next_explanations": [
                         {
                             "name": exp.explanation_name,
-                            "description": exp.description,
-                            "dependencies": exp.dependencies,
-                            "is_optional": exp.is_optional
-                        } for exp in result.explanation_plan
+                            "description": exp.description or "",
+                            "dependencies": exp.dependencies or [],
+                            "is_optional": exp.is_optional if exp.is_optional is not None else False
+                        } for exp in (result.explanation_plan or [])
                     ],
                     "new_explanations": [
                         {
                             "name": exp.name,
-                            "description": exp.description,
-                            "dependencies": exp.dependencies,
-                            "is_optional": exp.is_optional
-                        } for exp in result.new_explanations
+                            "description": exp.description or "",
+                            "dependencies": exp.dependencies or [],
+                            "is_optional": exp.is_optional if exp.is_optional is not None else False
+                        } for exp in (result.new_explanations or [])
                     ]
                 },
                 "Execute": {
-                    "execute_reasoning": result.execute_reasoning,
-                    "html_response": result.response
+                    "execute_reasoning": result.execute_reasoning or "",
+                    "html_response": result.response or "I apologize, but I'm having difficulty generating a proper response."
                 }
             }
             logger.info(f"Structured response parsed successfully: {result_json}")
