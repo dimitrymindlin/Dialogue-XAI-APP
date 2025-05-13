@@ -1,6 +1,7 @@
 import csv
 import copy
 import json
+from typing import List, Dict, Any, Optional
 
 from dotenv import load_dotenv
 from llama_index.core import PromptTemplate
@@ -30,10 +31,16 @@ from llm_agents.utils.postprocess_message import replace_plot_placeholders
 from llm_agents.merged_prompts import get_merged_prompts
 import os
 import datetime
+import traceback
 
 LOG_FOLDER = "mape-k-logs"
 if not os.path.exists(LOG_FOLDER):
     os.makedirs(LOG_FOLDER)
+
+# Performance logging folder
+PERFORMANCE_LOG_FOLDER = "performance-logs"
+if not os.path.exists(PERFORMANCE_LOG_FOLDER):
+    os.makedirs(PERFORMANCE_LOG_FOLDER)
 
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
@@ -57,7 +64,31 @@ formatter = logging.Formatter(
 file_handler.setFormatter(formatter)
 
 LOG_CSV_FILE = "unified_log_table.csv"
-CSV_HEADERS = ["timestamp", "experiment_id", "datapoint_count", "user_message", "monitor", "analyze", "plan", "execute", "user_model"]
+CSV_HEADERS = ["timestamp", "experiment_id", "datapoint_count", "user_message", "monitor", "analyze", "plan", "execute", "user_model", "processing_time"]
+
+# Performance logging
+performance_logger = logging.getLogger("performance_logger")
+performance_file_handler = logging.FileHandler(os.path.join(PERFORMANCE_LOG_FOLDER, "performance_comparison.log"), mode="a")
+performance_file_handler.setLevel(logging.INFO)
+performance_formatter = logging.Formatter(fmt="%(asctime)s - %(message)s")
+performance_file_handler.setFormatter(performance_formatter)
+performance_logger.addHandler(performance_file_handler)
+performance_logger.setLevel(logging.INFO)
+
+
+def log_performance_data(agent_type: str, time_elapsed: float, query: str, experiment_id: str):
+    """
+    Logs performance data to a centralized performance log file for comparison.
+    
+    Args:
+        agent_type (str): The type of agent used (e.g., "llama_index" or "openai_agents")
+        time_elapsed (float): Processing time in seconds
+        query (str): The query that was processed
+        experiment_id (str): The experiment ID
+    """
+    performance_logger.info(
+        f"PERFORMANCE_DATA,{agent_type},{time_elapsed:.4f}s,{experiment_id},\"{query[:50]}...\""
+    )
 
 
 def generate_log_file_name(experiment_id: str) -> str:
@@ -107,7 +138,18 @@ logger.addHandler(console_handler)
 logger.setLevel(logging.INFO)
 
 
-# Define custom models to match the outputs from the original components
+# Define Pydantic models for structured output
+
+class NewExplanationModel(BaseModel):
+    """
+    Data model for a new explanation concept to be added.
+    """
+    name: str = Field(..., description="The name of the explanation concept")
+    description: str = Field("", description="Brief justification for this explanation")
+    dependencies: List[str] = Field(default_factory=list, description="List of dependencies")
+    is_optional: bool = Field(False, description="Whether this explanation is optional")
+
+
 class ChosenExplanationModel(BaseModel):
     """
     Data model for a chosen explanation concept to be added to the explanation plan.
@@ -115,30 +157,59 @@ class ChosenExplanationModel(BaseModel):
     explanation_name: str = Field(..., description="The name of the explanation concept.")
     step: str = Field(..., description="The name or label of the step of the explanation.")
     description: str = Field("", description="Brief justification for this explanation")
-    dependencies: list = Field(default_factory=list, description="List of dependencies")
+    dependencies: List[str] = Field(default_factory=list, description="List of dependencies")
     is_optional: bool = Field(False, description="Whether this explanation is optional")
 
 
-class UnifiedMapeKResult(BaseModel):
+class CommunicationGoal(BaseModel):
     """
-    Unified MAPE-K workflow result model.
+    Data model for communication goals
     """
-    # Monitor step results
-    understanding_displays: list = Field(default_factory=list, 
-                                       description="A list of explicit understanding displays from the user message")
-    cognitive_state: str = Field("", description="The cognitive mode of engagement from the user message")
+    goal: str = Field(..., description="The goal description")
+    type: str = Field(..., description="The type of communication goal")
+
+
+class ExplanationTarget(BaseModel):
+    """
+    Data model for explanation targets
+    """
+    reasoning: str = Field(..., description="Reasoning for this explanation target")
+    explanation_name: str = Field(..., description="Name of the explanation")
+    step_name: str = Field(..., description="Step name of the explanation")
+    communication_goals: List[CommunicationGoal] = Field(default_factory=list, description="Communication goals for this explanation")
+
+
+class ModelChange(BaseModel):
+    """
+    Model for representing a change to the user model
+    """
+    explanation_name: str = Field(..., description="The name of the explanation")
+    step: str = Field(..., description="The step in the explanation process")
+    state: str = Field(..., description="The new state value")
+
+
+class MAPE_K_ResultModel(BaseModel):
+    """
+    Complete MAPE-K workflow result model.
+    """
+    # Monitor stage
+    monitor_reasoning: str = Field("", description="Reasoning about the user's understanding")
+    explicit_understanding_displays: List[str] = Field(default_factory=list, description="List of explicit understanding displays from the user message")
+    mode_of_engagement: str = Field("", description="The cognitive mode of engagement from the user message")
     
-    # Analyze step results
-    updated_explanation_states: dict = Field(default_factory=dict, 
-                                          description="Dictionary of updated explanation states")
+    # Analyze stage
+    analyze_reasoning: str = Field("", description="Reasoning behind analyzing user model changes")
+    model_changes: List[ModelChange] = Field(default_factory=list, description="List of changes to make to the user model")
     
-    # Plan step results
-    next_explanations: list = Field(default_factory=list, 
-                                 description="List of next explanations planned")
-    reasoning: str = Field("", description="Reasoning behind the chosen explanations")
+    # Plan stage
+    plan_reasoning: str = Field("", description="Reasoning behind the explanation plan")
+    new_explanations: List[NewExplanationModel] = Field(default_factory=list, description="List of new explanations to add")
+    explanation_plan: List[ChosenExplanationModel] = Field(default_factory=list, description="List of chosen explanations for the plan")
+    next_response: List[ExplanationTarget] = Field(default_factory=list, description="List of explanation targets for the next response")
     
-    # Execute step results
-    html_response: str = Field("", description="Final HTML response to the user")
+    # Execute stage
+    execute_reasoning: str = Field("", description="Reasoning behind the constructed response")
+    response: str = Field("", description="The HTML-formatted response to the user")
 
 
 class ExecuteResult(BaseModel):
@@ -268,7 +339,8 @@ class UnifiedMapeKAgent(Workflow, XAIBaseAgent):
             "analyze": "",
             "plan": "",
             "execute": "",
-            "user_model": ""
+            "user_model": "",
+            "processing_time": ""
         }
         append_new_log_row(self.current_log_row, self.log_file)
 
@@ -306,30 +378,46 @@ class UnifiedMapeKAgent(Workflow, XAIBaseAgent):
                 
             result_json = json.loads(json_text)
             
-            # Extract and process Monitor results
-            monitor_result = {
-                "reasoning": "Unified MAPE-K processing",
-                "explicit_understanding_displays": result_json["Monitor"]["understanding_displays"],
-                "mode_of_engagement": result_json["Monitor"]["cognitive_state"],
-                "model_changes": []
-            }
+            # Parse the response into the MAPE_K_ResultModel
+            mape_k_result = MAPE_K_ResultModel(
+                # Monitor stage
+                monitor_reasoning="Monitor analysis completed",
+                explicit_understanding_displays=result_json["Monitor"]["understanding_displays"],
+                mode_of_engagement=result_json["Monitor"]["cognitive_state"],
+                
+                # Analyze stage
+                analyze_reasoning="Analyze process completed",
+                model_changes=[
+                    ModelChange(
+                        explanation_name=exp_name,
+                        step="", # Will be populated in the processing loop
+                        state=state
+                    ) 
+                    for exp_name, state in result_json["Analyze"]["updated_explanation_states"].items()
+                ],
+                
+                # Plan stage
+                plan_reasoning=result_json["Plan"]["reasoning"],
+                new_explanations=[],  # Will be populated from next_explanations
+                explanation_plan=[
+                    ChosenExplanationModel(
+                        explanation_name=exp.get("name"),
+                        step=exp.get("dependencies", [""])[0] if exp.get("dependencies") else "",
+                        description=exp.get("description", ""),
+                        dependencies=exp.get("dependencies", []),
+                        is_optional=exp.get("is_optional", False)
+                    )
+                    for exp in result_json["Plan"]["next_explanations"]
+                ],
+                next_response=[],  # Will be populated during processing
+                
+                # Execute stage
+                execute_reasoning="Response generated successfully",
+                response=result_json["Execute"]["html_response"]
+            )
             
-            # Update user cognitive state based on monitor results
-            if monitor_result["mode_of_engagement"]:
-                self.user_model.cognitive_state = self.modes_of_engagement.get_differentiating_description(
-                    monitor_result["mode_of_engagement"])
-            
-            # Update explicit understanding signals
-            if monitor_result["explicit_understanding_displays"]:
-                self.user_model.explicit_understanding_signals = monitor_result["explicit_understanding_displays"]
-            
-            # Process Analyze changes
-            analyze_result = {
-                "reasoning": "Unified MAPE-K processing",
-                "model_changes": []
-            }
-            
-            # Update user model based on analyze results
+            # Process model changes to fully populate the state
+            analyze_model_changes = []
             for exp_name, new_state in result_json["Analyze"]["updated_explanation_states"].items():
                 # Get all steps for this explanation
                 explanation = self.user_model.explanations.get(exp_name)
@@ -337,37 +425,23 @@ class UnifiedMapeKAgent(Workflow, XAIBaseAgent):
                     # Then update all steps for this explanation
                     for step in explanation.explanation_steps:
                         self.user_model.update_explanation_step_state(exp_name, step.step_name, new_state)
-                        analyze_result["model_changes"].append({
-                            "explanation_name": exp_name, 
-                            "step": step.step_name, 
-                            "state": new_state
-                        })
+                        analyze_model_changes.append(ModelChange(
+                            explanation_name=exp_name, 
+                            step=step.step_name, 
+                            state=new_state
+                        ))
             
-            # Process Plan results
+            # Update model_changes with fully populated changes
+            mape_k_result.model_changes = analyze_model_changes
+            
+            # Create explanation targets for execute phase
             from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import (
-                ExplanationTarget, 
-                CommunicationGoal
+                ExplanationTarget as OrigExplanationTarget, 
+                CommunicationGoal as OrigCommunicationGoal
             )
             
-            plan_result = {
-                "reasoning": result_json["Plan"]["reasoning"],
-                "explanation_plan": [],
-                "new_explanations": [],
-                "next_response": []
-            }
-            
-            # Create chosen explanations from plan results
-            for explanation in result_json["Plan"]["next_explanations"]:
-                chosen_exp = ChosenExplanationModel(
-                    explanation_name=explanation["name"],
-                    step=explanation.get("dependencies", [""])[0] if explanation.get("dependencies") else "",
-                    description=explanation.get("description", ""),
-                    dependencies=explanation.get("dependencies", []),
-                    is_optional=explanation.get("is_optional", False)
-                )
-                plan_result["explanation_plan"].append(chosen_exp)
-                
-                # Create explanation targets for execute phase
+            next_response_targets = []
+            for chosen_exp in mape_k_result.explanation_plan:
                 exp_target = ExplanationTarget(
                     reasoning="From unified MAPE-K call",
                     explanation_name=chosen_exp.explanation_name,
@@ -379,42 +453,77 @@ class UnifiedMapeKAgent(Workflow, XAIBaseAgent):
                         )
                     ]
                 )
-                plan_result["next_response"].append(exp_target)
+                next_response_targets.append(exp_target)
             
-            # Update explanation plan
-            if plan_result["explanation_plan"]:
-                self.explanation_plan = plan_result["explanation_plan"]
-            
-            # Process Execute result
-            execute_result = {
-                "reasoning": "Unified MAPE-K processing",
-                "response": result_json["Execute"]["html_response"]
-            }
+            # Update next_response with created targets
+            mape_k_result.next_response = next_response_targets
             
             # Update log with processed results
-            self.current_log_row["monitor"] = monitor_result
-            self.current_log_row["analyze"] = analyze_result
-            self.current_log_row["plan"] = plan_result
-            self.current_log_row["execute"] = execute_result
+            self.current_log_row["monitor"] = {
+                "reasoning": mape_k_result.monitor_reasoning,
+                "explicit_understanding_displays": mape_k_result.explicit_understanding_displays,
+                "mode_of_engagement": mape_k_result.mode_of_engagement
+            }
+            
+            self.current_log_row["analyze"] = {
+                "reasoning": mape_k_result.analyze_reasoning,
+                "model_changes": [change.dict() for change in mape_k_result.model_changes]
+            }
+            
+            self.current_log_row["plan"] = {
+                "reasoning": mape_k_result.plan_reasoning,
+                "explanation_plan": [exp.dict() for exp in mape_k_result.explanation_plan],
+                "new_explanations": [exp.dict() for exp in mape_k_result.new_explanations],
+                "next_response": [target.dict() for target in mape_k_result.next_response]
+            }
+            
+            self.current_log_row["execute"] = {
+                "reasoning": mape_k_result.execute_reasoning,
+                "response": mape_k_result.response
+            }
+            
+            # Calculate and log time elapsed
+            end_time = datetime.datetime.now()
+            time_elapsed = (end_time - start_time).total_seconds()
+            self.current_log_row["processing_time"] = str(time_elapsed)
+            
             update_last_log_row(self.current_log_row, self.log_file)
             
             # Log execution time
-            end_time = datetime.datetime.now()
             logger.info(f"Time taken for Unified MAPE-K: {end_time - start_time}")
+            
+            # Log performance data for comparison
+            log_performance_data("llama_index", time_elapsed, user_message, self.experiment_id)
             
             # Update chat history
             self.append_to_history("user", user_message)
-            self.append_to_history("agent", execute_result["response"])
+            self.append_to_history("agent", mape_k_result.response)
             
             # Replace plot placeholders with actual visual content
-            response_with_plots = replace_plot_placeholders(execute_result["response"], self.visual_explanations_dict)
+            response_with_plots = replace_plot_placeholders(mape_k_result.response, self.visual_explanations_dict)
             
             # Update user model with explanations that were presented
-            for next_explanation in plan_result["next_response"]:
+            for next_explanation in mape_k_result.next_response:
                 exp = next_explanation.explanation_name
                 exp_step = next_explanation.step_name
                 self.user_model.update_explanation_step_state(exp, exp_step, ExplanationState.UNDERSTOOD.value)
-                self.last_shown_explanations.append(next_explanation)
+                # Here, convert the Pydantic model to the original type expected by the code
+                orig_exp_target = OrigExplanationTarget(
+                    reasoning=next_explanation.reasoning,
+                    explanation_name=next_explanation.explanation_name,
+                    step_name=next_explanation.step_name,
+                    communication_goals=[
+                        OrigCommunicationGoal(
+                            goal=cg.goal,
+                            type=cg.type
+                        ) for cg in next_explanation.communication_goals
+                    ]
+                )
+                self.last_shown_explanations.append(orig_exp_target)
+            
+            # Update explanation plan
+            if mape_k_result.explanation_plan:
+                self.explanation_plan = mape_k_result.explanation_plan
             
             # Log updated user model
             self.current_log_row["user_model"] = self.user_model.get_state_summary(as_dict=True)
@@ -423,13 +532,20 @@ class UnifiedMapeKAgent(Workflow, XAIBaseAgent):
             
             # Create final result object for the workflow
             final_result = ExecuteResult(
-                reasoning="Unified MAPE-K workflow completed successfully",
+                reasoning=mape_k_result.execute_reasoning,
                 response=response_with_plots
             )
             
             return StopEvent(result=final_result)
             
         except (json.JSONDecodeError, KeyError) as e:
+            # Calculate time even for error
+            end_time = datetime.datetime.now()
+            time_elapsed = (end_time - start_time).total_seconds()
+            
+            # Log performance data even for errors
+            log_performance_data("llama_index_error", time_elapsed, user_message, self.experiment_id)
+            
             logger.error(f"Error processing unified MAPE-K response: {e}\nResponse text: {response_text.text}")
             # Provide a fallback response when processing fails
             fallback_result = ExecuteResult(
@@ -446,7 +562,12 @@ class UnifiedMapeKAgent(Workflow, XAIBaseAgent):
         start_time = datetime.datetime.now()
         result = await self.run(input=user_question)
         end_time = datetime.datetime.now()
+        
+        time_elapsed = (end_time - start_time).total_seconds()
         logger.info(f"Total time for Unified MAPE-K workflow: {end_time - start_time}")
+        
+        # Log overall performance
+        performance_logger.info(f"TOTAL_TIME,llama_index,{time_elapsed:.4f}s,{self.experiment_id},\"{user_question[:50]}...\"")
         
         # Return analysis and response to maintain compatibility with caller
         return result.reasoning, result.response

@@ -72,12 +72,14 @@ End your response explicitly with a brief follow-up question or prompt explicitl
 {{
   "Monitor": {{
     "understanding_displays": ["ExplicitLabel1", "..."],
-    "cognitive_state": "ExplicitCognitiveMode"
+    "cognitive_state": "ExplicitCognitiveMode",
+    "monitor_reasoning": "Your step-by-step reasoning analyzing the user's cognitive state and understanding"
   }},
   "Analyze": {{
     "updated_explanation_states": {{
       "ExplanationName": "new_state"
-    }}
+    }},
+    "analyze_reasoning": "Your reasoning for updating or not updating each explanation state"
   }},
   "Plan": {{
     "next_explanations": [
@@ -88,10 +90,19 @@ End your response explicitly with a brief follow-up question or prompt explicitl
         "is_optional": false
       }}
     ],
+    "new_explanations": [
+      {{
+        "name": "NewExplanationName",
+        "description": "Description of the new explanation",
+        "dependencies": ["RequiredExplanationName"],
+        "is_optional": false
+      }}
+    ],
     "reasoning": "Explicit reasoning behind chosen explanations"
   }},
   "Execute": {{
-    "html_response": "<p>Explicit and clear response tailored for user...</p>"
+    "html_response": "<p>Explicit and clear response tailored for user...</p>",
+    "execute_reasoning": "Reasoning behind the constructed response"
   }}
 }}
 

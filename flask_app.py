@@ -40,11 +40,6 @@ CORS(bp)
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-# Configure OpenAI API key from environment
-load_dotenv()
-os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
-os.environ["OPENAI_ORGANIZATION"] = os.getenv('OPENAI_ORGANIZATION_ID')
-
 # Parse application level configs
 gin.parse_config_file(args.config)
 
