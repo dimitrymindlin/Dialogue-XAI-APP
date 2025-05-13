@@ -4,6 +4,7 @@ import json
 import time
 import os
 import datetime
+import argparse
 from typing import List, Dict, Any, Optional, AsyncGenerator
 import logging
 import asyncio
@@ -17,6 +18,8 @@ from agents import Agent, Runner, Tool
 from agents import RunResult
 from agents import FunctionTool
 logger = logging.getLogger(__name__)
+
+from llm_agents.mape_k_2_components.agent_prompts import get_unified_prompt, get_monitor_analyze_prompt, get_plan_execute_prompt
 
 try:
 
@@ -59,7 +62,6 @@ from llm_agents.utils.definition_wrapper import DefinitionWrapper
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 from llm_agents.mape_k_approach.user_model.user_model_fine_grained import UserModelFineGrained as UserModel
 from llm_agents.utils.postprocess_message import replace_plot_placeholders
-from llm_agents.merged_prompts import get_merged_prompts
 
 # Import the DirectOpenAIFallback as a last resort
 try:
@@ -222,6 +224,29 @@ class ModelChange(BaseModel):
     state: str = Field(..., description="The new state value")
 
 
+class MonitorModel(BaseModel):
+    """
+    The first part of the MAPE-K workflow focused on monitoring and analyzing.
+    """
+    monitor_reasoning: str = Field(None, description="Reasoning about the user's understanding")
+    explicit_understanding_displays: List[str] = Field(None, description="List of explicit understanding displays from the user message")
+    mode_of_engagement: str = Field(None, description="The cognitive mode of engagement from the user message")
+    analyze_reasoning: str = Field(None, description="Reasoning behind analyzing user model changes")
+    model_changes: List[ModelChange] = Field(None, description="List of changes to make to the user model")
+
+
+class ScaffoldModel(BaseModel):
+    """
+    The second part of the MAPE-K workflow focused on planning and executing.
+    """
+    plan_reasoning: str = Field(None, description="Reasoning behind the explanation plan")
+    new_explanations: List[NewExplanationModel] = Field(None, description="List of new explanations to add")
+    explanation_plan: List[ChosenExplanationModel] = Field(None, description="List of chosen explanations for the plan")
+    next_response: List[ExplanationTarget] = Field(None, description="List of explanation targets for the next response")
+    execute_reasoning: str = Field(None, description="Reasoning behind the constructed response")
+    response: str = Field(None, description="The HTML-formatted response to the user")
+
+
 class MAPE_K_ResultModel(BaseModel):
     """
     Complete MAPE-K workflow result model.
@@ -266,8 +291,11 @@ class UnifiedMapeKOpenAIAgent(XAIBaseAgent):
             user_ml_knowledge="",
             experiment_id="",
             model_name=LLM_MODEL_NAME,
+            use_two_prompts=False,
             **kwargs
     ):
+        print(f"DEBUG - UnifiedMapeKOpenAIAgent.__init__ called with use_two_prompts={use_two_prompts} of type {type(use_two_prompts).__name__}")
+        
         self.experiment_id = experiment_id
         self.log_file = generate_log_file_name(self.experiment_id)
         initialize_csv(self.log_file)
@@ -279,6 +307,10 @@ class UnifiedMapeKOpenAIAgent(XAIBaseAgent):
         self.instance = None
         self.datapoint_count = None
         self.model_name = model_name
+        
+        # Force convert to boolean to ensure it's properly set
+        self.use_two_prompts = bool(use_two_prompts)
+        print(f"DEBUG - Set self.use_two_prompts to {self.use_two_prompts}")
         
         # Initialize OpenAI client
         self.openai_client = OpenAI()
@@ -417,9 +449,30 @@ class UnifiedMapeKOpenAIAgent(XAIBaseAgent):
         Returns:
             Dict[str, Any]: The MAPE-K result in structured format
         """
+        # Add debugging information
+        print(f"DEBUG - process_mape_k called with self.use_two_prompts = {self.use_two_prompts}")
+        logger.warning(f"DEBUG - self.use_two_prompts = {self.use_two_prompts} of type {type(self.use_two_prompts).__name__}")
+        
+        # Check if command line has --use_two_prompts argument
+        import sys
+        cmd_has_two_prompts = '--use_two_prompts' in sys.argv
+        
+        # Override self.use_two_prompts based on command line
+        if cmd_has_two_prompts:
+            print(f"Command line argument --use_two_prompts detected! Enabling two-prompt mode.")
+            self.use_two_prompts = True
+        
+        print(f"Final self.use_two_prompts value: {self.use_two_prompts}")
+        
+        # If two prompts mode is enabled, use the split approach
+        if self.use_two_prompts:
+            logger.warning(f"TWO-PROMPT MODE ACTIVE: Switching to two-prompt approach")
+            return self.process_mape_k_two_prompts(prompt)
+        
+        logger.warning(f"USING UNIFIED APPROACH: Two-prompt mode is {'ENABLED' if self.use_two_prompts else 'DISABLED'}")
+            
         # Create the unified prompt with all necessary context - exactly as in unified_mape_k
-        prompt_template_str = get_merged_prompts()
-        prompt_template_str = prompt_template_str.format(
+        prompt_template_str = get_unified_prompt().format(
             domain_description=self.domain_description,
             feature_names=self.feature_names,
             instance=self.instance,
@@ -549,6 +602,7 @@ class UnifiedMapeKOpenAIAgent(XAIBaseAgent):
         Returns:
             ExecuteResult: The final result with reasoning and response
         """
+        print(f"DEBUG - run_mape_k_workflow called with self.use_two_prompts = {self.use_two_prompts}")
         start_time = datetime.datetime.now()
         
         # Initialize log row
@@ -839,6 +893,7 @@ class UnifiedMapeKOpenAIAgent(XAIBaseAgent):
         Public method to answer a user question using the OpenAI Agent MAPE-K workflow.
         This directly mimics the approach in UnifiedMapeKAgent.answer_user_question.
         """
+        print(f"DEBUG - answer_user_question called with self.use_two_prompts = {self.use_two_prompts}")
         start_time = datetime.datetime.now()
         
         try:
@@ -899,13 +954,7 @@ class UnifiedMapeKOpenAIAgent(XAIBaseAgent):
             str: A formatted prompt template string
         """
         # Get the base prompts
-        merged_prompts = get_merged_prompts(
-            domain_description=self.domain_description,
-            feature_names=self.feature_names,
-            predicted_class_name=self.predicted_class_name or "unknown",
-            opposite_class_name=self.opposite_class_name or "unknown",
-            instance=str(self.instance) if self.instance is not None else "No instance provided"
-        )
+        merged_prompts = get_unified_prompt()
         
         # Construct a simplified template
         template = f"""
@@ -946,19 +995,257 @@ Format your response as a JSON object with the following structure:
 """
         return template
 
+    def process_mape_k_two_prompts(self, prompt: str) -> Dict[str, Any]:
+        """
+        Process MAPE-K using two separate prompts for Monitor/Analyze and Plan/Execute stages.
+        
+        Args:
+            prompt (str): The user's query or input
+            
+        Returns:
+            Dict[str, Any]: The combined MAPE-K result in structured format
+        """
+        logger.warning(f"EXECUTING TWO-PROMPT APPROACH - Starting with Monitor/Analyze")
+        
+        # Step 1: Process the Monitor and Analyze phases
+        monitor_analyze_result = self.process_monitor_analyze(prompt)
+        
+        logger.warning(f"EXECUTING TWO-PROMPT APPROACH - Continuing with Plan/Execute")
+        
+        # Step 2: Process the Plan and Execute phases, using the results from Step 1
+        plan_execute_result = self.process_plan_execute(prompt, monitor_analyze_result)
+        
+        logger.warning(f"EXECUTING TWO-PROMPT APPROACH - Combining results")
+        
+        # Combine results from both steps
+        combined_result = {
+            "Monitor": {
+                "monitor_reasoning": monitor_analyze_result.get("Monitor", {}).get("monitor_reasoning", ""),
+                "understanding_displays": monitor_analyze_result.get("Monitor", {}).get("understanding_displays", []),
+                "cognitive_state": monitor_analyze_result.get("Monitor", {}).get("cognitive_state", "active")
+            },
+            "Analyze": {
+                "analyze_reasoning": monitor_analyze_result.get("Analyze", {}).get("analyze_reasoning", ""),
+                "updated_explanation_states": monitor_analyze_result.get("Analyze", {}).get("updated_explanation_states", {})
+            },
+            "Plan": {
+                "reasoning": plan_execute_result.get("Plan", {}).get("reasoning", ""),
+                "next_explanations": plan_execute_result.get("Plan", {}).get("next_explanations", []),
+                "new_explanations": plan_execute_result.get("Plan", {}).get("new_explanations", [])
+            },
+            "Execute": {
+                "execute_reasoning": plan_execute_result.get("Execute", {}).get("execute_reasoning", ""),
+                "html_response": plan_execute_result.get("Execute", {}).get("html_response", "")
+            }
+        }
+        
+        # Log the structured response similar to unified approach
+        logger.info(f"Structured response from two-prompt approach: {combined_result}")
+        
+        return combined_result
+    
+    def process_monitor_analyze(self, prompt: str) -> Dict[str, Any]:
+        """
+        Process just the Monitor and Analyze phases of MAPE-K.
+        
+        Args:
+            prompt (str): The user's query or input
+            
+        Returns:
+            Dict[str, Any]: The Monitor and Analyze results
+        """
+        # Create a prompt template specific to Monitor and Analyze
+        monitor_analyze_template = get_monitor_analyze_prompt()
+        prompt_template_str = monitor_analyze_template.format(
+            domain_description=self.domain_description,
+            feature_names=self.feature_names,
+            instance=self.instance,
+            predicted_class_name=self.predicted_class_name,
+            understanding_displays=self.understanding_displays.as_text(),
+            modes_of_engagement=self.modes_of_engagement.as_text(),
+            chat_history=self.chat_history,
+            user_message=prompt,
+            user_model=self.user_model.get_state_summary(as_dict=False),
+            explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
+            explanation_plan=self.explanation_plan,
+            last_shown_explanations=self.last_shown_explanations
+        )
+        
+        try:
+            # Use OpenAI's structured output feature with our MonitorModel
+            completion = self.openai_client.responses.parse(
+                model=self.model_name,
+                input=[{"role": "user", "content": prompt_template_str}],
+                text_format=MonitorModel,
+                temperature=0
+            )
+            
+            # Get the parsed structured output
+            result = completion.output_parsed
+            logger.info(f"Monitor/Analyze structured output parsing processed")
+            
+            # Convert to dictionary format
+            result_json = {
+                "Monitor": {
+                    "monitor_reasoning": result.monitor_reasoning or "",
+                    "understanding_displays": result.explicit_understanding_displays or [],
+                    "cognitive_state": result.mode_of_engagement or "active"
+                },
+                "Analyze": {
+                    "analyze_reasoning": result.analyze_reasoning or "",
+                    "updated_explanation_states": {
+                        change.explanation_name: change.state 
+                        for change in (result.model_changes or [])
+                    }
+                }
+            }
+            
+            logger.info(f"Monitor/Analyze response parsed successfully")
+            # Add detailed logging
+            logger.info(f"Monitor/Analyze result: {result_json}")
+            return result_json
+            
+        except Exception as e:
+            logger.error(f"Error with Monitor/Analyze parsing: {e}")
+            logger.error(traceback.format_exc())
+            
+            # Return a fallback response
+            return {
+                "Monitor": {
+                    "understanding_displays": [],
+                    "cognitive_state": "active",
+                    "monitor_reasoning": "Error processing Monitor/Analyze"
+                },
+                "Analyze": {
+                    "updated_explanation_states": {},
+                    "analyze_reasoning": "Error processing Monitor/Analyze"
+                }
+            }
+    
+    def process_plan_execute(self, prompt: str, monitor_analyze_result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process just the Plan and Execute phases of MAPE-K, using the results from Monitor and Analyze.
+        
+        Args:
+            prompt (str): The user's query or input
+            monitor_analyze_result (Dict[str, Any]): Results from the monitor and analyze phases
+            
+        Returns:
+            Dict[str, Any]: The Plan and Execute results
+        """
+        # Create a prompt template specific to Plan and Execute
+        plan_execute_template = get_plan_execute_prompt()
+        
+        # Extract relevant information from monitor_analyze_result
+        monitor_info = {
+            "reasoning": monitor_analyze_result.get("Monitor", {}).get("monitor_reasoning", ""),
+            "understanding_displays": monitor_analyze_result.get("Monitor", {}).get("understanding_displays", []),
+            "cognitive_state": monitor_analyze_result.get("Monitor", {}).get("cognitive_state", "active")
+        }
+        
+        analyze_info = {
+            "reasoning": monitor_analyze_result.get("Analyze", {}).get("analyze_reasoning", ""),
+            "updated_explanation_states": monitor_analyze_result.get("Analyze", {}).get("updated_explanation_states", {})
+        }
+        
+        prompt_template_str = plan_execute_template.format(
+            domain_description=self.domain_description,
+            feature_names=self.feature_names,
+            instance=self.instance,
+            predicted_class_name=self.predicted_class_name,
+            chat_history=self.chat_history,
+            user_message=prompt,
+            user_model=self.user_model.get_state_summary(as_dict=False),
+            explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
+            explanation_plan=self.explanation_plan,
+            last_shown_explanations=self.last_shown_explanations,
+            monitor_info=json.dumps(monitor_info),
+            analyze_info=json.dumps(analyze_info)
+        )
+        
+        try:
+            # Use OpenAI's structured output feature with our ScaffoldModel
+            completion = self.openai_client.responses.parse(
+                model=self.model_name,
+                input=[{"role": "user", "content": prompt_template_str}],
+                text_format=ScaffoldModel,
+                temperature=0
+            )
+            
+            # Get the parsed structured output
+            result = completion.output_parsed
+            logger.info(f"Plan/Execute structured output parsing processed")
+            
+            # Convert to dictionary format
+            result_json = {
+                "Plan": {
+                    "reasoning": result.plan_reasoning or "",
+                    "next_explanations": [
+                        {
+                            "name": exp.explanation_name,
+                            "description": exp.description or "",
+                            "dependencies": exp.dependencies or [],
+                            "is_optional": exp.is_optional if exp.is_optional is not None else False
+                        } for exp in (result.explanation_plan or [])
+                    ],
+                    "new_explanations": [
+                        {
+                            "name": exp.name,
+                            "description": exp.description or "",
+                            "dependencies": exp.dependencies or [],
+                            "is_optional": exp.is_optional if exp.is_optional is not None else False
+                        } for exp in (result.new_explanations or [])
+                    ]
+                },
+                "Execute": {
+                    "execute_reasoning": result.execute_reasoning or "",
+                    "html_response": result.response or "I apologize, but I'm having difficulty generating a proper response."
+                }
+            }
+            
+            logger.info(f"Plan/Execute response parsed successfully")
+            # Add detailed logging
+            logger.info(f"Plan/Execute result: {result_json}")
+            return result_json
+            
+        except Exception as e:
+            logger.error(f"Error with Plan/Execute parsing: {e}")
+            logger.error(traceback.format_exc())
+            
+            # Return a fallback response
+            return {
+                "Plan": {
+                    "next_explanations": [],
+                    "new_explanations": [],
+                    "reasoning": "Error processing Plan/Execute"
+                },
+                "Execute": {
+                    "html_response": "I apologize, but I encountered a technical issue processing your request. Could you please try rephrasing your question?",
+                    "execute_reasoning": "Error processing Plan/Execute"
+                }
+            }
+
 
 # For demonstration purposes
-async def test_agent():
+async def test_agent(use_two_prompts=False):
     agent = UnifiedMapeKOpenAIAgent(
         feature_names="age, workclass, education, marital_status, occupation",
         domain_description="This dataset contains census data",
         user_ml_knowledge="low",
-        experiment_id="test"
+        experiment_id="test",
+        use_two_prompts=use_two_prompts
     )
     
     result = await agent.answer_user_question("How does this model work?")
-    print(f"Response: {result[1]}")
+    print(f"Response (using {'two-prompt' if use_two_prompts else 'unified'} mode): {result[1]}")
 
 
 if __name__ == "__main__":
-    asyncio.run(test_agent()) 
+    parser = argparse.ArgumentParser(description='Run the MAPE-K agent with OpenAI API')
+    parser.add_argument('--two_prompt', action='store_true', 
+                        help='Use the two-prompt approach instead of the unified approach')
+    
+    args = parser.parse_args()
+    
+    print(f"Running with {'two-prompt' if args.two_prompt else 'unified'} mode...")
+    asyncio.run(test_agent(use_two_prompts=args.two_prompt)) 

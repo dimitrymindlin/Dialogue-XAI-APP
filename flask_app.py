@@ -4,6 +4,7 @@ import logging
 import os
 import traceback
 import time
+import argparse
 from datetime import datetime
 from functools import wraps
 import base64
@@ -19,6 +20,16 @@ import matplotlib
 
 from explain.logic import ExplainBot
 
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Run XAI Dialogue App')
+parser.add_argument('--use_llm_agent', type=str, help='LLM agent type to use')
+parser.add_argument('--gin_file', type=str, help='Gin config file path')
+parser.add_argument('--use_two_prompts', action='store_true', help='Use two-prompt approach for LLM agent')
+args_cmd = parser.parse_args()
+
+# Register two_prompt flag with gin
+gin.constant('use_two_prompts', args_cmd.use_two_prompts)
 
 # gunicorn doesn't have command line flags, using a gin file to pass command line args
 @gin.configurable

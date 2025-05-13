@@ -88,7 +88,8 @@ class ExplainBot:
                  use_intent_recognition: bool = False,
                  use_active_dialogue_manager: bool = False,
                  use_llm_agent=False,
-                 use_static_followup=False):
+                 use_static_followup=False,
+                 use_two_prompts=False):
         """The init routine.
 
         Arguments:
@@ -128,6 +129,7 @@ class ExplainBot:
             instance_type_naming: The naming of the instance type. This is used to display the instance type such as
                                     "person" or "house" in the UI.
             encoded_col_mapping_path: Path to the encoded column mapping file.
+            use_two_prompts: Whether to use the two-prompt approach for the LLM agent.
         """
 
         # Set seeds
@@ -156,6 +158,11 @@ class ExplainBot:
         self.use_active_dialogue_manager = use_active_dialogue_manager
         self.use_llm_agent = use_llm_agent
         self.use_static_followup = use_static_followup
+        self.use_two_prompts = use_two_prompts
+        
+        # Log the two-prompt mode setting
+        print(f"Two-prompt mode is {'ENABLED' if self.use_two_prompts else 'DISABLED'}")
+        
         if self.use_static_followup:
             self.static_followup_mapping = get_mapping()
 
@@ -687,6 +694,20 @@ class ExplainBot:
         feature_name = None
         feature_id = None
         if self.use_llm_agent:
+            # Create agent if not exists
+            if hasattr(self, 'agent') and self.agent is not None:
+                pass  # Agent already created
+            elif self.use_llm_agent == "structured_mape_k_openai_agents":
+                from llm_agents.mape_k_2_components.unified_mape_k_agent_openai import UnifiedMapeKOpenAIAgent
+                print(f"Creating structured MAPE-K OpenAI Agent with two-prompt mode: {self.use_two_prompts}")
+                self.agent = UnifiedMapeKOpenAIAgent(
+                    feature_names=", ".join(self.feature_ordering),
+                    domain_description=self.conversation.describe.get_dataset_description(),
+                    user_ml_knowledge=self.ml_knowledge,
+                    experiment_id=self.experiment_id,
+                    use_two_prompts=self.use_two_prompts
+                )
+            
             reasoning, response = await self.agent.answer_user_question(user_input)
             return response, None, None, reasoning
         elif self.use_intent_recognition:
