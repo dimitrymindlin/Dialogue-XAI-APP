@@ -63,6 +63,7 @@ class Explanation(NewExplanationModel):
                 step_name=step_name,
                 description=description,
                 dependencies=dependencies or [],
+                is_optional=False
             )
             self.explanation_steps.append(explanation)
             logger.info(f"Added step '{step_name}' to explanation '{self.explanation_name}'.")
