@@ -279,7 +279,7 @@ class ExecuteResult(BaseModel):
     response: str = Field(..., description="The HTML-formatted response to the user.")
 
 
-class UnifiedMapeKOpenAIAgent(XAIBaseAgent):
+class UnifiedMapeKAgent(XAIBaseAgent):
     """
     OpenAI Agents SDK implementation of the MAPE-K agent. 
     Uses the same interface as UnifiedMapeKAgent but with OpenAI Agents SDK under the hood.

@@ -243,7 +243,8 @@ class ExplainBot:
                 from llm_agents.mape_k_2_components.mape_k_workflow_agent import MapeK2Component as Agent
             elif self.use_llm_agent == "unified_mape_k":
                 from llm_agents.mape_k_2_components.unified_mape_k_agent import UnifiedMapeKAgent as Agent
-
+            elif self.use_llm_agent == "unified_mapek_openai":
+                from llm_agents.mape_k_2_components.unified_mape_k_agent_openai import UnifiedMapeKAgent as Agent
             if not use_two_prompts:
                 self.agent = Agent(feature_names=self.feature_ordering,
                                    domain_description=self.conversation.describe.get_dataset_description(),
