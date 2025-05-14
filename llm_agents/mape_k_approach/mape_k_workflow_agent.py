@@ -43,7 +43,7 @@ if not os.path.exists(LOG_FOLDER):
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
 os.environ["OPENAI_ORGANIZATION"] = os.getenv('OPENAI_ORGANIZATION_ID')
-LLM_MODEL_NAME = os.getenv('OPENAI_MODEL_NAME')
+OPENAI_MODEL_NAME = os.getenv('OPENAI_MODEL_NAME')
 OPENAI_MINI_MODEL_NAME = os.getenv('OPENAI_MINI_MODEL_NAME')
 # Create a logger specific to the current module
 
@@ -152,7 +152,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         self.predicted_class_name = None
         self.instance = None
         self.datapoint_count = None
-        self.llm = llm or OpenAI(model=LLM_MODEL_NAME)
+        self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
         self.understanding_displays = DefinitionWrapper(
             os.path.join(base_dir, "monitor_component", "understanding_displays_definition.json"))
@@ -307,7 +307,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         ))
 
         start_time = datetime.datetime.now()
-        analyze_result = await self.llm.astructured_predict(output_cls=AnalyzeResult, prompt=analyze_prompt)
+        analyze_result = await self.mini_llm.astructured_predict(output_cls=AnalyzeResult, prompt=analyze_prompt)
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Analyze: {end_time - start_time}")
         logger.info(f"Analyze result: {analyze_result}.\n")
@@ -364,6 +364,9 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Plan: {end_time - start_time}")
 
+        # log plan result
+        logger.info(f"Plan result: {plan_result}.\n")
+
         # Update Explanation Plan
         if len(plan_result.explanation_plan) > 0:
             self.explanation_plan = plan_result.explanation_plan
@@ -413,7 +416,7 @@ class MapeKXAIWorkflowAgent(Workflow, XAIBaseAgent):
             next_exp_content=plan_result.next_response,
         ))
         start_time = datetime.datetime.now()
-        execute_result = await self.llm.astructured_predict(ExecuteResult, execute_prompt)
+        execute_result = await self.mini_llm.astructured_predict(ExecuteResult, execute_prompt)
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Execute: {end_time - start_time}")
         await ctx.set("execute_result", copy.deepcopy(execute_result))

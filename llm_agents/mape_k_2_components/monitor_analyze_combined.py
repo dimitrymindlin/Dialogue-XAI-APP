@@ -1,15 +1,14 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict
 
 
 class MonitorAnalyzeResultModel(BaseModel):
     # Monitor fields
-    reasoning: str = Field(description="Short reasoning for the classification of the user message.", default="")
+    model_config = ConfigDict(extra="forbid")
+    reasoning: str = Field(description="Short reasoning for the classification of the user message.")
     explicit_understanding_displays: List[str] = Field(
-        description="A list of explicitly stated understanding displays by the user",
-        default_factory=list)
-    mode_of_engagement: str = Field(description="The cognitive mode of engagement that the user message exhibits",
-                                    default="")
+        description="A list of explicitly stated understanding displays by the user")
+    mode_of_engagement: str = Field(description="The cognitive mode of engagement that the user message exhibits")
     # Analyze fields
     analysis_reasoning: str = Field(..., description="The reasoning behind the classification of the user message.")
     model_changes: List = Field(...,
@@ -126,7 +125,14 @@ Think step-by-step.
 
 def get_monitor_analyze_prompt_template_streamlined():
     return """
-You are an AI assistant that helps explain machine learning predictions to users. Analyze the user's latest message.
+You are an AI assistant that helps explain machine learning predictions to users. Your task is to analyze the user's latest message.
+Here is the context of the conversation.
+
+<<Context>>:
+- Domain Description: {domain_description}
+- Model Features: {feature_names}
+- Current Explained Instance: {instance}
+- Predicted Class by AI Model: {predicted_class_name}
 
 **PART 1: MONITORING USER UNDERSTANDING**
 
@@ -136,17 +142,11 @@ You are an AI assistant that helps explain machine learning predictions to users
 **Possible Cognitive Modes of Engagement:**
 {modes_of_engagement}
 
-Analyze the learner's latest message in the context of the conversation history. 
+Analyze the users's latest message in the context of the conversation history. 
 1. If an explanation was provided and the user shows **explicit** signs of understanding as described in the **Understanding Display Labels** listed above, classify their explicit understanding. The user may express multiple understanding displays or just ask a question without explicitly signalling understanding. If it is not explicitly stated, return an empty list []. 
-2. Identify the **Cognitive Mode of Engagement** that best describes the user's engagement. Interpret the user message in the context of the conversation history to disambiguate nuances since a 'yes' or 'no' might refer to understanding something or agreeing to a suggestion.
+2. Identify the **Cognitive Mode of Engagement** that best describes the user's engagement as described in **Possible Cognitive Modes of Engagement** above. Interpret the user message in the context of the conversation history to disambiguate nuances since a 'yes' or 'no' might refer to understanding something or agreeing to a suggestion.
 
 **PART 2: ANALYZING USER'S COGNITIVE STATE**
-
-<<Context>>:
-- Domain Description: {domain_description}
-- Model Features: {feature_names}
-- Current Explained Instance: {instance}
-- Predicted Class by AI Model: {predicted_class_name}
 
 <<Explanation Collection>>:
 {explanation_collection}

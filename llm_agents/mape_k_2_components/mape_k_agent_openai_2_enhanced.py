@@ -11,12 +11,12 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Dict, Any, List, Tuple, Optional, Union
+from typing import Dict, Any, List, Tuple
 import uuid
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from pydantic import BaseModel, Field
+from openai.lib._parsing._completions import type_to_response_format_param
 
 # Import the prompt templates from monitor_analyze_combined
 from llm_agents.mape_k_2_components.monitor_analyze_combined import (
@@ -61,36 +61,8 @@ load_dotenv()
 # Environment variables for API keys
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_ORGANIZATION_ID = os.getenv('OPENAI_ORGANIZATION_ID')
-
-
-# Define Pydantic models for the agent's input and output schemas
-class MonitorState(BaseModel):
-    """State for the Monitor phase"""
-    goal: str = Field(..., description="The goal the user is trying to achieve")
-    context: str = Field(..., description="The context of the conversation")
-    user_ml_knowledge: str = Field(..., description="The user's knowledge of machine learning")
-    xai_report: str = Field(..., description="Report from the XAI system")
-
-
-class AnalyzeResult(BaseModel):
-    """Result from the Analyze phase"""
-    analysis: str = Field(..., description="Analysis of the user's question and context")
-    requirements: List[str] = Field(..., description="Requirements for an effective explanation")
-    suitable_explanations: List[str] = Field(..., description="List of suitable explanation methods")
-
-
-class PlanStrategy(BaseModel):
-    """Strategy for the Plan phase"""
-    explanation_method: str = Field(..., description="The explanation method to use")
-    explanation_details: str = Field(..., description="Details about the explanation")
-    rationale: str = Field(..., description="Rationale for choosing this explanation")
-
-
-class ExecuteResult(BaseModel):
-    """Result from the Execute phase"""
-    response: str = Field(..., description="The response to provide to the user")
-    reasoning: str = Field(..., description="Reasoning behind the response")
-    visualization: Optional[str] = Field(None, description="Any visualization instructions")
+OPENAI_MODEL_NAME = os.getenv('OPENAI_MODEL_NAME')
+OPENAI_MINI_MODEL_NAME = os.getenv('OPENAI_MINI_MODEL_NAME')
 
 
 def generate_log_file_name(experiment_id: str) -> str:
@@ -147,8 +119,6 @@ class MapeKXAIWorkflowAgentEnhanced:
             domain_description: str,
             user_ml_knowledge: str = "beginner",
             experiment_id: str = None,
-            model: str = "gpt-4-turbo",
-            mini_model: str = "gpt-3.5-turbo",
             include_monitor_reasoning: bool = True,
             include_analyze_reasoning: bool = True,
             include_plan_reasoning: bool = False,
@@ -178,8 +148,8 @@ class MapeKXAIWorkflowAgentEnhanced:
         self.experiment_id = experiment_id or str(uuid.uuid4())
         self.log_file = generate_log_file_name(self.experiment_id)
         initialize_csv(self.log_file)
-        self.model = model
-        self.mini_model = mini_model
+        self.model = OPENAI_MODEL_NAME
+        self.mini_model = OPENAI_MINI_MODEL_NAME
         self.include_monitor_reasoning = include_monitor_reasoning
         self.include_analyze_reasoning = include_analyze_reasoning
         self.include_plan_reasoning = include_plan_reasoning
@@ -321,63 +291,24 @@ class MapeKXAIWorkflowAgentEnhanced:
 
     def _get_monitor_analyze_tools(self) -> List[Dict[str, Any]]:
         """
-        Get the tools for the Monitor-Analyze component.
-        
-        Returns:
-            List of tool definitions for the Monitor-Analyze component
+        Get the tools for the Monitor-Analyze component,
+        auto‑generating JSON Schema from Pydantic models.
         """
+        # Patch the schema to set additionalProperties to False as required by OpenAI
+        schema = MonitorAnalyzeResultModel.model_json_schema(
+            mode="validation"
+        )
+        # Return the single function-tool definition
         return [
             {
                 "type": "function",
                 "function": {
                     "name": "monitor_analyze_result",
                     "description": "Monitor and analyze the user's question and understanding",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "reasoning": {
-                                "type": "string",
-                                "description": "Short reasoning for the classification of the user message."
-                            },
-                            "explicit_understanding_displays": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "A list of explicitly stated understanding displays by the user"
-                            },
-                            "mode_of_engagement": {
-                                "type": "string",
-                                "description": "The cognitive mode of engagement that the user message exhibits"
-                            },
-                            "analysis_reasoning": {
-                                "type": "string",
-                                "description": "The reasoning behind the classification of the user message."
-                            },
-                            "model_changes": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "explanation_name": {
-                                            "type": "string",
-                                            "description": "Name of the explanation"
-                                        },
-                                        "step": {
-                                            "type": "string",
-                                            "description": "Step in the explanation plan that was provided to the user"
-                                        },
-                                        "state": {
-                                            "type": "string",
-                                            "description": "State of understanding (not_yet_explained, partially_understood, understood, not_understood)"
-                                        }
-                                    },
-                                    "required": ["explanation_name", "step", "state"]
-                                },
-                                "description": "List of changes to the user model"
-                            }
-                        },
-                        "required": ["analysis_reasoning", "model_changes"]
-                    }
-                }
+                    "parameters": schema,
+                    "strict": True,
+                    "additionalProperties": False,
+                },
             }
         ]
 
@@ -393,40 +324,10 @@ class MapeKXAIWorkflowAgentEnhanced:
                 "type": "function",
                 "function": {
                     "name": "plan_and_execute",
-                    "description": "Plan and execute the XAI workflow",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "explanation_method": {
-                                "type": "string",
-                                "description": "The explanation method to use"
-                            },
-                            "explanation_details": {
-                                "type": "string",
-                                "description": "Details about the explanation"
-                            },
-                            "rationale": {
-                                "type": "string",
-                                "description": "Rationale for choosing this explanation"
-                            },
-                            "response": {
-                                "type": "string",
-                                "description": "The response to provide to the user"
-                            },
-                            "reasoning": {
-                                "type": "string",
-                                "description": "Reasoning behind the response"
-                            }
-                        },
-                        "required": [
-                            "explanation_method",
-                            "explanation_details",
-                            "rationale",
-                            "response",
-                            "reasoning"
-                        ]
-                    }
-                }
+                    "description": "Plan and execute a response to the user's question",
+                    "parameters": PlanExecuteResultModel.schema(),
+                    "strict": True,
+                },
             }
         ]
 
@@ -514,14 +415,16 @@ class MapeKXAIWorkflowAgentEnhanced:
             )
 
             # Call the OpenAI API with function calling
-            response = await self.client.chat.completions.create(
+            response = await self.client.beta.chat.completions.parse(
                 model=self.mini_model,
                 messages=[
                     {"role": "system", "content": "You are an AI assistant analyzing user understanding of ML models."},
                     {"role": "user", "content": monitor_analyze_prompt}
                 ],
                 tools=self._get_monitor_analyze_tools(),
-                tool_choice={"type": "function", "function": {"name": "monitor_analyze_result"}}
+                tool_choice={"type": "function", "function": {"name": "monitor_analyze_result"}},
+                response_format=MonitorAnalyzeResultModel,
+                parallel_tool_calls=False  # required for structured outputs
             )
 
             # Track API usage
@@ -615,22 +518,6 @@ class MapeKXAIWorkflowAgentEnhanced:
         """
         start_time = time.time()
 
-        # Check required components
-        if self.xai_report is None:
-            raise ValueError("XAI report not initialized")
-
-        if user_question is None or not isinstance(user_question, str):
-            raise ValueError("Invalid user question provided")
-
-        if not monitor_analyze_result or not isinstance(monitor_analyze_result, dict):
-            raise ValueError("Invalid monitor_analyze_result")
-
-        # Validate required fields in monitor_analyze_result
-        required_monitor_fields = ["reasoning", "mode_of_engagement", "analysis_reasoning", "model_changes"]
-        for field in required_monitor_fields:
-            if field not in monitor_analyze_result:
-                raise ValueError(f"Missing required field in monitor_analyze_result: {field}")
-
         try:
             # Build the explanation collection
             explanation_collection = self.get_explanation_collection()
@@ -654,15 +541,21 @@ class MapeKXAIWorkflowAgentEnhanced:
             logger.info(f"Plan-Execute prompt: {plan_execute_prompt}")
 
             # Call the OpenAI API with function calling
-            response = await self.client.chat.completions.create(
+            # Call the OpenAI API with function calling
+            result = await self.client.beta.chat.completions.parse(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are an AI assistant for explainable AI."},
+                    {"role": "system", "content": "You are an AI assistant…"},
                     {"role": "user", "content": plan_execute_prompt}
                 ],
                 tools=self._get_plan_execute_tools(),
-                tool_choice={"type": "function", "function": {"name": "plan_and_execute"}}
+                tool_choice={"type": "function", "function": {"name": "plan_and_execute"}},
+                response_format=PlanExecuteResultModel,  # your Pydantic class
+                parallel_tool_calls=False  # required for structured outputs
             )
+
+            # log result
+            logger.info(f"Plan-Execute result: {result}")
 
             # Track API usage
             self.query_count += 1
@@ -680,34 +573,24 @@ class MapeKXAIWorkflowAgentEnhanced:
             if tool_call.function.name != "plan_and_execute":
                 raise ValueError(f"Unexpected function call: {tool_call.function.name}")
 
+            # Log tool call response
+            logger.info(f"Tool call response: {tool_call}")
+
             # Extract the function arguments
             try:
                 function_args = json.loads(tool_call.function.arguments)
 
-                # Validate required fields
-                required_fields = ["explanation_method", "explanation_details", "rationale", "response", "reasoning"]
-                missing_fields = [field for field in required_fields if field not in function_args]
-                if missing_fields:
-                    raise ValueError(f"Missing required fields in response: {', '.join(missing_fields)}")
-
                 result = {
-                    "explanation_method": function_args["explanation_method"],
-                    "explanation_details": function_args["explanation_details"],
-                    "rationale": function_args["rationale"],
-                    "response": function_args["response"],
-                    "reasoning": function_args["reasoning"]
+                    "planning_reasoning": function_args["planning_reasoning"],
+                    "new_explanations": function_args["new_explanations"],
+                    "explanation_plan": function_args["explanation_plan"],
+                    "next_response": function_args["next_response"],
+                    "execution_reasoning": function_args["execution_reasoning"],
+                    "response": function_args["response"]
                 }
 
                 # Log the plan-execute result
-                if self.include_plan_reasoning and self.include_execute_reasoning:
-                    logger.info(f"Plan-Execute result: {result}")
-                else:
-                    filtered_result = {**result}
-                    if not self.include_plan_reasoning:
-                        filtered_result["rationale"] = "[plan reasoning excluded]"
-                    if not self.include_execute_reasoning:
-                        filtered_result["reasoning"] = "[execute reasoning excluded]"
-                    logger.info(f"Plan-Execute result (filtered reasoning): {filtered_result}")
+                logger.info(f"Plan-Execute result: {result}")
 
                 # Add agent's response to chat history
                 self.append_to_history("agent", result["response"])
@@ -721,6 +604,13 @@ class MapeKXAIWorkflowAgentEnhanced:
                 self.current_log_row["performance"] = json.dumps(performance_metrics)
 
                 update_last_log_row(self.current_log_row, self.log_file)
+
+                # Update Explanation Plan
+                if len(result["explanation_plan"]) > 0:
+                    self.explanation_plan = result["explanation_plan"].explanation_plan
+
+                if len(result["new_explanations"]) > 0:
+                    self.user_model.add_explanations_from_plan_result(result["new_explanations"].new_explanations)
 
                 return result
 

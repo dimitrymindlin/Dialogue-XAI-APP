@@ -233,9 +233,11 @@ class ExplainBot:
             elif self.use_llm_agent == "mape_k_openai":
                 from llm_agents.mape_k_approach.mape_k_agent_openai import MapeKXAIWorkflowAgent as Agent
             elif self.use_llm_agent == "mape_k_openai_2":
-                from llm_agents.mape_k_2_components.mape_k_agent_openai_2_components import MapeKXAIWorkflowAgent as Agent
+                from llm_agents.mape_k_2_components.mape_k_agent_openai_2_components import \
+                    MapeKXAIWorkflowAgent as Agent
             elif self.use_llm_agent == "mape_k_openai_2_enhanced":
-                from llm_agents.mape_k_2_components.mape_k_agent_openai_2_enhanced import MapeKXAIWorkflowAgentEnhanced as Agent
+                from llm_agents.mape_k_2_components.mape_k_agent_openai_2_enhanced import \
+                    MapeKXAIWorkflowAgentEnhanced as Agent
             elif self.use_llm_agent == "mape_k_2":
                 from llm_agents.mape_k_2_components.mape_k_workflow_agent import MapeK2Component as Agent
             self.agent = Agent(feature_names=self.feature_ordering,

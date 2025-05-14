@@ -17,8 +17,8 @@ class CommunicationGoalModel(BaseModel):
 class ExplanationStepModel(BaseModel):
     step_name: str = Field(..., description="The name of the explanation step.")
     description: str = Field(..., description="Description of the explanation step.")
-    dependencies: List[str] = Field(default_factory=list, description="List of dependencies for the explanation step.")
-    is_optional: bool = Field(default=False, description="Whether the explanation step is optional or not.")
+    dependencies: List[str] = Field(description="List of dependencies for the explanation step.")
+    is_optional: bool = Field(description="Whether the explanation step is optional or not.")
 
 
 class NewExplanationModel(BaseModel):
@@ -38,10 +38,8 @@ class PlanExecuteResultModel(BaseModel):
     # Planning section
     planning_reasoning: str = Field(...,
                                     description="The reasoning behind the decision for new explanations and which explanations to include in the next steps.")
-    new_explanations: List[NewExplanationModel] = Field(default_factory=list,
-                                                        description="List of new explanations to be added to the explanation plan.")
-    explanation_plan: List[ChosenExplanationModel] = Field(default_factory=list,
-                                                           description="List of explanations or scaffolding indicating long term steps to explain to the user.")
+    new_explanations: List[NewExplanationModel] = Field(description="List of new explanations to be added to the explanation plan.")
+    explanation_plan: List[ChosenExplanationModel] = Field(description="List of explanations or scaffolding indicating long term steps to explain to the user.")
     next_response: List[CommunicationGoalModel] = Field(...,
                                                         description="A list of explanations and steps to include in the next response to answer the user's question.")
 
@@ -49,7 +47,6 @@ class PlanExecuteResultModel(BaseModel):
     execution_reasoning: str = Field(..., description="The reasoning behind the response generation.")
     response: str = Field(...,
                           description="The final response to the user's question about the shown instance and prediction.")
-    success: bool = Field(default=True, description="Whether the execution was successful.")
 
 
 def get_plan_execute_prompt_template():
