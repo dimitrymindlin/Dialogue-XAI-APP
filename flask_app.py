@@ -3,9 +3,6 @@ import json
 import logging
 import os
 import traceback
-import time
-from datetime import datetime
-from functools import wraps
 import base64
 
 from flask import Flask
@@ -13,7 +10,6 @@ from flask import request, Blueprint
 from flask import jsonify, Response
 from flask_cors import CORS
 import gin
-from dotenv import load_dotenv
 import openai
 import matplotlib
 
@@ -313,6 +309,7 @@ def generate_audio_from_text(text, voice="alloy"):
 def get_bot_response():
     """Load the box response."""
     user_id = request.args.get("user_id")
+    #bot_dict[user_id].save_all_questions_and_answers_to_csv()
     if user_id is None:
         user_id = "TEST"
     if request.method == "POST":
