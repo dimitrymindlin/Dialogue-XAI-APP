@@ -524,4 +524,4 @@ if __name__ == "__main__":
     app.logger.info(f"Launching app from config: {args.config}")
     matplotlib.use('Agg') 
     
-    app.run(debug=True, port=5000, host='0.0.0.0', use_reloader=False)
+    app.run(debug=True, port=4555, host='0.0.0.0', use_reloader=False)
