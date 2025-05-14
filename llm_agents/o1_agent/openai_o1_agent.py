@@ -159,7 +159,7 @@ class XAITutorAssistant:
         self.assistant = self.client.beta.assistants.create(
             name="XAI Tutor",
             instructions=system_prompt,
-            model="o1",
+            model="gpt-4o",
         )
         self.client.beta.threads.messages.create(
             thread_id=self.thread.id,

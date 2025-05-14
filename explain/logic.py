@@ -229,10 +229,16 @@ class ExplainBot:
         if use_llm_agent is not False:
             if self.use_llm_agent == "o1":
                 from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant as Agent
-            if self.use_llm_agent == "simple":
-                from llm_agents.workflow_agent.simple_workflow_agent import SimpleXAIWorkflowAgent as Agent
             elif self.use_llm_agent == "mape_k":
                 from llm_agents.mape_k_approach.mape_k_workflow_agent import MapeKXAIWorkflowAgent as Agent
+            elif self.use_llm_agent == "mape_k_openai":
+                from llm_agents.mape_k_approach.mape_k_agent_openai import MapeKXAIWorkflowAgent as Agent
+            elif self.use_llm_agent == "mape_k_openai_2":
+                from llm_agents.mape_k_2_components.mape_k_agent_openai_2_components import \
+                    MapeKXAIWorkflowAgent as Agent
+            elif self.use_llm_agent == "mape_k_openai_2_enhanced":
+                from llm_agents.mape_k_2_components.mape_k_agent_openai_2_enhanced import \
+                    MapeKXAIWorkflowAgentEnhanced as Agent
             elif self.use_llm_agent == "mape_k_2":
                 from llm_agents.mape_k_2_components.mape_k_workflow_agent import MapeK2Component as Agent
             elif self.use_llm_agent == "unified_mape_k":
@@ -992,7 +998,6 @@ class ExplainBot:
         Arguments:
             intent_pd: Pandas DataFrame containing 'question', 'xai method', and 'feature' columns
             output_path: Path where to save the CSV file. Defaults to "all_questions_and_answers.csv".
-
         Returns:
             DataFrame: DataFrame with the original columns plus an 'answer' column.
         """

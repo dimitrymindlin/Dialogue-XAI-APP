@@ -7,7 +7,7 @@ from typing import List, Optional, Dict, Union
 from pydantic import PrivateAttr
 
 from llm_agents.explanation_state import ExplanationState
-from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt import ExplanationStepModel, NewExplanationModel, \
+from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import ExplanationStepModel, NewExplanationModel, \
     ChosenExplanationModel
 from llm_agents.utils.definition_wrapper import DefinitionWrapper
 

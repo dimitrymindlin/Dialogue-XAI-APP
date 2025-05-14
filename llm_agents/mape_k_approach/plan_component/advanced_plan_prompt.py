@@ -2,6 +2,8 @@ from typing import List
 
 from pydantic import BaseModel, Field
 
+from llm_agents.explanation_state import ExplanationState
+
 
 class ExplanationStepModel(BaseModel):
     """
@@ -9,6 +11,8 @@ class ExplanationStepModel(BaseModel):
     """
     step_name: str = Field(..., description="The name of the explanation step.")
     description: str = Field(..., description="Description of the explanation step.")
+    state: ExplanationState = Field(..., description="The state of this explanation step.")
+    explained_content_list: List[str] = Field(..., description="Already explained content for this step.")
     dependencies: list = Field(..., description="List of dependencies for the explanation step.")
 
 

@@ -309,6 +309,7 @@ def generate_audio_from_text(text, voice="alloy"):
 def get_bot_response():
     """Load the box response."""
     user_id = request.args.get("user_id")
+    #bot_dict[user_id].save_all_questions_and_answers_to_csv()
     if user_id is None:
         user_id = "TEST"
     if request.method == "POST":
@@ -516,11 +517,11 @@ if __name__ != '__main__':
     stream_handler.setLevel(logging.INFO)
     app.logger.addHandler(stream_handler)
     app.logger.setLevel(logging.INFO)
-    matplotlib.use('Agg')  
+    matplotlib.use('Agg')
 
 if __name__ == "__main__":
     # clean up storage file on restart
     app.logger.info(f"Launching app from config: {args.config}")
     matplotlib.use('Agg') 
     
-    app.run(debug=True, port=4555, host='0.0.0.0', use_reloader=False)
+    app.run(debug=True, port=5000, host='0.0.0.0', use_reloader=False)
