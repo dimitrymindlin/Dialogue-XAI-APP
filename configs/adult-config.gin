@@ -20,7 +20,7 @@ ExplainBot.remove_underscores = True
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
-ExplainBot.use_llm_agent = "unified_mape_k" # one of False, "simple", "mape_k", "o1", "mape_k_openai_2", "mape_k_openai_2_enhanced"
+ExplainBot.use_llm_agent = "unified_mapek_openai" # one of False, "simple", "mape_k", "o1", "mape_k_openai_2", "mape_k_openai_2_enhanced"
 ExplainBot.use_two_prompts = False
 
 # Experiment Helper
