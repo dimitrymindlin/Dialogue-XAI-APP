@@ -4,21 +4,27 @@ ExplainBot.encoded_col_mapping_path = "./data/diabetes/encoded_col_mapping.json"
 ExplainBot.categorical_mapping_path = "./data/diabetes/categorical_mapping.json"
 ExplainBot.background_dataset_file_path = "./data/diabetes/diabetes_train.csv"
 ExplainBot.dataset_file_path = "./data/diabetes/diabetes_test.csv"
-
 ExplainBot.name = "diabetes"
 
-# Dataset feature information
+# Seed
+ExplainBot.seed = 0
 
+# Dataset feature information
 ExplainBot.dataset_index_column = 0
-ExplainBot.instance_type_naming = "patient"
+ExplainBot.instance_type_naming = "Patient"
 ExplainBot.target_variable_name = "Y"
 ExplainBot.categorical_features = ['BloodGroup']
+ExplainBot.ordinary_features = None
 ExplainBot.numerical_features = ['Age', 'Pregnancies', 'Glucose', 'BloodPressure', 'Insulin', 'BodyMassIndex', 'DiabetesPedigreeFunction']
 ExplainBot.remove_underscores = True
-ExplainBot.ordinary_features = None
-ExplainBot.actionable_features = ['Glucose', 'BloodPressure', 'Insulin', 'BodyMassIndex', 'DiabetesPedigreeFunction']
-ExplainBot.feature_ordering = ['Age', 'BloodGroup', 'Pregnancies', 'Glucose', 'BloodPressure', 'Insulin', 'BodyMassIndex', 'DiabetesPedigreeFunction']
 ExplainBot.use_intent_recognition = "openAI"
+ExplainBot.use_active_dialogue_manager = False
+ExplainBot.use_static_followup = True
+ExplainBot.use_llm_agent = "mape_k_openai_2_enhanced" # one of False, "simple", "mape_k", "o1", "mape_k_openai_2", "mape_k_openai_2_enhanced"
+
+# Experiment Helper
+ExperimentHelper.actionable_features = ['Glucose', 'BloodPressure', 'Insulin', 'BodyMassIndex', 'DiabetesPedigreeFunction']
+
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
@@ -26,25 +32,27 @@ Explanation.max_cache_size = 1_000_000
 # MegaExplainer Params
 MegaExplainer.cache_location = "./cache/diabetes-mega-explainer-tabular.pkl"
 MegaExplainer.use_selection = False
+MegaExplainer.use_tree_shap = True
 
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/diabetes-dice-tabular.pkl"
 TabularDice.final_cfe_amount = 3
 
-# Tabular Anchor Params
-TabularAnchor.cache_location = "./cache/diabetes-anchor-tabular.pkl"
-
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/diabetes-diverse-instances.pkl"
-DiverseInstances.instance_amount = 10
-DiverseInstances.dataset_name = "diabetes"
+DiverseInstances.instance_amount = 15
 
 # Test Instances
 TestInstances.cache_location = "./cache/diabetes-test-instances.pkl"
 TestInstances.max_features_to_vary = 2
+TestInstances.instance_amount = 10
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/diabetes-ceteris-paribus.pkl"
+PdpExplanation.cache_location = "./cache/diabetes-pdp.pkl"
+
+# Tabular Anchor Params
+TabularAnchor.cache_location = "./cache/diabetes-anchor-tabular.pkl"
 
 # Conversation params
 Conversation.class_names = {0: "unlikely to have diabetes", 1: "likely to have diabetes"}

@@ -287,11 +287,14 @@ def explain_cfe_by_given_features(conversation,
         top_features: dict sorted by most important feature
     """
     dice_tabular = conversation.get_var('tabular_dice').contents
+    template_manager = conversation.get_var('template_manager').contents
     cfes = dice_tabular.run_explanation(data, "opposite", features_to_vary=feature_names_list)
     initial_feature_to_vary = feature_names_list[0]  # TODO: So far expecting that user only selects one feature.
     change_string_prefix = ""
     if cfes[data.index[0]].cf_examples_list[0].final_cfs_df is None:
-        change_string_prefix = f"The attribute {initial_feature_to_vary} cannot be changed <b>by itself</b> to alter the prediction. <br><br>"
+        # Get display name for the feature
+        display_name = template_manager.feature_display_names.get_by_name(initial_feature_to_vary)
+        change_string_prefix = f"The attribute <b>{display_name}</b> cannot be changed <b>by itself</b> to alter the prediction. <br><br>"
         # Find cfs with more features than just one feature by iterating over the top features and adding them
         for new_feature, importance in top_features.items():
             if new_feature not in feature_names_list:
@@ -299,7 +302,7 @@ def explain_cfe_by_given_features(conversation,
                 cfes = dice_tabular.run_explanation(data, "opposite", features_to_vary=feature_names_list)
                 if cfes[data.index[0]].cf_examples_list[0].final_cfs_df is not None:
                     break
-    change_string, _ = dice_tabular.summarize_cfe_for_given_attribute(cfes, data, initial_feature_to_vary)
+    change_string = dice_tabular.summarize_cfe_for_given_attribute(cfes, data, initial_feature_to_vary, template_manager=template_manager)
     conversation.store_followup_desc(change_string)
     change_string = change_string_prefix + change_string
     return change_string

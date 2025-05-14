@@ -4,12 +4,10 @@ ExplainBot.encoded_col_mapping_path = "./data/adult/encoded_col_mapping.json"
 ExplainBot.categorical_mapping_path = "./data/adult/categorical_mapping.json"
 ExplainBot.background_dataset_file_path = "./data/adult/adult_train.csv"
 ExplainBot.dataset_file_path = "./data/adult/adult_test.csv"
-
 ExplainBot.name = "adult census dataset"
 
 # Seed
 ExplainBot.seed = 0
-
 
 # Dataset feature information
 ExplainBot.dataset_index_column = 0
@@ -19,17 +17,14 @@ ExplainBot.categorical_features = ['MaritalStatus', 'InvestmentOutcome', 'Educat
 ExplainBot.ordinary_features = ['InvestmentOutcome','EducationLevel', 'WorkLifeBalance']
 ExplainBot.numerical_features = ['Age', 'WeeklyWorkingHours']
 ExplainBot.remove_underscores = True
-ExplainBot.actionable_features = ["InvestmentOutcome", "EducationLevel", "Occupation"]
-ExplainBot.feature_ordering = ['Age', 'Education Level', 'Marital Status', 'Occupation', 'Weekly Working Hours', 'Work Life Balance', 'Investment Outcome']
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
-ExplainBot.use_llm_agent = "structured_mape_k_openai_agents" # one of False, "simple", "mape_k", "o1", "mape_k_2", "unified_mape_k","structured_mape_k_openai_agents"
-ExplainBot.use_two_prompts = %use_two_prompts # Command line argument to enable two-prompt mode
+ExplainBot.use_llm_agent = "unified_mape_k" # one of False, "simple", "mape_k", "o1", "mape_k_openai_2", "mape_k_openai_2_enhanced"
+ExplainBot.use_two_prompts = False
 
 # Experiment Helper
 ExperimentHelper.actionable_features = ['Age', 'EducationLevel', 'MaritalStatus', 'Occupation', 'WeeklyWorkingHours', 'InvestmentOutcome']
-
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
@@ -46,7 +41,7 @@ TabularDice.final_cfe_amount = 3
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"
 DiverseInstances.instance_amount = 15
-DiverseInstances.dataset_name = "adult"
+
 
 # Test Instances
 TestInstances.cache_location = "./cache/adult-test-instances.pkl"
@@ -65,32 +60,9 @@ Conversation.class_names = {0: "under 50k", 1: "over 50k"}
 Conversation.question_bank_path =  "./data/question_bank.csv"
 
 # Dataset description
+DatasetDescription.dataset_name = "adult"
 DatasetDescription.dataset_objective = "Predict whether an individual earns more than 50k a years or less."
 ## Dataset description for context for llm agent
-DatasetDescription.dataset_description = "Adult Census Income Dataset, commonly used for binary classification tasks in machine learning. The goal is to predict whether an individual's income exceeds $50K/year based on demographic and employment-related features. It is based on US Census data and is often used to explore income distribution patterns, discrimination, or bias in predictive models."
+DatasetDescription.dataset_description = "Adult Census Income Dataset, commonly used for binary classification tasks in machine learning. The goal is to predict whether an individual’s income exceeds $50K/year based on demographic and employment-related features. It is based on US Census data and is often used to explore income distribution patterns, discrimination, or bias in predictive models."
 DatasetDescription.model_description = "random forest model"
 DatasetDescription.user_study_objective = "guess the model's prediction for the shown individual"
-
-# Feature Tooltip
-ExplainBot.feature_tooltip_mapping = {
-    "age": "The individual's age, in years.",
-    "education level": "Highest level of education attained by the individual, categorized as: Dropout, High School grad, Associates, Bachelors grad, Masters grad, Professional Degree or Doctorate/Prof Level.",
-    "weekly working hours": "The total number of hours the individual works in a typical week.",
-    "marital status": "The individual's marital status, indicating whether they are Married or Single. This simplification may encompass a broader range of legal statuses.",
-    "work life balance": "A self-reported assessment of the individual's work-life balance, ranging from poor to excellent. This subjective measure reflects the individual's satisfaction with their ability to balance work and personal life.",
-    "occupation": "The category of the individual's occupation, such as Admin (Administrative and clerical roles: office clerks and secretaries), Military (Personnel serving in the army), Blue-Collar (Manual labor occupations: craft workers, machine operators, farmers, handlers, cleaners), White-Collar (Executive and managerial positions involving strategic planning), Professional (Specialized professions requiring advanced education: doctors, lawyers, engineers, and educators), Sales (Roles related to selling products or services: sales representatives, retail personnel), Service (Occupations providing services to individuals or communities: protective services e.g., law enforcement officers, firefighters, technical support)","workclass": "The work class of the person: Government, Private Sector, Self-Employed / Entrepreneurial, Unemployed and Other.",
-    "investment outcome": "The result of the individual's investment activities, categorized as: No investment, Loss, or Gain. This reflects whether the individual has investments and if so, whether they have made a profit or a loss."
-}
-
-# Feature Units
-ExplainBot.feature_units_mapping = {
-    "age": "years",
-    "education": "",
-    "gender": "",
-    "weekly working hours": "hours",
-    "marital status": "",
-    "work life balance": "",
-    "occupation": "",
-    "workclass": "",
-    "investment outcome": ""
-}

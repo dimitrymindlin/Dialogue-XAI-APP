@@ -11,12 +11,12 @@ from create_experiment_data.instance_datapoint import InstanceDatapoint
 
 @gin.configurable
 class ExperimentHelper:
-    def __init__(self, conversation,
-                 categorical_mapping,
-                 categorical_features,
-                 template_manager,
-                 feature_ordering=None,
-                 actionable_features=None):
+    def __init__(self,
+                 actionable_features=None,
+                 conversation=None,
+                 categorical_mapping=None,
+                 categorical_features=None,
+                 template_manager=None):
         self.conversation = conversation
         self.categorical_mapping = categorical_mapping
         self.categorical_features = categorical_features
@@ -24,7 +24,7 @@ class ExperimentHelper:
         self.instances = {"train": [], "test": {}}
         self.current_instance = None
         self.current_instance_type = None
-        self.feature_ordering = feature_ordering
+        self.feature_ordering = list(template_manager.feature_display_names.feature_name_to_display_name.values())
         self.actionable_features = actionable_features
 
     def load_instances(self):
@@ -57,23 +57,38 @@ class ExperimentHelper:
                     value = int(value)
                 instance[key] = str(value)
 
-    def _make_displayable_instance(self, instance,
-                                   return_probabilities=False):
+    def _make_displayable_instance(self, instance, return_probabilities=False):
         # Round instance features
         instance_features = copy.deepcopy(instance.instance_as_dict)
         instance_features = self.template_manager.apply_categorical_mapping(instance_features)
         self._round_instance_features(instance_features)
 
-        # Turn instace features to display names
+        # Turn instance features to display names
         instance.displayable_features = instance_features  # Copy categorical feature values first
         instance.displayable_features = self.template_manager.replace_feature_names_by_display_names(
             instance.displayable_features)  # then add display names
 
         # Order instance features and values according to the feature ordering
         if self.feature_ordering is not None:
-            # Order instance features according to the feature ordering
-            instance.displayable_features = {feature: instance.displayable_features[feature] for feature in
-                                             self.feature_ordering}
+            # Make a new dict with only the features that exist in the instance AND in the feature_ordering
+            # This ensures no duplicates and proper ordering
+            ordered_features = {}
+            seen_features = set()  # Keep track of features we've already processed
+
+            for feature in self.feature_ordering:
+                if feature in instance.displayable_features and feature not in seen_features:
+                    ordered_features[feature] = instance.displayable_features[feature]
+                    seen_features.add(feature)
+                elif feature not in instance.displayable_features:
+                    print(f"Warning: Feature '{feature}' from feature_ordering not found in instance")
+
+            # Only add features that weren't in the ordering if needed
+            for feature, value in instance.displayable_features.items():
+                if feature not in seen_features:
+                    ordered_features[feature] = value
+                    seen_features.add(feature)
+
+            instance.displayable_features = ordered_features
         else:  # alphabetically order features
             instance.displayable_features = dict(sorted(instance.displayable_features.items()))
 
@@ -156,6 +171,8 @@ class ExperimentHelper:
         instances_dict_new = {}
         instance_dicts = {comp: pd.DataFrame(data).to_dict('records')[0] for comp, data in instances_dict.items()}
         for instance_naming, instance_dict in instance_dicts.items():
+            if "label" in instance_dict:
+                del instance_dict["label"]
             class_probabilities = self.conversation.get_var("model_prob_predict").contents(
                 pd.DataFrame(instance_dict, index=[0]))
             predicted_label_index = np.argmax(class_probabilities)

@@ -8,7 +8,6 @@ import difflib
 import json
 import pickle
 from random import seed as py_random_seed
-import secrets
 from typing import List, Tuple, Optional, Dict, Any
 import re
 
@@ -78,12 +77,9 @@ class ExplainBot:
                  feature_definitions: dict = None,
                  skip_prompts: bool = False,
                  categorical_mapping_path: str = None,
-                 feature_tooltip_mapping=None,
-                 actionable_features=None,
                  instance_type_naming: str = "instance",
-                 feature_units_mapping=None,
                  encoded_col_mapping_path: dict = None,
-                 feature_ordering: List[str] = None,
+                 feature_name_mapping_path: str = None,
                  use_selection: bool = False,
                  use_intent_recognition: bool = False,
                  use_active_dialogue_manager: bool = False,
@@ -122,14 +118,12 @@ class ExplainBot:
             skip_prompts: Whether to skip prompt generation. This is mostly useful for running fine-tuned
                           models where generating prompts is not necessary.
             categorical_mapping_path: Path to json mapping for each col that assigns a categorical var to an int.
-            feature_tooltip_mapping: A mapping from feature names to tooltips. This is used to display tooltips
-                                        in the UI.
             actionable_features: A list of features that can be changed (actionable features)
             feature_units_mapping: A mapping from feature names to units. This is used to display units in the UI.
             instance_type_naming: The naming of the instance type. This is used to display the instance type such as
                                     "person" or "house" in the UI.
             encoded_col_mapping_path: Path to the encoded column mapping file.
-            use_two_prompts: Whether to use the two-prompt approach for the LLM agent.
+            feature_name_mapping_path: Path to the feature name mapping file.
         """
 
         # Set seeds
@@ -147,22 +141,16 @@ class ExplainBot:
         self.categorical_features = categorical_features
         self.ordinary_features = ordinary_features
         self.numerical_features = numerical_features
-        self.feature_tooltip_mapping = feature_tooltip_mapping
-        self.feature_units_mapping = feature_units_mapping
-        self.actionable_features = actionable_features
         self.instance_type_naming = instance_type_naming
         self.encoded_col_mapping_path = encoded_col_mapping_path
-        self.feature_ordering = feature_ordering
+        self.feature_name_mapping_path = feature_name_mapping_path
+        self.feature_ordering = None
         self.use_selection = use_selection
         self.use_intent_recognition = use_intent_recognition
         self.use_active_dialogue_manager = use_active_dialogue_manager
         self.use_llm_agent = use_llm_agent
         self.use_static_followup = use_static_followup
         self.use_two_prompts = use_two_prompts
-        
-        # Log the two-prompt mode setting
-        print(f"Two-prompt mode is {'ENABLED' if self.use_two_prompts else 'DISABLED'}")
-        
         if self.use_static_followup:
             self.static_followup_mapping = get_mapping()
 
@@ -170,11 +158,6 @@ class ExplainBot:
         self.manual_var_filename = None
 
         self.decoding_model_name = parsing_model_name
-
-        # Initialize completion + parsing modules
-        self.intent_recognition_model = None
-        if self.use_intent_recognition == "openAI":
-            self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
 
         self.decoder = None
 
@@ -223,6 +206,26 @@ class ExplainBot:
                                                                     remove_underscores,
                                                                     store_to_conversation=False)
 
+        # Load Template Manager
+        template_manager = TemplateManager(self.conversation,
+                                           encoded_col_mapping_path=encoded_col_mapping_path,
+                                           categorical_mapping=categorical_mapping,
+                                           feature_name_mapping_path=self.feature_name_mapping_path)
+        self.conversation.add_var('template_manager', template_manager, 'template_manager')
+        self.feature_ordering = list(template_manager.feature_display_names.feature_name_to_display_name.keys())
+
+        # Load Experiment Helper
+        helper = ExperimentHelper(conversation=self.conversation,
+                                  categorical_mapping=self.categorical_mapping,
+                                  categorical_features=self.categorical_features,
+                                  template_manager=template_manager)
+        self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
+
+        # Initialize completion + parsing modules
+        self.intent_recognition_model = None
+        if self.use_intent_recognition == "openAI":
+            self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
+
         if use_llm_agent is not False:
             if self.use_llm_agent == "o1":
                 from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant as Agent
@@ -234,31 +237,20 @@ class ExplainBot:
                 from llm_agents.mape_k_2_components.mape_k_workflow_agent import MapeK2Component as Agent
             elif self.use_llm_agent == "unified_mape_k":
                 from llm_agents.mape_k_2_components.unified_mape_k_agent import UnifiedMapeKAgent as Agent
-            elif self.use_llm_agent == "structured_mape_k":
-                # Using the structured MAPE_K model with Pydantic schemas (LlamaIndex implementation)
-                from llm_agents.mape_k_2_components.unified_mape_k_agent import UnifiedMapeKAgent as Agent
-            elif self.use_llm_agent == "structured_mape_k_openai_agents":
-                # Using the structured MAPE_K model with OpenAI Agents SDK
-                from llm_agents.mape_k_2_components.unified_mape_k_agent_openai import UnifiedMapeKOpenAIAgent as Agent
-            self.agent = Agent(feature_names=self.feature_ordering,
-                               domain_description=self.conversation.describe.get_dataset_description(),
-                               user_ml_knowledge=self.ml_knowledge,
-                               experiment_id=self.experiment_id,
-                               verbose=True)
 
-        # Load Template Manager
-        template_manager = TemplateManager(self.conversation,
-                                           encoded_col_mapping_path=encoded_col_mapping_path,
-                                           categorical_mapping=categorical_mapping)
-        self.conversation.add_var('template_manager', template_manager, 'template_manager')
-
-        # Load Experiment Helper
-        helper = ExperimentHelper(self.conversation,
-                                  self.categorical_mapping,
-                                  self.categorical_features,
-                                  template_manager,
-                                  self.feature_ordering)
-        self.conversation.add_var('experiment_helper', helper, 'experiment_helper')
+            if not use_two_prompts:
+                self.agent = Agent(feature_names=self.feature_ordering,
+                                   domain_description=self.conversation.describe.get_dataset_description(),
+                                   user_ml_knowledge=self.ml_knowledge,
+                                   experiment_id=self.experiment_id,
+                                   verbose=True)
+            else:
+                self.agent = Agent(feature_names=self.feature_ordering,
+                                   domain_description=self.conversation.describe.get_dataset_description(),
+                                   user_ml_knowledge=self.ml_knowledge,
+                                   experiment_id=self.experiment_id,
+                                   verbose=True,
+                                   use_two_prompts=True)
 
         # Load the explanations
         self.load_explanations(background_ds_x=background_dataset,
@@ -338,13 +330,15 @@ class ExplainBot:
         """
         Returns the feature tooltips for the current dataset.
         """
-        return self.feature_tooltip_mapping
+        template_manager = self.conversation.get_var("template_manager").contents
+        return template_manager.feature_display_names.feature_tooltips
 
     def get_feature_units(self):
         """
         Returns the feature units for the current dataset.
         """
-        return self.feature_units_mapping
+        template_manager = self.conversation.get_var("template_manager").contents
+        return template_manager.feature_display_names.feature_units
 
     def get_feature_names(self):
         template_manager = self.conversation.get_var("template_manager").contents
@@ -353,10 +347,10 @@ class ExplainBot:
         original_feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
 
         # Sort
-        feature_names_ordering = [feature.replace(" ", "") for feature in
-                                  self.feature_ordering]  # From display names to feature names
         if self.feature_ordering is not None:
             # Sort feature names by feature_ordering
+            feature_names_ordering = [feature.replace(" ", "") for feature in
+                                      self.feature_ordering]  # From display names to feature names
             feature_names = sorted(feature_names, key=lambda k: feature_names_ordering)
         else:
             feature_names = sorted(feature_names)
@@ -443,13 +437,19 @@ class ExplainBot:
             lime_for_submodular = mega_explainer.mega_explainer.explanation_methods['lime_0.75']
         else:
             lime_for_submodular = None
-        diverse_instances_explainer = DiverseInstances(lime_explainer=lime_for_submodular)
+        diverse_instances_explainer = DiverseInstances(
+            dataset_name=self.conversation.describe.dataset_name,
+            lime_explainer=lime_for_submodular)
         diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=test_data,
                                                                                     model=model,
                                                                                     y_values=test_data_y,
                                                                                     submodular_pick=False)
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
-        diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
+        if isinstance(diverse_instance_ids, list) and all(isinstance(i, int) for i in diverse_instance_ids):
+            diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
+        else:
+            diverse_instances = diverse_instance_ids.copy()
+            diverse_instance_ids = [instance['id'] for instance in diverse_instances]
         app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")
 
         # Compute explanations for diverse instances
@@ -513,8 +513,7 @@ class ExplainBot:
                                        feature_names=list(test_data.columns),
                                        categorical_features=self.categorical_features,
                                        numerical_features=self.numerical_features,
-                                       categorical_mapping=self.categorical_mapping
-                                       )
+                                       categorical_mapping=self.categorical_mapping)
         pdp_explainer.get_explanations()
         self.conversation.add_var('pdp', pdp_explainer, 'explanation')
 
@@ -525,7 +524,7 @@ class ExplainBot:
                                                                   feature_names=list(background_ds_x.columns),
                                                                   rounding_precision=self.conversation.rounding_precision,
                                                                   categorical_mapping=self.categorical_mapping,
-                                                                  feature_units=self.feature_units_mapping)
+                                                                  feature_units=self.get_feature_units())
         self.conversation.add_var('feature_statistics_explainer', feature_statistics_explainer, 'explanation')
 
         # Add all the explanations to the conversation
@@ -538,7 +537,8 @@ class ExplainBot:
         test_instance_explainer = TestInstances(test_data, model, mega_explainer,
                                                 self.conversation.get_var("experiment_helper").contents,
                                                 diverse_instance_ids=diverse_instance_ids,
-                                                actionable_features=self.actionable_features)
+                                                actionable_features=self.conversation.get_var(
+                                                    "experiment_helper").contents.actionable_features)
         test_instances, remove_instances_from_experiment = test_instance_explainer.get_test_instances()
         # given the list of remove_instances_from_experiment, remove them from the experiment in all explanations
         if len(remove_instances_from_experiment) > 0:
@@ -553,11 +553,13 @@ class ExplainBot:
                 # Remove instance from anchor
                 tabular_anchor.cache = {k: v for k, v in tabular_anchor.cache.items() if k != instance_id}
                 # Remove instance from ceteris paribus
-                ceteris_paribus_explainer.cache = {k: v for k, v in ceteris_paribus_explainer.cache.items() if k != instance_id}
+                ceteris_paribus_explainer.cache = {k: v for k, v in ceteris_paribus_explainer.cache.items() if
+                                                   k != instance_id}
                 # Remove instance from pdp
                 pdp_explainer.cache = {k: v for k, v in pdp_explainer.cache.items() if k != instance_id}
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
+        diverse_instances_explainer.save_diverse_instances(diverse_instances)
 
     def load_model(self, filepath: str):
         """Loads a model.
@@ -654,7 +656,6 @@ class ExplainBot:
         except (KeyError, TypeError):
             return []
 
-
     def update_state_new(self,
                          question_id: str = None,
                          feature_id: int = None) -> tuple[str, int, Optional[int]]:
@@ -694,20 +695,6 @@ class ExplainBot:
         feature_name = None
         feature_id = None
         if self.use_llm_agent:
-            # Create agent if not exists
-            if hasattr(self, 'agent') and self.agent is not None:
-                pass  # Agent already created
-            elif self.use_llm_agent == "structured_mape_k_openai_agents":
-                from llm_agents.mape_k_2_components.unified_mape_k_agent_openai import UnifiedMapeKOpenAIAgent
-                print(f"Creating structured MAPE-K OpenAI Agent with two-prompt mode: {self.use_two_prompts}")
-                self.agent = UnifiedMapeKOpenAIAgent(
-                    feature_names=", ".join(self.feature_ordering),
-                    domain_description=self.conversation.describe.get_dataset_description(),
-                    user_ml_knowledge=self.ml_knowledge,
-                    experiment_id=self.experiment_id,
-                    use_two_prompts=self.use_two_prompts
-                )
-            
             reasoning, response = await self.agent.answer_user_question(user_input)
             return response, None, None, reasoning
         elif self.use_intent_recognition:
@@ -994,3 +981,81 @@ class ExplainBot:
         output_file = '03_exit_questionnaire_filled.md'
         with open(output_file, 'w') as file:
             file.write(markdown)
+
+    def save_all_questions_and_answers_to_csv(self, output_path="all_questions_and_answers.csv"):
+        """Saves all possible question and answer combinations to a CSV file based on an intent DataFrame.
+
+        This function iterates through the provided intent DataFrame, which contains columns for questions,
+        XAI methods, and features. For each row, it calls the update_state_new method to get the answer,
+        and saves the results to a CSV file.
+
+        Arguments:
+            intent_pd: Pandas DataFrame containing 'question', 'xai method', and 'feature' columns
+            output_path: Path where to save the CSV file. Defaults to "all_questions_and_answers.csv".
+
+        Returns:
+            DataFrame: DataFrame with the original columns plus an 'answer' column.
+        """
+        import pandas as pd
+        from parsing.llm_intent_recognition.prompts.explanations_prompt import question_to_id_mapping
+
+        # Create a copy of the intent DataFrame to add the answers
+        intent_pd = pd.read_csv(
+            "/Users/dimitrymindlin/UniProjects/Dialogue-XAI-APP/parsing/llm_intent_recognition/processed_xai_dataset_semicolon.csv",
+            delimiter=";")
+        result_df = intent_pd.copy()
+        result_df['answer'] = None
+
+        # Get all feature IDs and names for mapping
+        feature_names = self.get_feature_names()
+        feature_name_to_id = {item['feature_name']: item['id'] for item in feature_names}
+
+        # Make sure we have a valid instance
+        if self.current_instance is None:
+            self.get_next_instance("train", 0)
+
+        # Iterate through each row in the intent DataFrame
+        for index, row in intent_pd.iterrows():
+            xai_method = row['xai method']
+            question = row['question']
+            feature = row['feature'] if pd.notna(row['feature']) else None
+
+            # Get question ID from the xai method
+            question_id = xai_method
+
+            if not question_id:
+                result_df.at[index, 'answer'] = f"ERROR: Unknown XAI method '{xai_method}'"
+                continue
+
+            # Get feature ID if a feature is specified
+            feature_id = None
+            if feature is not None:
+                if feature in feature_name_to_id:
+                    feature_id = feature_name_to_id[feature]
+                else:
+                    # Try to find the closest match
+                    import difflib
+                    feature_names_list = list(feature_name_to_id.keys())
+                    closest_matches = difflib.get_close_matches(feature, feature_names_list, n=1, cutoff=0.6)
+                    if closest_matches:
+                        feature_id = feature_name_to_id[closest_matches[0]]
+                    else:
+                        result_df.at[index, 'answer'] = f"ERROR: Unknown feature '{feature}'"
+                        continue
+
+            try:
+                # Get answer for this combination
+                answer, _, _, _ = self.update_state_new(question_id, feature_id)
+
+                # Store answer in the result DataFrame
+                result_df.at[index, 'answer'] = answer
+                print(f"Processed: {xai_method} with feature {feature}")
+            except Exception as e:
+                # Record error in the DataFrame
+                result_df.at[index, 'answer'] = f"ERROR: {str(e)}"
+                print(f"Error processing {xai_method} with feature {feature}: {str(e)}")
+
+        # Save the results to a CSV file
+        result_df.to_csv(output_path, index=False, sep=";")
+        print(f"All questions and answers saved to {output_path}")
+        return result_df

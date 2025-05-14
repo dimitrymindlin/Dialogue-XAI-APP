@@ -1,16 +1,20 @@
 # Import necessary libraries
-import json
-import os
-import pickle
-from sklearn import __version__ as sklearn_version
-import shap
-from sklearn.metrics import roc_auc_score
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from data import load_config, create_folder_if_not_exists
+from sklearn.metrics import roc_auc_score
 from data.ml_utilities import label_encode_and_save_classes, construct_pipeline, train_model
+from data.train_utils import (
+    setup_training_environment,
+    save_train_test_data,
+    setup_feature_display_names,
+    apply_display_names,
+    save_config_file,
+    save_categorical_mapping,
+    save_model_and_features,
+    print_feature_importances
+)
 
 DATASET_NAME = "diabetes"
 config_path = f"./{DATASET_NAME}_model_config.json"
@@ -116,79 +120,72 @@ def preprocess_data_specific(data, config):
 
 
 def main():
-    config = load_config(config_path)
-    config["save_path"] = save_path
+    # Initialize environment and paths
+    config, save_path = setup_training_environment(DATASET_NAME, config_path)
 
+    # Load and preprocess data
     data = pd.read_csv(config["dataset_path"])
-    create_folder_if_not_exists(save_path)
     X, y, encoded_classes = preprocess_data_specific(data, config)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    # Split into train and test
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=config.get("test_size", 0.2),
+        random_state=config.get("random_state", 42),
+        stratify=y
+    )
 
     target_col = config["target_col"]
-    # Add labels to X and save train and test data
+    # Attach target and save CSVs
     X_train[target_col] = y_train
     X_test[target_col] = y_test
-    X_train.to_csv(os.path.join(save_path, f"{DATASET_NAME}_train.csv"))
-    X_test.to_csv(os.path.join(save_path, f"{DATASET_NAME}_test.csv"))
+    save_train_test_data(X_train, X_test, DATASET_NAME, save_path)
+
+    # Set up feature display names
+    feature_display_names, config = setup_feature_display_names(X_train, config, target_col)
+    X_train, X_test = apply_display_names(X_train, X_test, feature_display_names)
+
+    # Label-encode categorical features and update config
+    _, encoded_classes = label_encode_and_save_classes(
+        X_train.drop(columns=[target_col]),
+        config
+    )
+    save_config_file(config, save_path, DATASET_NAME)
+    save_categorical_mapping(encoded_classes, save_path)
+
+    # Prepare arrays for training
     X_train.drop(columns=[target_col], inplace=True)
     X_test.drop(columns=[target_col], inplace=True)
+    feature_names = list(X_train.columns)
 
-    # Check if there are nan values in the data and raise an error if there are
-    if X_train.isna().sum().sum() > 0:
-        # print the nan columns
-        print(X_train.columns[X_train.isna().any()].tolist())
-        raise ValueError("There are NaN values in the training data.")
-
-    # Change list of column names to be encoded to a list of column indices
-    columns_to_encode = [X_train.columns.get_loc(col) for col in config["columns_to_encode"]]
-    pipeline = construct_pipeline(columns_to_encode, RandomForestClassifier())
-
-    model_params = {("model__" + key if not key.startswith("model__") else key): value for key, value in
-                    config["model_params"].items()}
+    # Train model using existing utilities
+    from sklearn import __version__ as sklearn_version
+    model_params = {("model__" + k if not k.startswith("model__") else k): v
+                    for k, v in config["model_params"].items()}
     search_params = config.get("random_search_params", {"n_iter": 10, "cv": 5, "random_state": 42})
+    best_model, best_params = train_model(
+        X_train.values, y_train,
+        construct_pipeline(
+            [X_train.columns.get_loc(c) for c in config["columns_to_encode"]],
+            RandomForestClassifier()
+        ),
+        model_params,
+        search_params
+    )
 
-    best_model, best_params = train_model(X_train, y_train, pipeline, model_params, search_params)
-
-    best_model.fit(X_train, y_train)
-
-    # Predict probabilities for the train set
-    y_train_pred = best_model.predict_proba(X_train)[:, 1]
-
-    # Compute ROC AUC score for the train set
-    train_score = roc_auc_score(y_train, y_train_pred)
-    print("Best Model Score Train:", train_score)
-
-    # Predict probabilities for the test set
-    y_test_pred = best_model.predict_proba(X_test)[:, 1]
-
-    # Compute ROC AUC score for the test set
-    test_score = roc_auc_score(y_test, y_test_pred)
-    print("Best Model Score AUC ROC Test:", test_score)
-
-    # Print best parameters
-    print("Best Parameters:", best_params)
-
-    # Get global shapley feature importance
-    # Transform the data to a numpy array with preprocessor from the pipeline
-    explainer = shap.Explainer(best_model.predict, X_train)
-    shap_values = explainer(X_train)
-    shap.plots.bar(shap_values)
-
-    # Save the best model
-    pickle.dump(best_model, open(os.path.join(save_path, f"{DATASET_NAME}_model_rf.pkl"), 'wb'))
-
-    # Store evaluation metrics in model_config.json under "evaluation_metrics"
+    # Evaluate and record metrics
+    train_score = roc_auc_score(y_train, best_model.predict_proba(X_train.values)[:, 1])
+    test_score = roc_auc_score(y_test, best_model.predict_proba(X_test.values)[:, 1])
     config["evaluation_metrics"] = {
         "train_score_auc_roc": train_score,
         "test_score_auc_roc": test_score
     }
-    # Store sklearn version in model_config.json under "sklearn_version"
     config["sklearn_version"] = sklearn_version
+    save_config_file(config, save_path, DATASET_NAME)
 
-    # Copy the config file to the save path
-    with open(os.path.join(save_path, f"{DATASET_NAME}_model_config.json"), 'w') as file:
-        json.dump(config, file)
+    # Save model and features, then print importances
+    save_model_and_features(best_model, feature_names, save_path, DATASET_NAME)
+    print_feature_importances(best_model, feature_names)
 
 
 if __name__ == "__main__":

@@ -1,15 +1,39 @@
 import numpy as np
 import pandas as pd
 import pickle as pkl
+import os
+import json
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
+from data.feature_mapping_utils import create_feature_name_mapping
 
 np.random.seed(3)
 
+# Define dataset name and paths
+DATASET_NAME = "diabetes"
+save_path = f"./data/{DATASET_NAME}"
+target_col = "y"
+
+# Create folder if it doesn't exist
+if not os.path.exists(save_path):
+    os.makedirs(save_path)
+
 X_values = pd.read_csv("diabetesSmall.csv")
+
+# Store original column names before any processing
+original_columns = list(X_values.columns)
+
 y_values = X_values.pop("y")
+
+# Create feature name mapping
+create_feature_name_mapping(
+    original_columns=original_columns,
+    save_path=save_path,
+    dataset_name="feature",
+    target_col=target_col
+)
 
 # Create Pipeline
 model_name = "Linear Regression"
