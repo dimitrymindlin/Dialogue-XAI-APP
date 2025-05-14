@@ -24,7 +24,7 @@ class ExperimentHelper:
         self.instances = {"train": [], "test": {}}
         self.current_instance = None
         self.current_instance_type = None
-        self.feature_ordering = list(template_manager.feature_display_names.feature_name_to_display_name.keys())
+        self.feature_ordering = list(template_manager.feature_display_names.feature_name_to_display_name.values())
         self.actionable_features = actionable_features
 
     def load_instances(self):
