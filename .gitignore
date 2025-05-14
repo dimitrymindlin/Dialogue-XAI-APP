@@ -235,3 +235,8 @@ ENV/
 poetry.lock
 
 experiment_analysis/prolific_export.csv
+openai-agents-docs.pdf
+
+openai_agent_logfile.txt
+
+unified_logfile.txt

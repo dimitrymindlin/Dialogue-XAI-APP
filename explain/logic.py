@@ -84,7 +84,8 @@ class ExplainBot:
                  use_intent_recognition: bool = False,
                  use_active_dialogue_manager: bool = False,
                  use_llm_agent=False,
-                 use_static_followup=False):
+                 use_static_followup=False,
+                 use_two_prompts=False):
         """The init routine.
 
         Arguments:
@@ -149,6 +150,7 @@ class ExplainBot:
         self.use_active_dialogue_manager = use_active_dialogue_manager
         self.use_llm_agent = use_llm_agent
         self.use_static_followup = use_static_followup
+        self.use_two_prompts = use_two_prompts
         if self.use_static_followup:
             self.static_followup_mapping = get_mapping()
 
@@ -239,11 +241,22 @@ class ExplainBot:
                     MapeKXAIWorkflowAgentEnhanced as Agent
             elif self.use_llm_agent == "mape_k_2":
                 from llm_agents.mape_k_2_components.mape_k_workflow_agent import MapeK2Component as Agent
-            self.agent = Agent(feature_names=self.feature_ordering,
-                               domain_description=self.conversation.describe.get_dataset_description(),
-                               user_ml_knowledge=self.ml_knowledge,
-                               experiment_id=self.experiment_id,
-                               verbose=True)
+            elif self.use_llm_agent == "unified_mape_k":
+                from llm_agents.mape_k_2_components.unified_mape_k_agent import UnifiedMapeKAgent as Agent
+
+            if not use_two_prompts:
+                self.agent = Agent(feature_names=self.feature_ordering,
+                                   domain_description=self.conversation.describe.get_dataset_description(),
+                                   user_ml_knowledge=self.ml_knowledge,
+                                   experiment_id=self.experiment_id,
+                                   verbose=True)
+            else:
+                self.agent = Agent(feature_names=self.feature_ordering,
+                                   domain_description=self.conversation.describe.get_dataset_description(),
+                                   user_ml_knowledge=self.ml_knowledge,
+                                   experiment_id=self.experiment_id,
+                                   verbose=True,
+                                   use_two_prompts=True)
 
         # Load the explanations
         self.load_explanations(background_ds_x=background_dataset,
@@ -977,15 +990,14 @@ class ExplainBot:
 
     def save_all_questions_and_answers_to_csv(self, output_path="all_questions_and_answers.csv"):
         """Saves all possible question and answer combinations to a CSV file based on an intent DataFrame.
-        
+
         This function iterates through the provided intent DataFrame, which contains columns for questions,
         XAI methods, and features. For each row, it calls the update_state_new method to get the answer,
         and saves the results to a CSV file.
-        
+
         Arguments:
             intent_pd: Pandas DataFrame containing 'question', 'xai method', and 'feature' columns
             output_path: Path where to save the CSV file. Defaults to "all_questions_and_answers.csv".
-        
         Returns:
             DataFrame: DataFrame with the original columns plus an 'answer' column.
         """
