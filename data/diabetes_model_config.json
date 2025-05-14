@@ -27,11 +27,72 @@
       10
     ]
   },
-  "rename_columns": {
-    "Bmi": "BodyMassIndex",
-    "Diabetespedigreefunction": "DiabetesPedigreeFunction",
-    "Bloodpressure": "BloodPressure"
-  },
+  "column_details": [
+    [
+      "Age",
+      [
+        "Age",
+        "years",
+        "The person’s age in years."
+      ]
+    ],
+    [
+      "Pregnancies",
+      [
+        "Pregnancies",
+        "times",
+        "How many times the person has been pregnant."
+      ]
+    ],
+    [
+      "Glucose",
+      [
+        "Glucose",
+        "mg/dL",
+        "Blood sugar level measured two hours after drinking a sugary solution."
+      ]
+    ],
+    [
+      "BloodPressure",
+      [
+        "Blood Pressure",
+        "mm Hg",
+        "Diastolic blood pressure: the lower number showing artery pressure when the heart is resting."
+      ]
+    ],
+    [
+      "Insulin",
+      [
+        "Insulin",
+        "mu U/ml",
+        "Amount of insulin in the blood two hours after eating."
+      ]
+    ],
+    [
+      "BMI",
+      [
+        "Body Mass Index",
+        "kg/m^2",
+        "A value from weight and height that indicates if weight is in a healthy range."
+      ]
+    ],
+    [
+      "DiabetesPedigreeFunction",
+      [
+        "Diabetes Pedigree Function",
+        "score",
+        "A score based on family history showing likelihood of diabetes."
+      ]
+    ],
+    [
+      "BloodGroup",
+      [
+        "Blood Group",
+        "",
+        "The person’s blood type (A, B, AB, or O)."
+      ]
+    ]
+  ],
   "random_search_params": {
     "n_iter": 100,
     "cv": 5,

@@ -128,8 +128,12 @@ class DiverseInstances:
             else:
                 # Get random instances
                 dynamic_seed = int(time.time()) % 10000
-                # Get 10 times more instances to filter and ensure diversity
-                diverse_instances_pandas_indices = data.sample(self.instance_amount * 50,
+                # Get more instances to filter and ensure diversity
+                # Try 10 times more if enough instances
+                get_instances_amount = self.instance_amount * 50
+                if get_instances_amount > len(data):
+                    get_instances_amount = len(data)
+                diverse_instances_pandas_indices = data.sample(get_instances_amount,
                                                                random_state=dynamic_seed).index.tolist()
 
                 # If adult dataset, filter by marital status and class
@@ -160,6 +164,9 @@ class DiverseInstances:
         diverse_instances_pandas_indices.remove(123)"""
 
         if save_to_cache:
-            with open(self.cache_location, 'wb') as file:
-                pkl.dump(self.diverse_instances, file)
+            self.save_diverse_instances(self.diverse_instances)
         return self.diverse_instances
+
+    def save_diverse_instances(self, diverse_instances):
+        with open(self.cache_location, 'wb') as file:
+            pkl.dump(diverse_instances, file)

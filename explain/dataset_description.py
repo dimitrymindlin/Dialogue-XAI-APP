@@ -16,6 +16,7 @@ class DatasetDescription:
     """The dataset description class."""
 
     def __init__(self,
+                 dataset_name: str = "",
                  dataset_objective: str = "",
                  dataset_description: str = "",
                  model_description: str = "",
@@ -37,6 +38,7 @@ class DatasetDescription:
             model_description: A description of the model. i.e., gradient boosted tree or linear
                                regression
         """
+        self.dataset_name = dataset_name
         self.objective = dataset_objective
         self.description = dataset_description
         self.eval_file_path = eval_file_path
@@ -44,6 +46,10 @@ class DatasetDescription:
         self.target_var_name = target_var_name
         self.model_description = model_description
         self.user_study_objective = user_study_objective
+
+    def get_dataset_name(self):
+        """Gets the dataset name."""
+        return self.dataset_name
 
     def get_dataset_objective(self):
         """Gets the objective."""

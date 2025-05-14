@@ -148,57 +148,80 @@ class TabularDice(Explanation):
         assert set(cfe_features) == set(original_features), message
 
         change_string = ""
+        feature_display_names_dict = {}
+        
+        # Get display names dictionary from template_manager
+        if template_manager and hasattr(template_manager, 'feature_display_names'):
+            feature_display_names_dict = template_manager.feature_display_names.feature_name_to_display_name
+            # Also get feature ordering if available
+            feature_ordering = None
+            try:
+                if hasattr(template_manager.conversation, 'feature_ordering'):
+                    feature_ordering = template_manager.conversation.feature_ordering
+            except:
+                pass
+        
         for feature in cfe_features:
             feature_index = cfe_features.index(feature)
             orig_f = original_instance[feature].values[0]
             cfe_f = cfe[feature].values[0]
 
-            """# Map label encoded features to their original names if needed
-            if template_manager and template_manager.encoded_col_mapping:
-                cfe_f = template_manager.get_encoded_feature_name(feature, str(cfe_f))
-                orig_f = template_manager.get_encoded_feature_name(feature, str(orig_f))"""
-            feature_display_names_dict = template_manager.feature_display_names.feature_name_to_display_name
             if isinstance(cfe_f, str):
-                cfe_f = float(cfe_f)
+                try:
+                    cfe_f = float(cfe_f)
+                except ValueError:
+                    pass  # If it can't be converted to float, keep as string
 
             if orig_f != cfe_f:
-                if cfe_f > orig_f:
+                if isinstance(cfe_f, (int, float)) and isinstance(orig_f, (int, float)) and cfe_f > orig_f:
                     inc_dec = "Increasing"
-                else:
+                elif isinstance(cfe_f, (int, float)) and isinstance(orig_f, (int, float)):
                     inc_dec = "Decreasing"
+                else:
+                    inc_dec = "Changing"
+                    
                 # Turn feature to categorical name if possible
                 if self.categorical_mapping is not None:
                     try:
-                        cfe_f = self.categorical_mapping[feature_index][int(cfe_f)]
-                        inc_dec = "Changing"
-                    except KeyError:
-                        pass  # feature is numeric and not in categorical mapping
-                    except IndexError:
-                        print("Index error in DICE explanation encountered...")
-                # check if cfe_f is a float or string and process accordingly
-                if isinstance(cfe_f, float) or isinstance(cfe_f, str):
-                    # if it's a string and contains a '.', attempt to convert to float
-                    if isinstance(cfe_f, str) and "." in cfe_f:
-                        try:
-                            cfe_f = float(cfe_f)
-                        except ValueError:
-                            pass  # if it fails to convert, leave as string
-
-                    # round if it's a float after conversion
-                    if isinstance(cfe_f, float):
-                        cfe_f = round(cfe_f, self.rounding_precision)
-                        # check if it can be safely converted to int (no decimal places)
-                        if cfe_f.is_integer():
-                            cfe_f = int(cfe_f)
-                    else:
-                        # if it's not a float, just return it as a string
-                        cfe_f = str(cfe_f)
-
-                feature_display_name = feature_display_names_dict[feature]
+                        # Convert to int if possible
+                        if isinstance(cfe_f, (int, float)):
+                            cfe_f = self.categorical_mapping[feature_index][int(cfe_f)]
+                            inc_dec = "Changing"
+                    except (KeyError, IndexError):
+                        # Log error with the feature name for debugging
+                        print(f"Error in categorical mapping for feature '{feature}' with value {cfe_f}")
+                
+                # Process the value for display
+                if isinstance(cfe_f, float):
+                    cfe_f = round(cfe_f, self.rounding_precision)
+                    if cfe_f.is_integer():
+                        cfe_f = int(cfe_f)
+                
+                # Find the display name for the feature
+                feature_display_name = feature
+                if feature in feature_display_names_dict:
+                    feature_display_name = feature_display_names_dict[feature]
+                else:
+                    # Try case-insensitive matching
+                    for key, value in feature_display_names_dict.items():
+                        if key.lower() == feature.lower():
+                            feature_display_name = value
+                            break
+                    
+                    # If still not found, check if feature is in feature ordering
+                    if not feature_display_name == feature and feature_ordering:
+                        for display_name in feature_ordering:
+                            # Convert display name to feature name format (removing spaces)
+                            potential_feature_name = display_name.replace(" ", "")
+                            if potential_feature_name.lower() == feature.lower():
+                                feature_display_name = display_name
+                                break
+                
                 change_string += f"{inc_dec} <b>{feature_display_name}</b> to <b>{cfe_f}</b>"
                 change_string += " and "
+                
         # Strip off last and
-        change_string = change_string[:-5]
+        change_string = change_string[:-5] if change_string else "No changes found"
         return change_string
 
     def get_final_cfes(self, data, ids, ids_to_regenerate=None, save_to_cache=False):
@@ -286,13 +309,15 @@ class TabularDice(Explanation):
     def summarize_cfe_for_given_attribute(self,
                                           cfe: pd.DataFrame,
                                           data: pd.DataFrame,
-                                          attribute_to_vary: str):
+                                          attribute_to_vary: str,
+                                          template_manager=None):
         """Summarizes explanations for a given counterfactual by dice tabular.
 
         Arguments:
             cfe: CounterfactualExample object.
             data: pandas df containing data.
-            save_to_cache:
+            attribute_to_vary: The attribute to vary.
+            template_manager: The template manager containing feature display names.
         Returns:
             summary: a string containing the summary.
         """
@@ -316,7 +341,7 @@ class TabularDice(Explanation):
 
         original_instance = data.loc[[key]]
         # Get all cfe strings and remove duplicates
-        cfe_strings = [self.get_change_string(final_cfes.loc[[c_id]], original_instance) for c_id in final_cfe_ids]
+        cfe_strings = [self.get_change_string(final_cfes.loc[[c_id]], original_instance, template_manager=template_manager) for c_id in final_cfe_ids]
         cfe_strings = list(set(cfe_strings))
 
         response = textual_cf(cfe_strings)
