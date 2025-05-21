@@ -7,7 +7,8 @@ from typing import List, Optional, Dict, Union
 from pydantic import PrivateAttr
 
 from llm_agents.explanation_state import ExplanationState
-from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import ExplanationStepModel, NewExplanationModel, \
+from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import ExplanationStepModel, \
+    NewExplanationModel, \
     ChosenExplanationModel
 from llm_agents.utils.definition_wrapper import DefinitionWrapper
 
@@ -341,14 +342,14 @@ class UserModelFineGrained:
         """
         try:
             explanations = [
-                f"- Use the step **{choosen_exp.step}** of the explanation **{choosen_exp.explanation_name}**: " \
-                f"{self._get_explanation_step(choosen_exp.explanation_name, choosen_exp.step).description}."
+                f"- Use the step **{choosen_exp.step_name}** of the explanation **{choosen_exp.explanation_name}**: " \
+                f"{self._get_explanation_step(choosen_exp.explanation_name, choosen_exp.step_name).description}."
                 for choosen_exp in explanation_plan
             ]
         except AttributeError:
             # Scaffolding Strategies
             explanations = [
-                f"- Use the step **{choosen_exp.step}** of the explanation **{choosen_exp.explanation_name}**."
+                f"- Use the step **{choosen_exp.step_name}** of the explanation **{choosen_exp.explanation_name}**."
                 for choosen_exp in explanation_plan
             ]
             # return "No explanations found in the explanation plan."
