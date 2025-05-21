@@ -15,6 +15,16 @@ import matplotlib
 
 from explain.logic import ExplainBot
 
+import mlflow
+import mlflow.llama_index
+
+
+from dotenv import load_dotenv
+
+# Define API blueprint at module level
+bp = Blueprint('host', __name__, template_folder='templates')
+# Allow CORS for our React frontend
+CORS(bp)
 
 # gunicorn doesn't have command line flags, using a gin file to pass command line args
 @gin.configurable
@@ -23,21 +33,6 @@ class GlobalArgs:
         self.config = config
         self.baseurl = baseurl
 
-
-# Parse gin global config
-gin.parse_config_file("global_config.gin")
-
-# Get args
-args = GlobalArgs()
-
-bp = Blueprint('host', __name__, template_folder='templates')
-
-CORS(bp)
-
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-# Parse application level configs
-gin.parse_config_file(args.config)
 
 # Setup the explainbot dict to run multiple bots
 bot_dict = {}
@@ -54,6 +49,50 @@ def home():
     app.logger.info("Loaded Login and created bot")
     objective = bot_dict[user_id].conversation.describe.get_dataset_objective()
     return render_template("index.html", currentUserId=user_id, datasetObjective=objective)"""
+
+
+def create_app():
+    # Load .env / .flaskenv variables
+    load_dotenv()
+    # Parse gin configs
+    gin.parse_config_file("global_config.gin")
+    args = GlobalArgs()
+    gin.parse_config_file(args.config)
+
+    # Initialize Flask app and CORS
+    app = Flask(__name__)
+    CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+
+    # Register the already-defined blueprint
+    app.register_blueprint(bp, url_prefix=args.baseurl)
+
+    # Initialize MLflow autolog at startup (requires mlflow UI already running)
+    try:
+        mlflow.set_tracking_uri("http://localhost:5005")
+        mlflow.set_experiment("Dialogue-XAI-Experiment")
+        mlflow.llama_index.autolog(log_traces=True)
+        app.logger.info("MLflow autolog initialized at startup.")
+    except Exception as e:
+        app.logger.warning(f"MLflow startup init failed: {e}")
+
+    # Any other top‐level setup (cache folder, logging handlers, matplotlib backend)
+    if not os.path.exists("cache"):
+        os.makedirs("cache")
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
+    app.logger.addHandler(stream_handler)
+    app.logger.setLevel(logging.INFO)
+    matplotlib.use('Agg')
+
+    # Make app available to route functions
+    globals()["app"] = app
+
+    # Set environment variable
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    return app
+
+
 
 
 @bp.route('/init', methods=['GET'])
@@ -503,25 +542,7 @@ def test_tts_page():
     return app.send_static_file('test_tts.html')
 
 
-app = Flask(__name__)
-app.register_blueprint(bp, url_prefix=args.baseurl)
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
-# CORS(app, resources={r"/*": {"origins": "http://dialogue-xai-frontend:3000"}})
-
-# Create cache folder in root if it doesn't exist
-if not os.path.exists("cache"):
-    os.makedirs("cache")
-
-if __name__ != '__main__':
-    stream_handler = logging.StreamHandler()
-    stream_handler.setLevel(logging.INFO)
-    app.logger.addHandler(stream_handler)
-    app.logger.setLevel(logging.INFO)
-    matplotlib.use('Agg')
+app = create_app()
 
 if __name__ == "__main__":
-    # clean up storage file on restart
-    app.logger.info(f"Launching app from config: {args.config}")
-    matplotlib.use('Agg') 
-    
     app.run(debug=True, port=4555, host='0.0.0.0', use_reloader=False)
