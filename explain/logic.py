@@ -226,38 +226,23 @@ class ExplainBot:
         if self.use_intent_recognition == "openAI":
             self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
 
-        if use_llm_agent is not False:
+        if use_llm_agent:
             if self.use_llm_agent == "o1":
                 from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant as Agent
-            elif self.use_llm_agent == "mape_k":
-                from llm_agents.mape_k_approach.mape_k_workflow_agent import MapeKXAIWorkflowAgent as Agent
-            elif self.use_llm_agent == "mape_k_openai":
-                from llm_agents.mape_k_approach.mape_k_agent_openai import MapeKXAIWorkflowAgent as Agent
-            elif self.use_llm_agent == "mape_k_openai_2":
-                from llm_agents.mape_k_2_components.mape_k_agent_openai_2_components import \
-                    MapeKXAIWorkflowAgent as Agent
-            elif self.use_llm_agent == "mape_k_openai_2_enhanced":
-                from llm_agents.mape_k_2_components.mape_k_agent_openai_2_enhanced import \
-                    MapeKXAIWorkflowAgentEnhanced as Agent
+            elif self.use_llm_agent in ("mape_k", "mape_k_4"):
+                from llm_agents.mape_k_mixins import MapeK4Agent as Agent
             elif self.use_llm_agent == "mape_k_2":
-                from llm_agents.mape_k_2_components.mape_k_workflow_agent import MapeK2Component as Agent
-            elif self.use_llm_agent == "unified_mape_k":
-                from llm_agents.mape_k_2_components.unified_mape_k_agent import UnifiedMapeKAgent as Agent
-            elif self.use_llm_agent == "unified_mapek_openai":
-                from llm_agents.mape_k_2_components.unified_mape_k_agent_openai import UnifiedMapeKAgent as Agent
-            if not use_two_prompts:
-                self.agent = Agent(feature_names=self.feature_ordering,
-                                   domain_description=self.conversation.describe.get_dataset_description(),
-                                   user_ml_knowledge=self.ml_knowledge,
-                                   experiment_id=self.experiment_id,
-                                   verbose=True)
+                from llm_agents.mape_k_mixins import MapeK2Agent as Agent
+            elif self.use_llm_agent in ("unified_mape_k", "mape_k_unified"):
+                from llm_agents.mape_k_mixins import MapeKUnifiedAgent as Agent
             else:
-                self.agent = Agent(feature_names=self.feature_ordering,
-                                   domain_description=self.conversation.describe.get_dataset_description(),
-                                   user_ml_knowledge=self.ml_knowledge,
-                                   experiment_id=self.experiment_id,
-                                   verbose=True,
-                                   use_two_prompts=True)
+                raise ValueError(f"Unknown agent type: {self.use_llm_agent}")
+            self.agent = Agent(
+                feature_names=self.feature_ordering,
+                domain_description=self.conversation.describe.get_dataset_description(),
+                user_ml_knowledge=self.ml_knowledge,
+                experiment_id=self.experiment_id
+            )
 
         # Load the explanations
         self.load_explanations(background_ds_x=background_dataset,
