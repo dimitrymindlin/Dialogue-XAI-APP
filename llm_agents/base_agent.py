@@ -182,8 +182,8 @@ class XAIBaseAgent(ABC, metaclass=XAIBaseAgentMeta):
         self.reset_history()
 
         self.populator = XAIExplanationPopulator(
-            template_dir="/Users/dimitrymindlin/UniProjects/Dialogue-XAI-APP",
-            template_file="llm_agents/mape_k_approach/plan_component/explanations_model.yaml",
+            template_dir=os.path.dirname(os.path.abspath(__file__)),
+            template_file="mape_k_approach/plan_component/explanations_model.yaml",
             xai_explanations=xai_explanations,
             predicted_class_name=predicted_class_name,
             opposite_class_name=opposite_class_name,
