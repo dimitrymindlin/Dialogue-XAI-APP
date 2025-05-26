@@ -66,10 +66,6 @@ class ScaffoldingResultModel(BaseModel):
         ...,
         description="The response to the user's question styled with appropriate HTML elements (e.g., <b>, <ul>, <li>, <p>)."
     )
-    summary_sentence: str = Field(
-        ...,
-        description="A concise summary of the response highlighting key delivered facts and whether the explanation ended with a question."
-    )
 
 
 # --- Merged Prompt Template ---

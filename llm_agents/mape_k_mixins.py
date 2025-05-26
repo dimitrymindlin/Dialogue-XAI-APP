@@ -377,14 +377,13 @@ class PlanExecuteMixin:
             if target and target.communication_goals:
                 goal = target.communication_goals.pop(0)
                 self.user_model.update_explanation_step_state(
-                    target.explanation_name, target.step_name, ExplanationState.SHOWN.value,
-                    goal + " -> " + scaff.summary_sentence)
+                    target.explanation_name, target.step_name, ExplanationState.SHOWN.value)
                 if not target.communication_goals:
                     self.complete_explanation_step(target.explanation_name, target.step_name)
 
         except AttributeError:
             self.user_model.update_explanation_step_state(
-                target.explanation_name, target.step_name, ExplanationState.SHOWN.value, scaff.summary_sentence)
+                target.explanation_name, target.step_name, ExplanationState.SHOWN.value)
 
         self.last_shown_explanations.append(target)
         self.append_to_history("user", user_message)
@@ -502,7 +501,6 @@ class UnifiedMixin:
         final = ExecuteResult(
             reasoning=result.reasoning,
             response=response_with_plots,
-            summary_sentence=result.summary_sentence,
         )
         return StopEvent(result=final)
 

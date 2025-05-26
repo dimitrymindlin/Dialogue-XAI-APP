@@ -87,9 +87,6 @@ class ExecuteResult(BaseModel):
     reasoning: str = Field(..., description="Short reasoning behind how to craft the response.")
     response: str = Field(...,
                           description="The response to the user's question about the shown instance and prediction only using information from the chat history and explanation plan styled with appropriate html elements such as <b> for bold text or bullet points.")
-    summary_sentence: str = Field(...,
-                                  description="Single sentence summary of the response, highlighting the key delivered facts to keep track of what the user should have understood. Specific bits of knowledge that the user should keep after reading the explanation, also indicating whether the explanation ended with a question.")
-
 
 class PlanExecuteResultModel(PlanResultModel, ExecuteResult):
     """

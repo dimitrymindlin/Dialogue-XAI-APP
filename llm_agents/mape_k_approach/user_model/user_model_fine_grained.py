@@ -30,17 +30,13 @@ class ExplanationStep(ExplanationStepModel):
     _explained_content_list: PrivateAttr = PrivateAttr(default=[])
 
     def update_state(self,
-                     new_state: ExplanationState,
-                     content_piece: str = None) -> None:
+                     new_state: ExplanationState) -> None:
         if not isinstance(new_state, ExplanationState):
             raise ValueError(f"Invalid state: {new_state}")
         old = self._state
         self._state = new_state
-        if content_piece:
-            self._explained_content_list.append(content_piece)
         logger.info(
             f"[Δ] {self.step_name}: {old.value}→{new_state.value}"
-            + (f", +[{content_piece}]" if content_piece else "")
         )
 
     @property
@@ -80,11 +76,10 @@ class Explanation(NewExplanationModel):
 
     def update_state(self,
                      step_name: str,
-                     new_state: ExplanationState,
-                     content_piece: str = None) -> None:
+                     new_state: ExplanationState) -> None:
         exp_step = self._get_explanation_step(step_name)
         if exp_step:
-            exp_step.update_state(new_state, content_piece)
+            exp_step.update_state(new_state)
         else:
             logger.warning(f"Explanation step '{step_name}' not found in '{self.explanation_name}'.")
 
@@ -180,8 +175,7 @@ class UserModelFineGrained:
     def update_explanation_step_state(self,
                                       exp_name: str,
                                       exp_step: str,
-                                      new_state: Union[ExplanationState, str],
-                                      content_piece: str = None) -> None:
+                                      new_state: Union[ExplanationState, str]) -> None:
         """Update the state of a specific explanation step."""
         # Convert string to ExplanationState if necessary
         if isinstance(new_state, str):
@@ -193,7 +187,7 @@ class UserModelFineGrained:
 
         explanation = self._get_explanation(exp_name)
         if explanation:
-            explanation.update_state(exp_step, new_state, content_piece)
+            explanation.update_state(exp_step, new_state)
         else:
             logger.warning(f"Explanation '{exp_name}' not found in the model.")
 
