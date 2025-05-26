@@ -5,7 +5,6 @@ xai_explanations:
       - step_name: "Concept"
         description: >
           Counterfactual explanations highlight feature changes that alter a model’s prediction. The method prioritizes minimal counterfactuals, modifying only one attribute.
-        dependencies: [ ]
 
       - step_name: "ImpactMultipleFeatures"
         description: >
@@ -22,7 +21,6 @@ xai_explanations:
         description: >
           Feature importance explanations show how individual features influence predictions, either toward over or under 50k, with varying strength. This helps identify key drivers behind the model’s decisions.
           After listing the features, ask if the user would like to see a plot visualizing the feature importance and influence on the model’s decision.
-          dependencies: [ ]
 
       - step_name: "FeatureInfluencesPlot"
         description: >
@@ -50,9 +48,7 @@ xai_explanations:
     explanation_steps:
       - step_name: "Concept"
         description: >
-            Anchor explanations identify the minimal set of features that anchor the model’s decision. They provide a clear, human-understandable explanation for the model’s prediction that is similar to the most important features. Anchors can answer...
-        dependencies: [ ]
-
+            Anchor explanations identify the minimal set of features that anchor the model’s decision. They provide a clear, human-understandable explanation for the model’s prediction that is similar to the most important features.
       - step_name: "Anchor"
         description: >
           Anchor showing which features with their current values need to be present for the model to predict the current model prediction. {{anchor.anchor_text}}

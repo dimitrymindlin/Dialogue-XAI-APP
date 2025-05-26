@@ -29,7 +29,6 @@ class ExplanationStepModel(BaseModel):
     step_name: str = Field(..., description="The name of the explanation step.")
     description: str = Field(..., description="Description of the explanation step.")
     dependencies: list = Field(..., description="List of dependencies for the explanation step.")
-    is_optional: bool = Field(..., description="Whether the explanation step is optional or not.")
 
 
 class NewExplanationModel(BaseModel):

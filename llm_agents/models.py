@@ -49,8 +49,6 @@ class ExplanationStepModel(BaseModel):
     """
     step_name: str = Field(..., description="The name of the explanation step.")
     description: str = Field(..., description="Description of the explanation step.")
-    dependencies: List[str] = Field(..., description="List of dependencies for the explanation step as strings.")
-    is_optional: bool = Field(..., description="Whether the explanation step is optional or not.")
 
 
 class NewExplanationModel(BaseModel):
@@ -60,8 +58,7 @@ class NewExplanationModel(BaseModel):
     explanation_name: str = Field(..., description="The name of the new explanation concept.")
     description: str = Field(..., description="Description of the new explanation concept.")
     explanation_steps: List[ExplanationStepModel] = Field(...,
-                                                          description="List of steps for the new explanation concept. Each step is a dict with "
-                                                                      "a 'step_name', 'description', 'dependencies' and 'is_optional' keys.")
+                                                          description="List of steps for the new explanation concept.")
 
 
 class ChosenExplanationModel(BaseModel):

@@ -72,7 +72,7 @@ next_explanations with the explanation plan for MachineLearningDefinition. Once 
 recursingly define the sub-concepts that are part of the main concept that need to be understood before the main concept.
 Make sure the newly explanations are necessary and are not redundant with explanations in the existing explanation plan.
 You can also mix some new concept defition that is dependant or a prerequisite for an existing explanation in the plan.
-Each newly defined step should also contain the keys 'description' and 'dependencies' and is_optional.
+Each newly defined step should also contain the keys 'description' and 'dependencies'.
 
 <<Response Instructions>>:
 As a general rule, do not provide more than two new explanations in a single turn. The user should have the opportunity

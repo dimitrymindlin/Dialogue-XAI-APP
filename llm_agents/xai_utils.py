@@ -116,8 +116,6 @@ def prepare_dynamic_explanations(xai_explanations, predicted_class_name, opposit
             {
                 "label": f"Feature: {feature_name}",
                 "description": feature_data["description"],
-                "dependencies": ["Concept"],  # Example dependency for each feature
-                "is_optional": False,
             }
             for feature_name, feature_data in feature_dict.items()
         ]
@@ -129,7 +127,7 @@ def prepare_dynamic_explanations(xai_explanations, predicted_class_name, opposit
     feature_names_to_values = {k.lower().replace(" ", ""): v for k, v in instance_dict.items()}
 
     for idx, (feature_name, importance) in enumerate(
-        sorted(feature_importances.items(), key=lambda item: abs(item[1][0]), reverse=True)
+            sorted(feature_importances.items(), key=lambda item: abs(item[1][0]), reverse=True)
     ):
         feature_rank = idx + 1
         feature_value_name = feature_names_to_values.get(feature_name.lower().replace(" ", ""), "unknown")
@@ -153,8 +151,8 @@ def prepare_dynamic_explanations(xai_explanations, predicted_class_name, opposit
 
     # Format dynamic feature importance explanations
     feature_importance_dynamic = (
-        format_feature_importances(favor_predicted, predicted_class_name, is_positive=True)
-        + format_feature_importances(favor_alternative, opposite_class_name, is_positive=False)
+            format_feature_importances(favor_predicted, predicted_class_name, is_positive=True)
+            + format_feature_importances(favor_alternative, opposite_class_name, is_positive=False)
     )
 
     # Prepare counterfactual dynamic content
@@ -163,7 +161,6 @@ def prepare_dynamic_explanations(xai_explanations, predicted_class_name, opposit
             "label": "Possible Counterfactuals",
             "explanation": xai_explanations["counterfactuals"],
             "dependencies": ["Concept"],
-            "is_optional": False,
         }
     ]
 
@@ -178,7 +175,6 @@ def prepare_dynamic_explanations(xai_explanations, predicted_class_name, opposit
             "label": "Feature Statistics Overview",
             "description": feature_statistics_string,
             "dependencies": [],
-            "is_optional": False,
         }
     ]
 

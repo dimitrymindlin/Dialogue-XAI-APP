@@ -67,8 +67,7 @@ class Explanation(NewExplanationModel):
             explanation = ExplanationStep(
                 step_name=step_name,
                 description=description,
-                dependencies=dependencies or [],
-                is_optional=False
+                dependencies=dependencies or []
             )
             self.explanation_steps.append(explanation)
             logger.info(f"Added step '{step_name}' to explanation '{self.explanation_name}'.")
@@ -155,8 +154,7 @@ class UserModelFineGrained:
             explanation_name: str,
             step_name: str,
             description: str,
-            dependencies: Optional[List[str]] = None,
-            # is_optional: bool = False # TODO: Implement in future versions.
+            dependencies: Optional[List[str]] = None
     ) -> None:
         """Add an explanation step under a specific explanation."""
         explanation = self._get_explanation(explanation_name)
