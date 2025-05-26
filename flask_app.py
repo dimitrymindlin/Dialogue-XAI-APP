@@ -70,6 +70,7 @@ def create_app():
     try:
         mlflow.set_tracking_uri("http://localhost:5005")
         mlflow.set_experiment("Dialogue-XAI-Experiment")
+        #mlflow.openai.autolog(log_traces=True)
         mlflow.llama_index.autolog(log_traces=True)
         app.logger.info("MLflow autolog initialized at startup.")
     except Exception as e:
