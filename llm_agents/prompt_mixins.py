@@ -152,6 +152,20 @@ Analyze the user's latest message in the context of the conversation history.
         )
 
 
+class MonitorAgentSystemPrompt(CompositePromptMixin):
+    def __init__(self):
+        agent_instructions = """
+        You are an analyst that interprets user messages to identify users understanding and cognitive engagement based on the provided chat and his recent message. The user is curious about an AI models prediction and is presented with explanations via explainable AI tools. Your task is to analyze the user's latest message in the context of the conversation history and define the class of cognitive engagement and understanding displays as defined below.
+        """
+        modules = {
+            "instructions": SimplePromptMixin(agent_instructions),
+            "context": ContextPrompt(),
+            "understanding": UnderstandingPrompt(),
+            "monitor_task": MonitorTaskPrompt(),
+        }
+        super().__init__(modules, exclude_task=True)
+
+
 # Modular MonitorPrompt using the above building blocks
 class MonitorPrompt(CompositePromptMixin):
     def __init__(self, exclude_task: bool = False):
@@ -160,7 +174,7 @@ class MonitorPrompt(CompositePromptMixin):
             "understanding": UnderstandingPrompt(),
             "history": HistoryPrompt(),
             "user_message": UserMessagePrompt(),
-            "monitor_task": MonitorTaskPrompt(),  # Always in the end
+            "task": MonitorTaskPrompt(),  # Always in the end
         }
         super().__init__(modules, exclude_task=exclude_task)
 
@@ -171,7 +185,7 @@ class ExplanationCollectionPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Explanation Collection>>:
+<<This is the entire collection of all available explanations>>:
 {explanation_collection}
 """
         )
@@ -192,7 +206,7 @@ class LastShownExpPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Last Shown Explanations>>:
+<<This are the explanations that were shown to the user in the last agent message>>:
 {last_shown_explanations}
 """
         )
@@ -206,6 +220,8 @@ class AnalyzeTaskPrompt(SimplePromptMixin):
 1.	Suggest updates the states of the last shown explanations based  on the user’s message, cognitive state and understanding displays. Take into account that the user might say 'yes', 'no', or 'okay' as a response to the last agent message, rather than explicitly stating that they understood it. Check  each explanation individually and assess if the user understood it or not. If the user asks a followup question resulting from the latest given explanation, provide a reasoning for why the explanation state should change. For non-referenced explanations that were explained last, update their states to “understood”. If the agent used a ScaffoldingStrategy as the last explanation, ignore this explanation in the user model as it is not a part of the explanation plan.
 2.	If the user demonstrates wrong assumptions or misunderstandings on previously understood explanations, mark them with an according state.
 3.	Provide only the changes to explanation states, omitting states that remain unchanged. Do not suggest which new explanations should be shown to the user.
+
+Reason step by step about the updates to the user model and why an explantion should be marked as understood or not understood.
 """
         )
 
@@ -221,6 +237,20 @@ class AnalyzePrompt(CompositePromptMixin):
             "task": AnalyzeTaskPrompt(),  # Always in the end
         }
         super().__init__(modules, exclude_task=exclude_task)
+
+
+class AnalyzeAgentSystemPrompt(CompositePromptMixin):
+    def __init__(self):
+        agent_instructions = """
+        You are an analyst that interprets user messages to identify users understanding based on the provided chat and his recent message. The user is curious about an AI models prediction and is presented with explanations via explainable AI tools. Your task is to analyze the user's latest message in the context of the conversation history and suggest updates to the user model.
+        """
+        modules = {
+            "instructions": SimplePromptMixin(agent_instructions),
+            "context": ContextPrompt(),
+            "collection": ExplanationCollectionPrompt(),
+            "task": AnalyzeTaskPrompt(),  # Always in the end
+        }
+        super().__init__(modules, exclude_task=True)
 
 
 class MonitorAnalyzeTaskPrompt(PromptMixin):
@@ -303,18 +333,8 @@ class PreviousPlanPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Previous Explanation Plan>>:
+<<This is the previous explanation plan that was established for the user before the user's current message>>:
 {explanation_plan}
-"""
-        )
-
-
-class LastExplanationPrompt(SimplePromptMixin):
-    def __init__(self):
-        super().__init__(
-            """
-<<Last Shown Explanations>>:
-{last_shown_explanations}
 """
         )
 
@@ -323,7 +343,7 @@ class NextExplanationPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Planning decided that the next explanation should be>>:
+<<The plan suggests that the next explanation should be>>:
 {next_exp_content}
 """
         )
@@ -335,26 +355,24 @@ class PlanTaskPrompt(SimplePromptMixin):
             """
 <<Task (Plan)>>:
 You have three steps:
-1. **Defining New Explanations**:
-   - Determine if the latest input requires introducing a new concept by checking each possible explanation. If the user does not explicitly request one, apply scaffolding to address understanding gaps.
-   - Define any new concept and integrate it into the explanation_plan if needed.
+1. **Defining New Explanations if needed**:
+   - First, evaluate whether the user’s message expresses a clear information need. If it does, check whether this need can be satisfied using any existing explanations. If no suitable explanation is available, define a new one tailored to the identified need and add it to the explanation plan.   
+   - If the user’s need is unclear, do not create a new explanation yet. Instead, use scaffolding techniques from the explantion collection.
 
-2. **Maintaining the Explanation Plan**:
-    - consider that the user might only ask one or maximally three questions in a row:
-    - If no explanation_plan exists, generate one based on the latest input.
-    - Continuously assess the plan’s relevance. Update it only when significant gaps, shifts in user understanding, or requests for new overarching concepts occur.
-    - Continuously check if the user's question that can be mapped to another explanation. If the user asks a question that fits any of the explanation methods, avoid explaining the concept of that explanations and assume the user knows it.
-    - Address minor misunderstandings through communication_goals without altering the plan. Remove concepts that the user fully understands, as justified by the UserModel and recent input.
+2. **Construct and maintaining an Explanation Plan**:
+    - Assume the user may ask only a few questions. The explanation plan should prioritize diverse, informative explanations that highlight relevant and unexpected aspects of the current data instance to clarify the model’s decision. If no explanation plan exists, create one based on the latest user message, prioritizing explanations that address the identified need. The first item will guide the next response.
+    - Revise the plan only when there are major gaps, shifts in user understanding, or new high-level concepts are introduced.
+    - Map new user questions to existing explanations when possible; if matched, assume familiarity with the explanation’s concept.
 
-3. **Generating the Next Explanations**:
-   - Based on the latest input, previous explanations, the user's cognitive state and ML knowledge, create the next_explanations along with tailored communication_goals. If the last explanation was not understood, consider scaffolding strategies and put them back into the next communication goal.
-   - Ensure these goals are concise, engaging, and matched to the user’s current state. If the user’s ML knowledge is low or unclear, first assess and elicit their familiarity with key concepts.
-   - For ambiguous requests, use scaffolding to clarify intent before providing details.
-   - Adapt content dynamically—delving deeper, simplifying, or redirecting based on the user’s responses.
-   - Avoid repetition unless the user explicitly asks for clarification, and prioritize reacting to user queries over strictly following the plan.
-   - If the user asks question unrelated to understanding the current explanation, provide a short answer that you are not able to respond to that and can only talk about the model prediction and the instance shown.\n
-
-Think step by step and provide a reasoning for each decision based on the users model indicating the UNDERSTOOD explanations, the users's latest message, the conversation history, and the current explanation plan.
+3. **Generating the Next ExplanationTarget**:
+   - Use the latest input, prior explanations, and the user’s cognitive state and ML knowledge to generate a tailored ExplanationTarget based on the next item in the plan. If the last explanation was unclear, apply scaffolding and integrate it into the next communication goal.
+   - Ensure communication goals are concise, engaging, and aligned with the user’s current understanding. If ML knowledge is low or unclear, assess familiarity through conversation context or follow-up questions.
+   - For ambiguous inputs, use scaffolding to clarify intent before proceeding.
+   - Adapt content dynamically, starting with an overview of key facts, suggesting to delving deeper, simplifying, or redirecting based on the user’s responses.
+   - Avoid repetition unless requested, and prioritize addressing user queries over rigidly following the plan.
+   - If the user asks an unrelated question, briefly explain that you can only discuss the model’s prediction and the current instance, suggesting new explanations to explore without explicitely mentioning the names but rather what they reveal.
+   
+Think step by step about each step and provide a reasoning for each decision based on the users model indicating the UNDERSTOOD explanations, the users's latest message, the conversation history, and the current explanation plan. Especially when deciding to create a new explanation, you should provide a reasoning for why the explanation is needed and how it relates to the user's message and why it cannot be answered with existing explanations from the collection.
 """
         )
 
@@ -363,24 +381,22 @@ class ExecuteTaskPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Task (Execute)>>:
-Using the current user model, generate a response that aligns with the user's understanding level, ML knowledge, and conversation history. Your answer should be concise (no more than 3 sentences per Explanation Goal) and directly address the user's query to not upset the user with irrelevant information.
-Rely solely on the information in the chat history and any clear, deducible assumptions.
+<<Task (Execute)>>
 
-**Craft the Response**:
-- **Content Alignment**: Use only the information from the chat history and explanation plan to fulfill the goal of the next explanation. If the objective is to elicit knowledge from the user, do so with a concise prompt rather than a full explanation.
-- **Language and Tone**: Match the user’s proficiency and cognitive state. Maintain a natural, teacher-like tone, ensuring clarity without unnecessary repetition. For lay users, use everyday language while preserving accuracy—highlighting key and less important points. Avoid technical terms like features, plot, unless the user is knowledgeable in ML. For lay users, try to express clear explanations with wording like: Most important, least important, and do not simplify the content too much as to not lose the meaning and accuracy.
-- **Clarity and Conciseness**: Present information in a clear and accessible manner, minimizing technical jargon and excessive details, keeping the conversation flow as seen by the chat history. It is less about mentioning the specific XAI techniques that are used and more about using them to explain the model's prediction and answer the user's understanding needs.
-- **Stay Focused**: If the user asks a question unrelated to understanding the current explanation, provide a short answer that you are not able to respond to that and can only talk about the model prediction and the instance shown.
-- **Contextualize User's furst question**: If the user's guess was correct, indicating by the first agent message in the chat history, the user is prompted to check if his reasoning alignes with the model reasoning. Therefore, the user might indicate why he thinks the model predicts a certain class. In this case, consider the explanation plan and next explanation but react to the users's reasoning by varifying his decision making or correcting it. 
-- **Formatting**: Use HTML elements for structure and emphasis:
-    - `<b>` or `<strong>` for bold text,
-    - `<ul>` and `<li>` for bullet points,
-    - `<p>` for paragraphs.
-- **Visual Placeholders**: If visuals (e.g., plots) are required, insert placeholders in the format `##plot_name##` (e.g., `##FeatureInfluencesPlot##`) but keep the text as if the placeholder is substituted already. When a plot is shown, display it first, provide a brief explanation, then ask if the user understood.
-- **Engagement and Adaptive Strategy**: Conclude with a question or prompt that invites further interaction without overwhelming the user. If the user's ML knowledge is low or if the request is ambiguous, assess their familiarity with key concepts using scaffolding before expanding. Avoid repeating previously explained content unless explicitly requested.
+Using the current User Model, generate a concise response (max 3 sentences per Explanation Goal) that fits the user’s ML knowledge, understanding level, and chat history. Respond directly to the user’s query using only the information from the conversation and clear assumptions.
 
-Think step by step to craft a natural response that clearly connects the user's question with your answer and consider the User Model to see alrady UNDERSTOOD explanations to not repeat them, and consider the chat history as well as if the user's guess about the ML model prediction was correct.
+Craft the Response:
+- Content Alignment: Use the explanation plan and chat history. If eliciting knowledge, prompt briefly rather than explaining fully.
+- Tone and Language: Match the user’s cognitive state and ML expertise. Use plain language for lay users; avoid technical terms unless the user is ML-proficient.
+- Clarity and Relevance: Be concise and avoid jargon. Focus on explanation over naming techniques. Maintain the flow of conversation.
+- Stay Focused: If the user goes off-topic, respond that you can only discuss the model’s prediction and the current instance.
+- User Reasoning Context: If the user’s guess was correct (see first agent message), ask them to reflect on their reasoning. Acknowledge or correct their view while continuing with the plan.
+- Formatting: Use HTML tags:
+  <b> or <strong> for bold,
+  <ul> and <li> for bullet lists,
+  <p> for paragraphs.
+- Visuals: Insert placeholders like ##FeatureInfluencesPlot##. Present the plot first, explain briefly, then ask for understanding.
+- Engagement: End with a prompt or question. Use scaffolding for ambiguous or low-knowledge input. Don’t repeat previous content unless asked.
 """
         )
 
@@ -395,7 +411,7 @@ class PlanPrompt(CompositePromptMixin):
             "user_message": UserMessagePrompt(),
             "explanation_plan": PreviousPlanPrompt(),
             "user_model": UserModelPrompt(),
-            "last_shown_explanations": LastExplanationPrompt(),
+            "last_shown_explanations": LastShownExpPrompt(),
             "task": PlanTaskPrompt(),
             "history": HistoryPrompt(),
         }
@@ -429,6 +445,35 @@ class PlanExecutePrompt(CompositePromptMixin):
         super().__init__(modules, exclude_task=exclude_task)
 
 
+# --- Plan and Execute System Prompts ---
+
+class PlanAgentSystemPrompt(CompositePromptMixin):
+    def __init__(self):
+        agent_instructions = """
+        You are a planner that designs explanation plans for users interacting with AI model predictions. The user is curious about an AI model's prediction and is presented with explanations via explainable AI tools. Your task is to analyze the user's latest message in the context of the conversation history, user model, and previous explanations to create a logical explanation plan tailored to the user's needs and understanding level.
+        """
+        modules = {
+            "instructions": SimplePromptMixin(agent_instructions),
+            "context": ContextPrompt(),
+            "collection": ExplanationCollectionPrompt(),
+            "task": PlanTaskPrompt(),
+        }
+        super().__init__(modules, exclude_task=True)
+
+
+class ExecuteAgentSystemPrompt(CompositePromptMixin):
+    def __init__(self):
+        agent_instructions = """
+        You are a communicator that generates explanations about AI model predictions for users. The user is curious about an AI model's prediction and needs clear, concise explanations tailored to their understanding level. Your task is to craft a natural, engaging response based on the next explanation content that has been planned, taking into account the user's message, conversation history, and cognitive state.
+        """
+        modules = {
+            "instructions": SimplePromptMixin(agent_instructions),
+            "context": ContextPrompt(),
+            "task": ExecuteTaskPrompt(),
+        }
+        super().__init__(modules, exclude_task=True)
+
+
 # --- SinglePromptPrompt ---
 
 
@@ -440,6 +485,37 @@ class UnifiedPrompt(CompositePromptMixin):
             "task": UnifiedTaskPrompt(),
         }
         super().__init__(modules, exclude_task=exclude_task)
+
+
+# --- MonitorAnalyzeSystemPrompt ---
+class MonitorAnalyzeSystemPrompt(CompositePromptMixin):
+    def __init__(self):
+        agent_instructions = """
+        You are an analyst that interprets user messages to identify users' understanding and cognitive engagement based on the provided chat and recent message. The user is curious about an AI model's prediction and is presented with explanations via explainable AI tools. Your task is to analyze the user's latest message in the context of the conversation history, define the class of cognitive engagement and understanding displays, and suggest updates to the user model as appropriate.
+        """
+        modules = {
+            "instructions": SimplePromptMixin(agent_instructions),
+            "context": ContextPrompt(),
+            "understanding": UnderstandingPrompt(),
+            "collection": ExplanationCollectionPrompt(),
+            "task": MonitorAnalyzeTaskPrompt(),
+        }
+        super().__init__(modules, exclude_task=True)
+
+
+# --- PlanExecuteSystemPrompt ---
+class PlanExecuteSystemPrompt(CompositePromptMixin):
+    def __init__(self):
+        agent_instructions = """
+        You are a planner and communicator that designs explanation plans and generates explanations about AI model predictions for users. The user is curious about an AI model's prediction and is presented with explanations via explainable AI tools. Your task is to analyze the user's latest message in the context of the conversation history, user model, and previous explanations to create a logical explanation plan tailored to the user's needs and understanding level, and then craft a natural, engaging response based on the next explanation content that has been planned.
+        """
+        modules = {
+            "instructions": SimplePromptMixin(agent_instructions),
+            "context": ContextPrompt(),
+            "collection": ExplanationCollectionPrompt(),
+            "task": PlanExecuteTaskPrompt(),
+        }
+        super().__init__(modules, exclude_task=True)
 
 
 # === TEST HARNESS ===
