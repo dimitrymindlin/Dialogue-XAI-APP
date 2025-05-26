@@ -32,12 +32,16 @@ class ExplanationStep(ExplanationStepModel):
     def update_state(self,
                      new_state: ExplanationState,
                      content_piece: str = None) -> None:
-        if isinstance(new_state, ExplanationState):
-            self._state = new_state
-            if content_piece:
-                self._explained_content_list.append(content_piece)
-        else:
+        if not isinstance(new_state, ExplanationState):
             raise ValueError(f"Invalid state: {new_state}")
+        old = self._state
+        self._state = new_state
+        if content_piece:
+            self._explained_content_list.append(content_piece)
+        logger.info(
+            f"[Δ] {self.step_name}: {old.value}→{new_state.value}"
+            + (f", +[{content_piece}]" if content_piece else "")
+        )
 
     @property
     def state(self) -> ExplanationState:
