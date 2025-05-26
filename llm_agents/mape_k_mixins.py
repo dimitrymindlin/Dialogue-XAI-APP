@@ -2,15 +2,22 @@
 
 from llama_index.core.llms.llm import LLM
 from llama_index.llms.openai import OpenAI
-from llm_agents.base_agent import OPENAI_MODEL_NAME, OPENAI_MINI_MODEL_NAME, OPENAI_REASONING_MODEL_NAME
-from llm_agents.base_agent import timed
-
-# MLflow import for logging prompts
+# Update imports to use the new structure
+from llm_agents.agent_utils import (
+    timed, append_new_log_row, update_last_log_row,
+    OPENAI_MODEL_NAME, OPENAI_MINI_MODEL_NAME, OPENAI_REASONING_MODEL_NAME
+)
+import logging
 import mlflow
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 from llama_index.core.workflow import Context, Event, Workflow, StartEvent, StopEvent, step
 from llama_index.core.workflow.retry_policy import ConstantDelayRetryPolicy
 from llm_agents.models import MonitorResultModel, AnalyzeResult, PlanResultModel, ExecuteResult
+import re
+import json
 
 # Use new prompt mixins
 from llm_agents.prompt_mixins import (
@@ -28,7 +35,8 @@ from llm_agents.models import SinglePromptResultModel, MonitorAnalyzeResultModel
 
 import datetime
 from llama_index.core import PromptTemplate
-from llm_agents.base_agent import XAIBaseAgent, append_new_log_row, update_last_log_row, logger
+# Update import to use the new structure
+from llm_agents.llama_index_base_agent import LlamaIndexBaseAgent
 from llm_agents.explanation_state import ExplanationState
 from llm_agents.models import ChosenExplanationModel
 from llm_agents.utils.postprocess_message import replace_plot_placeholders
@@ -335,25 +343,50 @@ class PlanExecuteMixin:
         with mlflow.start_run():
             # Log the scaffolding prompt
             mlflow.log_param("scaffolding_prompt", prompt_str)
-            prompt = PromptTemplate(prompt_str)
-            scaff = await self.llm.astructured_predict(PlanExecuteResultModel, prompt)
+            # include Pydantic schema for PlanExecuteResultModel
+            model_schema = PlanExecuteResultModel.schema_json(indent=2)
+            full_prompt_str = (
+                    prompt_str
+                    + "\n\nPydantic model schema:\n"
+                    + model_schema
+                    + "\n\nPlease respond with a raw JSON string conforming exactly to this schema, without any markdown or code fences."
+            )
+            # call LLM to get raw JSON string asynchronously
+            scaff_resp = await self.llm.acomplete(full_prompt_str)
+            # clean out any markdown fences if present
+            raw_text = scaff_resp.text.strip()
+            match = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw_text)
+            clean_json = match.group(1) if match else raw_text
+            # robustly extract only the first JSON object in case of trailing text
+            raw = clean_json.strip()
+            decoder = json.JSONDecoder()
+            obj, idx = decoder.raw_decode(raw)
+            clean_json = raw[:idx]
+            # parse JSON into Pydantic model
+            scaff = PlanExecuteResultModel.parse_raw(clean_json)
         end = datetime.datetime.now()
         logger.info(f"Time taken for Scaffolding: {end - start}")
 
         if scaff.explanation_plan:
             self.explanation_plan = scaff.explanation_plan
         # scaff is a PlanExecuteResultModel with next_response list
-        target = scaff.next_response[0] if scaff.next_response else None
-        if target and target.communication_goals:
-            goal = target.communication_goals.pop(0)
-            self.user_model.update_explanation_step_state(
-                target.explanation_name, target.step_name, ExplanationState.SHOWN.value,
-                goal + " -> " + scaff.summary_sentence
-            )
-            if not target.communication_goals:
-                self.complete_explanation_step(target.explanation_name, target.step_name)
-            self.last_shown_explanations.append(target)
+        target = scaff.next_response if scaff.next_response else None
+        # Update user model with new explanations
 
+        try:
+            if target and target.communication_goals:
+                goal = target.communication_goals.pop(0)
+                self.user_model.update_explanation_step_state(
+                    target.explanation_name, target.step_name, ExplanationState.SHOWN.value,
+                    goal + " -> " + scaff.summary_sentence)
+                if not target.communication_goals:
+                    self.complete_explanation_step(target.explanation_name, target.step_name)
+
+        except AttributeError:
+            self.user_model.update_explanation_step_state(
+                target.explanation_name, target.step_name, ExplanationState.SHOWN.value, scaff.summary_sentence)
+
+        self.last_shown_explanations.append(target)
         self.append_to_history("user", user_message)
         self.append_to_history("agent", scaff.response)
         scaff.response = replace_plot_placeholders(scaff.response, self.visual_explanations_dict)
@@ -410,7 +443,8 @@ class UnifiedMixin:
             # Wrap the prompt string in a PromptTemplate for structured prediction
             unified_prompt = PromptTemplate(prompt_str)
             # Single LLM call
-            result: SinglePromptResultModel = await self.llm.astructured_predict(SinglePromptResultModel, unified_prompt)
+            result: SinglePromptResultModel = await self.llm.astructured_predict(SinglePromptResultModel,
+                                                                                 unified_prompt)
         end = datetime.datetime.now()
         logger.info(f"Time taken for Unified single-prompt: {end - start}")
 
@@ -475,7 +509,7 @@ class UnifiedMixin:
 
 # Composed agent classes
 
-class MapeK4Agent(Workflow, XAIBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin, ExecuteMixin):
+class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin, ExecuteMixin):
     """
     Full 4-step MAPE-K agent: separate Monitor, Analyze, Plan, Execute steps.
     """
@@ -491,7 +525,7 @@ class MapeK4Agent(Workflow, XAIBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin,
             **kwargs
     ):
         Workflow.__init__(self, timeout=timeout, **kwargs)
-        XAIBaseAgent.__init__(
+        LlamaIndexBaseAgent.__init__(
             self,
             experiment_id=experiment_id,
             feature_names=feature_names,
@@ -511,7 +545,7 @@ class MapeK4Agent(Workflow, XAIBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin,
         return analysis, response
 
 
-class MapeK2Agent(Workflow, XAIBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin):
+class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin):
     def __init__(
             self,
             llm: LLM = None,
@@ -523,7 +557,7 @@ class MapeK2Agent(Workflow, XAIBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin)
             **kwargs
     ):
         Workflow.__init__(self, timeout=timeout, **kwargs)
-        XAIBaseAgent.__init__(
+        LlamaIndexBaseAgent.__init__(
             self,
             experiment_id=experiment_id,
             feature_names=feature_names,
@@ -540,7 +574,7 @@ class MapeK2Agent(Workflow, XAIBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin)
         return analysis, response
 
 
-class MapeKUnifiedAgent(Workflow, XAIBaseAgent, UnifiedMixin):
+class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
     def __init__(
             self,
             llm: LLM = None,
@@ -552,7 +586,7 @@ class MapeKUnifiedAgent(Workflow, XAIBaseAgent, UnifiedMixin):
             **kwargs
     ):
         Workflow.__init__(self, timeout=timeout, **kwargs)
-        XAIBaseAgent.__init__(
+        LlamaIndexBaseAgent.__init__(
             self,
             experiment_id=experiment_id,
             feature_names=feature_names,
