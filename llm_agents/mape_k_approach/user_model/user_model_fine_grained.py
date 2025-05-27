@@ -106,6 +106,10 @@ class UserModelFineGrained:
         """Set the cognitive state of the user model."""
         self.cognitive_state = cognitive_state
 
+    def set_explicit_understanding_signals(self, explicit_understanding_signals: List[str]):
+        """Set the explicit understanding signals of the user model."""
+        self.explicit_understanding_signals = explicit_understanding_signals
+
     def set_user_ml_knowledge(self, user_ml_knowledge: str):
         """Set the user's ML knowledge"""
         if user_ml_knowledge == "anonymous":
@@ -205,21 +209,43 @@ class UserModelFineGrained:
         containing a list of explanation dictionaries, each including 'explanation_name',
         'description', and 'steps'.
         """
-        understood_exp_concepts = self.get_understood_concepts()
-        xai_summary = summary.get("xai_explanations", [])
-        for exp_data in xai_summary:
-            explanation_name = exp_data["explanation_name"]
-            description = exp_data["description"]
-            self.add_explanation(explanation_name, description)
-            for step in exp_data.get("explanation_steps", []):
-                step_name = step["step_name"]
-                step_description = step["description"]
-                dependencies = step.get("dependencies", [])
-                if len(dependencies) > 0:
-                    dependencies = dependencies[0]  # For some reason dependencies are in two lists
-                self.add_explanation_step(explanation_name, step_name, step_description, dependencies)
-        for exp_name in understood_exp_concepts:
-            self.update_explanation_step_state(exp_name, "Concept", ExplanationState.UNDERSTOOD)
+        # If a predefined plan exists, load only the planned explanations and their steps
+        plan = summary.get("predefined_plan")
+        if plan:
+            # Clear any existing explanations
+            self.explanations.clear()
+            for item in plan:
+                exp_name = item["title"]
+                # Add explanation with placeholder description or retrieve from summary map
+                desc = next(
+                    (e["description"] for e in summary.get("xai_explanations", []) if
+                     e["explanation_name"] == exp_name),
+                    ""
+                )
+                self.add_explanation(exp_name, desc)
+                # Add only the two planned steps
+                for step in item.get("children", []):
+                    step_name = step.get("step_name") or step.get("title")
+                    step_desc = step.get("description", "")
+                    deps = step.get("dependencies", [])
+                    self.add_explanation_step(exp_name, step_name, step_desc, deps)
+            return
+        else:
+            understood_exp_concepts = self.get_understood_concepts()
+            xai_summary = summary.get("xai_explanations", [])
+            for exp_data in xai_summary:
+                explanation_name = exp_data["explanation_name"]
+                description = exp_data["description"]
+                self.add_explanation(explanation_name, description)
+                for step in exp_data.get("explanation_steps", []):
+                    step_name = step["step_name"]
+                    step_description = step["description"]
+                    dependencies = step.get("dependencies", [])
+                    if len(dependencies) > 0:
+                        dependencies = dependencies[0]  # For some reason dependencies are in two lists
+                    self.add_explanation_step(explanation_name, step_name, step_description, dependencies)
+            for exp_name in understood_exp_concepts:
+                self.update_explanation_step_state(exp_name, "Concept", ExplanationState.UNDERSTOOD)
 
     def add_explanations_from_plan_result(self, exp_dict_list: List[NewExplanationModel]) -> None:
         """

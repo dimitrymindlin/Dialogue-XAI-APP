@@ -27,6 +27,38 @@ class DefinitionWrapper:
                 summary.append(f"- {name}: {description} {example}")
         return "\n".join(summary)
 
+    def as_text_filtered(self, user_model=None):
+        """
+        Provides a filtered textual summary containing only the name and implication fields.
+        If user_model is provided, only returns understanding displays that are currently 
+        assigned to the user (from their explicit_understanding_signals).
+        This is used for Plan and Execute components to reduce information while maintaining
+        the essential understanding signals.
+        :param user_model: Optional user model containing explicit_understanding_signals
+        :return: A string summary with only names and implications.
+        """
+        summary = []
+        
+        # If user model is provided and has understanding signals, filter to only those
+        if (user_model and 
+            hasattr(user_model, 'explicit_understanding_signals') and 
+            user_model.explicit_understanding_signals):
+            
+            user_signals = user_model.explicit_understanding_signals
+            for display in self.displays:
+                name = display.get("name", "Unnamed display")
+                if name in user_signals:
+                    implication = display.get("implication", "No implication available.")
+                    summary.append(f"- {name}: {implication}")
+        else:
+            # Fallback to showing all displays if no user model or no signals
+            for display in self.displays:
+                name = display.get("name", "Unnamed display")
+                implication = display.get("implication", "No implication available.")
+                summary.append(f"- {name}: {implication}")
+        
+        return "\n".join(summary)
+
     def get_differentiating_description(self, concept_name):
         """
         Provides the differentiating description for a given concept.

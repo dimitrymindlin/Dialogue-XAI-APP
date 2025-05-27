@@ -112,6 +112,23 @@ class BaseAgent(ABC):
         populated = self.populator.get_populated_json(as_dict=True)
         self.user_model.set_model_from_summary(populated)
 
+        # Initialize explanation plan from predefined plan if available
+        predefined_plan = populated.get("predefined_plan", [])
+        if predefined_plan:
+            # Convert predefined plan to explanation plan format
+            from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import ChosenExplanationModel
+            self.explanation_plan = []
+            for plan_item in predefined_plan:
+                for child in plan_item.get("children", []):
+                    step_name = child.get("step_name") or child.get("title", "")
+                    self.explanation_plan.append(ChosenExplanationModel(
+                        explanation_name=plan_item["title"],
+                        step=step_name
+                    ))
+        else:
+            # Fallback to empty plan
+            self.explanation_plan = []
+
         # Set visual explanations
         self.visual_explanations_dict = xai_visual_explanations
         self.last_shown_explanations = []
@@ -124,6 +141,7 @@ class BaseAgent(ABC):
             The initial chat history string
         """
         self.chat_history = "No history available, beginning of the chat."
+        self.last_shown_explanations = ["No explanations shown yet, beginning of the chat."]
         return self.chat_history
 
     def append_to_history(self, role: str, msg: str) -> None:

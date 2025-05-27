@@ -157,7 +157,29 @@ class XAIExplanationPopulator:
             self.populate_yaml()
 
         if as_dict:
-            return yaml.safe_load(self.populated_yaml_content)
+            result = yaml.safe_load(self.populated_yaml_content)
+            for node in result.get("xai_explanations", []):
+                node["children"] = node.pop("explanation_steps", [])
+                # Add ID field if it doesn't exist
+                if "id" not in node:
+                    node["id"] = node["explanation_name"].replace(" ", "").lower()
+            
+            # Build predefined plan: exclude ScaffoldingStrategy explanations
+            result["predefined_plan"] = []
+            for node in result.get("xai_explanations", []):
+                # Skip scaffolding strategies when generating the predefined plan
+                if node["explanation_name"] == "ScaffoldingStrategy":
+                    continue
+                    
+                # take the first two children (Concept and next step)
+                first_two = node["children"][:2]
+                node_id = node.get("id", node["explanation_name"].replace(" ", "").lower())
+                result["predefined_plan"].append({
+                    "id": node_id,
+                    "title": node["explanation_name"],
+                    "children": first_two
+                })
+            return result
         else:
             return self.populated_yaml_content
 
@@ -166,7 +188,32 @@ class XAIExplanationPopulator:
             self.populate_yaml()
 
         data = yaml.safe_load(self.populated_yaml_content)
-        return data if as_dict else json.dumps(data)
+        for node in data.get("xai_explanations", []):
+            node["children"] = node.pop("explanation_steps", [])
+            # Add ID field if it doesn't exist
+            if "id" not in node:
+                node["id"] = node["explanation_name"].replace(" ", "").lower()
+        
+        # Build predefined plan for JSON output: exclude ScaffoldingStrategy explanations
+        data["predefined_plan"] = []
+        for node in data.get("xai_explanations", []):
+            # Skip scaffolding strategies when generating the predefined plan
+            if node["explanation_name"] == "ScaffoldingStrategy":
+                continue
+                
+            first_two = node["children"][:2]
+            # Generate ID from explanation_name if 'id' field doesn't exist
+            node_id = node.get("id", node["explanation_name"].replace(" ", "").lower())
+            data["predefined_plan"].append({
+                "id": node_id,
+                "title": node["explanation_name"],
+                "children": first_two
+            })
+        
+        if as_dict:
+            return data
+        else:
+            return json.dumps(data)
 
     def save_populated_yaml(self, output_yaml_path):
         """

@@ -185,7 +185,7 @@ class ExplanationCollectionPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<This is the entire collection of all available explanations>>:
+<<Collection of all explanations as background knowledge to make plans and update the user model>>:
 {explanation_collection}
 """
         )
@@ -206,7 +206,7 @@ class LastShownExpPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<This are the explanations that were shown to the user in the last agent message>>:
+<<Explanations that were shown to the user in the last agent message>>:
 {last_shown_explanations}
 """
         )
@@ -217,11 +217,9 @@ class AnalyzeTaskPrompt(SimplePromptMixin):
         super().__init__(
             """
 <<Task (Analyze)>>:
-1.	Suggest updates the states of the last shown explanations based  on the user’s message, cognitive state and understanding displays. Take into account that the user might say 'yes', 'no', or 'okay' as a response to the last agent message, rather than explicitly stating that they understood it. Check  each explanation individually and assess if the user understood it or not. If the user asks a followup question resulting from the latest given explanation, provide a reasoning for why the explanation state should change. For non-referenced explanations that were explained last, update their states to “understood”. If the agent used a ScaffoldingStrategy as the last explanation, ignore this explanation in the user model as it is not a part of the explanation plan.
+1.	Suggest updates the states of the last shown explanations based on the user’s response and explicit understanding displays. If the user replies with “yes,” “no,” or “okay,” treat it as a possible reaction to the last message, even if they don’t say they understood. For each explanation mentioned in the chat history, assess whether it was understood. If a follow-up question relates to the latest explanation, justify any state change. Mark last shown but unreferenced explanations as “understood.” Ignore ScaffoldingStrategy explanations, as they are not part of the explanation plan.
 2.	If the user demonstrates wrong assumptions or misunderstandings on previously understood explanations, mark them with an according state.
 3.	Provide only the changes to explanation states, omitting states that remain unchanged. Do not suggest which new explanations should be shown to the user.
-
-Reason step by step about the updates to the user model and why an explantion should be marked as understood or not understood.
 """
         )
 
@@ -371,8 +369,6 @@ You have three steps:
    - Adapt content dynamically, starting with an overview of key facts, suggesting to delving deeper, simplifying, or redirecting based on the user’s responses.
    - Avoid repetition unless requested, and prioritize addressing user queries over rigidly following the plan.
    - If the user asks an unrelated question, briefly explain that you can only discuss the model’s prediction and the current instance, suggesting new explanations to explore without explicitely mentioning the names but rather what they reveal.
-   
-Think step by step about each step and provide a reasoning for each decision based on the users model indicating the UNDERSTOOD explanations, the users's latest message, the conversation history, and the current explanation plan. Especially when deciding to create a new explanation, you should provide a reasoning for why the explanation is needed and how it relates to the user's message and why it cannot be answered with existing explanations from the collection.
 """
         )
 
@@ -445,31 +441,32 @@ class PlanExecutePrompt(CompositePromptMixin):
         super().__init__(modules, exclude_task=exclude_task)
 
 
-# --- Plan and Execute System Prompts ---
+# --- Plan Approval System Prompts ---
 
-class PlanAgentSystemPrompt(CompositePromptMixin):
+class PlanApprovalSystemPrompt(CompositePromptMixin):
     def __init__(self):
         agent_instructions = """
-        You are a planner that designs explanation plans for users interacting with AI model predictions. The user is curious about an AI model's prediction and is presented with explanations via explainable AI tools. Your task is to analyze the user's latest message in the context of the conversation history, user model, and previous explanations to create a logical explanation plan tailored to the user's needs and understanding level.
+        You are a plan approval specialist that evaluates predefined explanation plans and determines whether they should be followed or modified based on the user's current needs. The user is curious about an AI model's prediction and has been provided with a predefined explanation plan. Your task is to analyze the user's latest message in the context of the conversation history and decide whether to approve the predefined plan or modify it by selecting a more appropriate explanation.
         """
         modules = {
             "instructions": SimplePromptMixin(agent_instructions),
             "context": ContextPrompt(),
             "collection": ExplanationCollectionPrompt(),
-            "task": PlanTaskPrompt(),
+            "task": PlanApprovalTaskPrompt(),
         }
         super().__init__(modules, exclude_task=True)
 
 
-class ExecuteAgentSystemPrompt(CompositePromptMixin):
+class PlanApprovalExecuteSystemPrompt(CompositePromptMixin):
     def __init__(self):
         agent_instructions = """
-        You are a communicator that generates explanations about AI model predictions for users. The user is curious about an AI model's prediction and needs clear, concise explanations tailored to their understanding level. Your task is to craft a natural, engaging response based on the next explanation content that has been planned, taking into account the user's message, conversation history, and cognitive state.
+        You are a planning specialist and communicator that evaluates predefined explanation plans and generates explanations about AI model predictions for users. The user is curious about an AI model's prediction and has been provided with a predefined explanation plan. Your task is to analyze the user's latest message in the context of the conversation history, decide whether to approve the predefined plan or modify it by selecting a more appropriate explanation, and then craft a natural, engaging response based on your decision.
         """
         modules = {
             "instructions": SimplePromptMixin(agent_instructions),
             "context": ContextPrompt(),
-            "task": ExecuteTaskPrompt(),
+            "collection": ExplanationCollectionPrompt(),
+            "task": PlanApprovalExecuteTaskPrompt(),
         }
         super().__init__(modules, exclude_task=True)
 
@@ -516,6 +513,88 @@ class PlanExecuteSystemPrompt(CompositePromptMixin):
             "task": PlanExecuteTaskPrompt(),
         }
         super().__init__(modules, exclude_task=True)
+
+
+# --- Building blocks for Plan Approval ---
+
+
+class PlanApprovalTaskPrompt(SimplePromptMixin):
+    def __init__(self):
+        super().__init__(
+            """
+<<Task (Plan Approval)>>:
+You are presented with a previous explanation plan that was created based on the user's initial needs and context. Your task is to evaluate whether this plan should be approved as-is or modified based on the user's latest message and current understanding state.
+
+**Decision Process:**
+1. **Analyze User's Current State**: Consider the user's message, understanding displays, cognitive engagement, and any changes in their information needs since the predefined plan was created.
+
+2. **Evaluate Plan Relevance**: Determine if the next step in the plan above still addresses the user's current question or if their needs have shifted.
+
+3. **Make Approval Decision**:
+   - **APPROVE (approved=True)**: If the predefined plan's next step is still relevant and appropriate for the user's current state and message.
+   - **MODIFY (approved=False)**: If the user's needs have changed, they're asking about something different, or the predefined plan no longer fits their current understanding level.
+
+4. **Provide Alternative **: When not approving, select a more appropriate explanation step for the next answer from the available collection that better addresses the user's current message and state.
+
+**Guidelines:**
+- Prioritize the user's explicit questions and requests over sticking to the predefined plan
+- Consider the user's demonstrated understanding level and adjust accordingly
+- If the user shows confusion about a concept in the predefined plan, consider scaffolding strategies
+- If the user asks an unrelated question, adapt by selecting relevant explanations from the collection
+"""
+        )
+
+
+class PlanApprovalPrompt(CompositePromptMixin):
+    def __init__(self, exclude_task: bool = False):
+        modules = {
+            "context": ContextPrompt(),
+            "collection": ExplanationCollectionPrompt(),
+            "history": HistoryPrompt(),
+            "user_message": UserMessagePrompt(),
+            "user_model": UserModelPrompt(),
+            "explanation_plan": PreviousPlanPrompt(),
+            "last_shown": LastShownExpPrompt(),
+            "task": PlanApprovalTaskPrompt(),
+        }
+        super().__init__(modules, exclude_task=exclude_task)
+
+
+# --- Combined task prompt classes ---
+class PlanApprovalExecuteTaskPrompt(PromptMixin):
+    def __init__(self):
+        # Combine plan approval and execute tasks
+        tasks = [PlanApprovalTaskPrompt(), ExecuteTaskPrompt()]
+        combined = "\n\n".join(
+            t.get_prompts()["default"].get_template().strip()
+            for t in tasks
+        )
+        self._tpl = PromptTemplate(combined)
+
+    def _get_prompts(self) -> PromptDictType:
+        return {"default": self._tpl}
+
+    def _get_prompt_modules(self) -> PromptMixinType:
+        return {}
+
+    def _update_prompts(self, prompts_dict: PromptDictType) -> None:
+        if "default" in prompts_dict:
+            self._tpl = prompts_dict["default"]
+
+
+class PlanApprovalExecutePrompt(CompositePromptMixin):
+    """Composite prompt for Plan Approval + Execute phases with a combined task."""
+
+    def __init__(self, exclude_task: bool = False):
+        # Get Execute without next_exp_content since we'll determine that from approval
+        exec_prompt = ExecutePrompt(exclude_task=True)
+        exec_prompt._modules.pop("next_exp_content")
+        modules = {
+            "approval": PlanApprovalPrompt(exclude_task=True),
+            "execute": exec_prompt,
+            "task": PlanApprovalExecuteTaskPrompt(),
+        }
+        super().__init__(modules, exclude_task=exclude_task)
 
 
 # === TEST HARNESS ===

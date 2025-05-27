@@ -2,31 +2,37 @@
   {
     "name": "acknowledge",
     "description": "Acknowledgments are explicit utterances consisting of short phrases such as “ok”, “yes”, “uh-huh”, that signal that the previous utterance was understood without necessarily signaling acceptance. They do not resolve the content of the utterance they address.",
-    "example": "Examples include 'ok', 'yes', 'uh-huh', 'right', 'alright'."
+    "example": "Examples include 'ok', 'yes', 'uh-huh', 'right', 'alright'.",
+    "implication": "The listener has heard the message and is ready to continue, but no commitment to acceptance or resolution has been made; you may proceed but should still verify any critical details before moving on."
   },
   {
     "name": "signal_understanding",
     "description": "An utterance that signals understanding explicitly.",
-    "example": "Example: 'I see.'"
+    "example": "Example: 'I see.'",
+    "implication": "The listener comprehends the content and you can safely build on it or advance to the next point without further clarification."
   },
   {
     "name": "signal_partial_understanding",
     "description": "An utterance which explicitly signals partial understanding.",
-    "example": "Example: 'Yeah, kind of.'"
+    "example": "Example: 'Yeah, kind of.'",
+    "implication": "The listener grasps some aspects but remains unclear on others; you should identify and clarify the ambiguous parts before proceeding."
   },
   {
     "name": "signal_non_understanding",
     "description": "An utterance that explicitly signals that the speaker has not understood the previous utterance.",
-    "example": "Examples: 'I don’t understand', 'What did you say?', 'What do you mean by that?'"
+    "example": "Examples: 'I don’t understand', 'What did you say?', 'What do you mean by that?'",
+    "implication": "The listener has failed to comprehend; you must rephrase, elaborate, or provide additional context to ensure understanding."
   },
   {
     "name": "completion",
     "description": "An utterance that shows understanding by finishing or adding to the clause that a speaker is in the middle of constructing.",
-    "example": "Example: Completing someone else's sentence."
+    "example": "Example: Completing someone else's sentence.",
+    "implication": "The listener is actively engaged and sufficiently understands the ongoing content; you can invite further collaboration or confirmation and build on their contribution."
   },
   {
     "name": "non_lexical_backchannel",
     "description": "A vocalized sound that has little or no referential meaning but still verbalizes the listener's attention.",
-    "example": "Examples: 'Whoa', 'Aww', 'Mm-hmm', 'Oh', 'Hmm', 'Um', 'Huh'."
+    "example": "Examples: 'Whoa', 'Aww', 'Mm-hmm', 'Oh', 'Hmm', 'Um', 'Huh'.",
+    "implication": "The listener is attending but the level of comprehension is uncertain; you may continue but remain alert for more explicit signals or prompt for clarification if needed."
   }
 ]

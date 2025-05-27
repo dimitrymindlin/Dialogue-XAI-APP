@@ -2,10 +2,8 @@
 
 from llama_index.core.llms.llm import LLM
 from llama_index.llms.openai import OpenAI
-# Update imports to use the new structure
 from llm_agents.agent_utils import (
-    timed, append_new_log_row, update_last_log_row,
-    OPENAI_MODEL_NAME, OPENAI_MINI_MODEL_NAME, OPENAI_REASONING_MODEL_NAME
+    timed, OPENAI_MODEL_NAME, OPENAI_MINI_MODEL_NAME, OPENAI_REASONING_MODEL_NAME
 )
 import logging
 import mlflow
@@ -16,10 +14,6 @@ logger = logging.getLogger(__name__)
 from llama_index.core.workflow import Context, Event, Workflow, StartEvent, StopEvent, step
 from llama_index.core.workflow.retry_policy import ConstantDelayRetryPolicy
 from llm_agents.models import MonitorResultModel, AnalyzeResult, PlanResultModel, ExecuteResult
-import re
-import json
-
-# Use new prompt mixins
 from llm_agents.prompt_mixins import (
     MonitorPrompt,
     AnalyzePrompt,
@@ -30,12 +24,22 @@ from llm_agents.prompt_mixins import (
     UnifiedPrompt,
 )
 
+# Import the new prompts and models
+from llm_agents.prompt_mixins import PlanApprovalExecutePrompt
+from llm_agents.models import PlanApprovalExecuteResultModel
+
+from llm_agents.helper_mixins import (
+    UserModelHelperMixin,
+    LoggingHelperMixin,
+    ConversationHelperMixin,
+    UnifiedHelperMixin,
+)
+
 # Two-step & unified prompt variants
 from llm_agents.models import SinglePromptResultModel, MonitorAnalyzeResultModel, PlanExecuteResultModel
 
 import datetime
 from llama_index.core import PromptTemplate
-# Update import to use the new structure
 from llm_agents.llama_index_base_agent import LlamaIndexBaseAgent
 from llm_agents.explanation_state import ExplanationState
 from llm_agents.models import ChosenExplanationModel
@@ -54,24 +58,14 @@ class PlanDoneEvent(Event):
     pass
 
 
-class MonitorMixin:
+class MonitorMixin(LoggingHelperMixin, UserModelHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def monitor(self, ctx: Context, ev: StartEvent) -> MonitorDoneEvent:
         user_message = ev.input
         await ctx.set("user_message", user_message)
 
-        self.current_log_row = {
-            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "experiment_id": self.experiment_id,
-            "datapoint_count": self.datapoint_count,
-            "user_message": user_message,
-            "monitor": "",
-            "analyze": "",
-            "plan": "",
-            "execute": "",
-            "user_model": ""
-        }
-        append_new_log_row(self.current_log_row, self.log_file)
+        # Initialize log row using helper method
+        self.initialize_log_row(user_message)
 
         monitor_pm = MonitorPrompt()
         template = monitor_pm.get_prompts()["default"].get_template()
@@ -94,25 +88,23 @@ class MonitorMixin:
         logger.info(f"Time taken for Monitor: {end_time - start_time}")
         logger.info(f"Monitor result: {monitor_result}.\n")
 
-        self.current_log_row["monitor"] = monitor_result
-        update_last_log_row(self.current_log_row, self.log_file)
+        # Update user model from monitor result
+        self.update_user_model_from_monitor(monitor_result)
+
+        # Update log with monitor results
+        self.update_log("monitor", monitor_result)
+
         await ctx.set("monitor_result", monitor_result)
         return MonitorDoneEvent()
 
 
-class AnalyzeMixin:
+class AnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def analyze(self, ctx: Context, ev: MonitorDoneEvent) -> AnalyzeDoneEvent:
         user_message = await ctx.get("user_message")
         monitor_result: MonitorResultModel = await ctx.get("monitor_result", None)
         if monitor_result is None:
             raise ValueError("Monitor result is None.")
-
-        if monitor_result.mode_of_engagement:
-            self.user_model.cognitive_state = self.modes_of_engagement.get_differentiating_description(
-                monitor_result.mode_of_engagement)
-        if monitor_result.explicit_understanding_displays:
-            self.user_model.explicit_understanding_signals = monitor_result.explicit_understanding_displays
 
         analyze_pm = AnalyzePrompt()
         template = analyze_pm.get_prompts()["default"].get_template()
@@ -139,40 +131,25 @@ class AnalyzeMixin:
         logger.info(f"Time taken for Analyze: {end_time - start_time}")
         logger.info(f"Analyze result: {analyze_result}.\n")
 
-        for change in analyze_result.model_changes:
-            if isinstance(change, dict):
-                exp = change["explanation_name"];
-                step = change["step"];
-                state = change["state"]
-            else:
-                exp, state, step = change
-            self.user_model.update_explanation_step_state(exp, step, state)
+        # Update user model from analyze result
+        self.update_user_model_from_analyze(analyze_result)
+
+        # Update log with analyze results using helper method
+        self.update_log("analyze", analyze_result)
 
         await ctx.set("analyze_result", analyze_result)
-        self.current_log_row["analyze"] = analyze_result
-        update_last_log_row(self.current_log_row, self.log_file)
-        logger.info(f"User model after analyze: {self.user_model.get_state_summary(as_dict=True)}.\n")
         return AnalyzeDoneEvent()
 
 
-class MonitorAnalyzeMixin:
+class MonitorAnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def monitor(self, ctx: Context, ev: StartEvent) -> MonitorDoneEvent:
-        # identical row initialization to MonitorMixin
+        # Get user message
         user_message = ev.input
         await ctx.set("user_message", user_message)
-        self.current_log_row = {
-            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "experiment_id": self.experiment_id,
-            "datapoint_count": self.datapoint_count,
-            "user_message": user_message,
-            "monitor": "",
-            "analyze": "",
-            "plan": "",
-            "execute": "",
-            "user_model": ""
-        }
-        append_new_log_row(self.current_log_row, self.log_file)
+
+        # Initialize log row using helper method
+        self.initialize_log_row(user_message)
 
         # use modular MonitorAnalyzePrompt
         ma_pm = MonitorAnalyzePrompt()
@@ -200,26 +177,18 @@ class MonitorAnalyzeMixin:
         end = datetime.datetime.now()
         logger.info(f"Time taken for MonitorAnalyze: {end - start}")
 
-        # update user model from combined result
-        if result.mode_of_engagement:
-            self.user_model.cognitive_state = self.modes_of_engagement.get_differentiating_description(
-                result.mode_of_engagement)
-        if result.explicit_understanding_displays:
-            self.user_model.explicit_understanding_signals = result.explicit_understanding_displays
-        for change in result.model_changes:
-            if isinstance(change, dict):
-                exp, state, step = change["explanation_name"], change["state"], change["step"]
-            else:
-                exp, state, step = change
-            self.user_model.update_explanation_step_state(exp, step, state)
+        # Update user model from combined result using helper methods
+        self.update_user_model_from_monitor(result)
+        self.update_user_model_from_analyze(result)
+
+        # Update log with monitor results using helper method
+        self.update_log("monitor", result)
 
         await ctx.set("monitor_result", result)
-        self.current_log_row["monitor"] = result
-        update_last_log_row(self.current_log_row, self.log_file)
         return MonitorDoneEvent()
 
 
-class PlanMixin:
+class PlanMixin(LoggingHelperMixin, UserModelHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def plan(self, ctx: Context, ev: AnalyzeDoneEvent) -> PlanDoneEvent:
         user_message = await ctx.get("user_message")
@@ -250,18 +219,17 @@ class PlanMixin:
         logger.info(f"Time taken for Plan: {end_time - start_time}")
         logger.info(f"Plan result: {plan_result}.\n")
 
-        if plan_result.explanation_plan:
-            self.explanation_plan = plan_result.explanation_plan
-        if plan_result.new_explanations:
-            self.user_model.add_explanations_from_plan_result(plan_result.new_explanations)
+        # Update user model with plan result using helper method
+        self.update_user_model_from_plan(plan_result)
+
+        # Update log with plan results using helper method
+        self.update_log("plan", plan_result)
 
         await ctx.set("plan_result", plan_result)
-        self.current_log_row["plan"] = plan_result
-        update_last_log_row(self.current_log_row, self.log_file)
         return PlanDoneEvent()
 
 
-class ExecuteMixin:
+class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def execute(self, ctx: Context, ev: PlanDoneEvent) -> StopEvent:
         user_message = await ctx.get("user_message")
@@ -299,31 +267,35 @@ class ExecuteMixin:
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Execute: {end_time - start_time}")
 
-        self.current_log_row["execute"] = execute_result
-        update_last_log_row(self.current_log_row, self.log_file)
-        self.append_to_history("user", user_message)
-        self.append_to_history("agent", execute_result.response)
+        # Update log with execute results
+        self.update_log("execute", execute_result)
 
+        # Update conversation history
+        self.update_conversation_history(user_message, execute_result.response)
+
+        # Process visual explanations
         execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
 
-        for nxt in plan_result.next_response:
-            self.user_model.update_explanation_step_state(
-                nxt.explanation_name, nxt.step_name, ExplanationState.UNDERSTOOD.value)
+        # Update user model from execute
+        self.update_user_model_from_execute(execute_result, plan_result.explanation_plan[0])
 
-        self.current_log_row["user_model"] = self.user_model.get_state_summary(as_dict=True)
-        update_last_log_row(self.current_log_row, self.log_file)
-        self.user_model.new_datapoint()
+        # Finalize log row
+        self.finalize_log_row()
+
+        # Record shown explanations
         self.last_shown_explanations.extend(plan_result.next_response)
 
-        logger.info(f"User model after execute: {self.user_model.get_state_summary(as_dict=False)}.\n")
+        # Update datapoint
+        self.user_model.new_datapoint()
         return StopEvent(result=execute_result)
 
 
-class PlanExecuteMixin:
+class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def scaffolding(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
         user_message = await ctx.get("user_message")
         last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else ""
+
         # use modular PlanExecutePrompt for scaffolding
         pe_pm = PlanExecutePrompt()
         template = pe_pm.get_prompts()["default"].get_template()
@@ -343,79 +315,47 @@ class PlanExecuteMixin:
         with mlflow.start_run():
             # Log the scaffolding prompt
             mlflow.log_param("scaffolding_prompt", prompt_str)
-            # include Pydantic schema for PlanExecuteResultModel
-            model_schema = PlanExecuteResultModel.schema_json(indent=2)
-            full_prompt_str = (
-                    prompt_str
-                    + "\n\nPydantic model schema:\n"
-                    + model_schema
-                    + "\n\nPlease respond with a raw JSON string conforming exactly to this schema, without any markdown or code fences."
-            )
-            # call LLM to get raw JSON string asynchronously
-            scaff_resp = await self.llm.acomplete(full_prompt_str)
-            # clean out any markdown fences if present
-            raw_text = scaff_resp.text.strip()
-            match = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw_text)
-            clean_json = match.group(1) if match else raw_text
-            # robustly extract only the first JSON object in case of trailing text
-            raw = clean_json.strip()
-            decoder = json.JSONDecoder()
-            obj, idx = decoder.raw_decode(raw)
-            clean_json = raw[:idx]
-            # parse JSON into Pydantic model
-            scaff = PlanExecuteResultModel.parse_raw(clean_json)
+            prompt = PromptTemplate(prompt_str)
+            scaff = await self.llm.astructured_predict(PlanExecuteResultModel, prompt)
         end = datetime.datetime.now()
         logger.info(f"Time taken for Scaffolding: {end - start}")
 
-        if scaff.explanation_plan:
-            self.explanation_plan = scaff.explanation_plan
-        # scaff is a PlanExecuteResultModel with next_response list
-        target = scaff.next_response if scaff.next_response else None
-        # Update user model with new explanations
+        # Update explanation plan from scaffolding result
+        self.update_user_model_from_plan(scaff)
 
-        try:
-            if target and target.communication_goals:
-                goal = target.communication_goals.pop(0)
-                self.user_model.update_explanation_step_state(
-                    target.explanation_name, target.step_name, ExplanationState.SHOWN.value)
-                if not target.communication_goals:
-                    self.complete_explanation_step(target.explanation_name, target.step_name)
+        # Handle target explanations
+        target = scaff.explanation_plan[0] if scaff.explanation_plan else None
 
-        except AttributeError:
-            self.user_model.update_explanation_step_state(
-                target.explanation_name, target.step_name, ExplanationState.SHOWN.value)
+        self.user_model.update_explanation_step_state(
+            target.explanation_name, target.step_name, ExplanationState.SHOWN.value)
 
+        # Record shown explanations and update conversation
         self.last_shown_explanations.append(target)
-        self.append_to_history("user", user_message)
-        self.append_to_history("agent", scaff.response)
+        self.update_conversation_history(user_message, scaff.response)
+
+        # Process any visual explanations
         scaff.response = replace_plot_placeholders(scaff.response, self.visual_explanations_dict)
+
+        self.update_user_model_from_plan(scaff)
+        self.update_user_model_from_execute(scaff, target)
+
+        # Update datapoint and log
         self.user_model.new_datapoint()
+        self.update_log("execute", scaff)
+        self.finalize_log_row()
+
         await ctx.set("scaffolding_result", scaff)
-        self.current_log_row["execute"] = scaff
-        self.current_log_row["user_model"] = self.user_model.get_state_summary(as_dict=False)
-        update_last_log_row(self.current_log_row, self.log_file)
         return StopEvent(result=scaff)
 
 
-class UnifiedMixin:
+class UnifiedMixin(UnifiedHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def unified_mape_k(self, ctx: Context, ev: StartEvent) -> StopEvent:
         user_message = ev.input
         await ctx.set("user_message", user_message)
 
-        # Initialize log row
-        self.current_log_row = {
-            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "experiment_id": self.experiment_id,
-            "datapoint_count": self.datapoint_count,
-            "user_message": user_message,
-            "monitor": "",
-            "analyze": "",
-            "plan": "",
-            "execute": "",
-            "user_model": ""
-        }
-        append_new_log_row(self.current_log_row, self.log_file)
+        # Initialize log row using helper method
+        self.initialize_log_row(user_message)
 
         # use SinglePromptPrompt for unified call
         sp_pm = UnifiedPrompt()
@@ -447,60 +387,14 @@ class UnifiedMixin:
         end = datetime.datetime.now()
         logger.info(f"Time taken for Unified single-prompt: {end - start}")
 
-        # Monitor & Analyze from flattened fields
-        if result.mode_of_engagement:
-            self.user_model.cognitive_state = self.modes_of_engagement.get_differentiating_description(
-                result.mode_of_engagement)
-        if result.explicit_understanding_displays:
-            self.user_model.explicit_understanding_signals = result.explicit_understanding_displays
-        for change in result.model_changes:
-            if isinstance(change, dict):
-                exp, state, step = change["explanation_name"], change["state"], change["step"]
-            else:
-                exp, state, step = change
-            self.user_model.update_explanation_step_state(exp, step, state)
+        # Process the unified result using helper method
+        # This handles all MAPE-K phases in one go
+        self.process_unified_result(user_message, result)
 
-        # Log monitor/analyze
-        self.current_log_row["monitor"] = {
-            "mode_of_engagement": result.mode_of_engagement,
-            "explicit_understanding_displays": result.explicit_understanding_displays
-        }
-        self.current_log_row["analyze"] = result.model_changes
-        update_last_log_row(self.current_log_row, self.log_file)
-
-        # Plan phase
-        if result.explanation_plan:
-            self.explanation_plan = result.explanation_plan
-        if result.new_explanations:
-            self.user_model.add_explanations_from_plan_result(result.new_explanations)
-
-        # Log plan
-        self.current_log_row["plan"] = {
-            "new_explanations": result.new_explanations,
-            "explanation_plan": result.explanation_plan,
-            "next_response": result.next_response
-        }
-        update_last_log_row(self.current_log_row, self.log_file)
-
-        # Execute phase
-        self.append_to_history("user", user_message)
-        self.append_to_history("agent", result.response)
-        response_with_plots = replace_plot_placeholders(result.response, self.visual_explanations_dict)
-
-        for target in result.next_response:
-            self.user_model.update_explanation_step_state(
-                target.explanation_name, target.step_name, ExplanationState.UNDERSTOOD.value)
-            self.last_shown_explanations.append(target)
-
-        # Log execute & user model
-        self.current_log_row["execute"] = result.response
-        self.current_log_row["user_model"] = self.user_model.get_state_summary(as_dict=False)
-        update_last_log_row(self.current_log_row, self.log_file)
-
-        # Wrap into ExecuteResult for workflow
+        # Prepare final result for workflow
         final = ExecuteResult(
             reasoning=result.reasoning,
-            response=response_with_plots,
+            response=replace_plot_placeholders(result.response, self.visual_explanations_dict),
         )
         return StopEvent(result=final)
 
@@ -544,6 +438,10 @@ class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin,
 
 
 class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin):
+    """
+    2-step MAPE-K agent: combines Monitor+Analyze and Plan+Execute steps.
+    """
+
     def __init__(
             self,
             llm: LLM = None,
@@ -573,6 +471,10 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
 
 
 class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
+    """
+    Unified MAPE-K agent: performs all MAPE-K steps in a single LLM call.
+    """
+
     def __init__(
             self,
             llm: LLM = None,
@@ -598,4 +500,268 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
         result = await self.run(input=user_question)
         analysis = getattr(result, "reasoning", None) or result.reasoning
         response = getattr(result, "response", None) or result.response
+        return analysis, response
+
+
+class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
+    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
+    async def plan_approval(self, ctx: Context, ev: AnalyzeDoneEvent) -> PlanDoneEvent:
+        user_message = await ctx.get("user_message")
+        last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else None
+
+        # Import the new prompts and models
+        from llm_agents.prompt_mixins import PlanApprovalPrompt
+        from llm_agents.models import PlanApprovalModel
+
+        # Get the predefined plan as a formatted string
+        predefined_plan_str = self.format_predefined_plan_for_prompt()
+
+        plan_approval_pm = PlanApprovalPrompt()
+        template = plan_approval_pm.get_prompts()["default"].get_template()
+        prompt_str = template.format(
+            domain_description=self.domain_description,
+            feature_names=self.feature_names,
+            instance=self.instance,
+            predicted_class_name=self.predicted_class_name,
+            chat_history=self.chat_history,
+            user_model=self.user_model.get_state_summary(as_dict=False),
+            user_message=user_message,
+            explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
+            explanation_plan=predefined_plan_str,
+            last_shown_explanations=last_exp,
+            understanding_displays=self.understanding_displays.as_text_filtered(self.user_model),
+            modes_of_engagement=self.modes_of_engagement.as_text(),
+        )
+
+        start_time = datetime.datetime.now()
+        with mlflow.start_run():
+            # Log the plan approval prompt
+            mlflow.log_param("plan_approval_prompt", prompt_str)
+            plan_approval_prompt = PromptTemplate(prompt_str)
+            approval_result = await self.llm.astructured_predict(PlanApprovalModel, plan_approval_prompt)
+        end_time = datetime.datetime.now()
+        logger.info(f"Time taken for Plan Approval: {end_time - start_time}")
+        logger.info(f"Plan Approval result: {approval_result}.\n")
+
+        # Create a plan result based on the approval decision
+        if approval_result.approved:
+            # Use the next step from the predefined plan
+            if hasattr(self, 'explanation_plan') and self.explanation_plan:
+                next_explanation = self.explanation_plan[0] if self.explanation_plan else None
+                if next_explanation:
+                    # Create a basic plan result that uses the predefined plan
+                    plan_result = PlanResultModel(
+                        reasoning=approval_result.reasoning,
+                        new_explanations=[],
+                        explanation_plan=[next_explanation]
+                    )
+                else:
+                    # No predefined plan available, create empty plan
+                    plan_result = PlanResultModel(
+                        reasoning="No predefined plan available, creating empty plan.",
+                        new_explanations=[],
+                        explanation_plan=[]
+                    )
+            else:
+                # No predefined plan available, create empty plan
+                plan_result = PlanResultModel(
+                    reasoning="No predefined plan available, creating empty plan.",
+                    new_explanations=[],
+                    explanation_plan=[]
+                )
+        else:
+            # Use the alternative explanation selected by the approval process
+            if approval_result.next_response:
+                plan_result = PlanResultModel(
+                    reasoning=approval_result.reasoning,
+                    new_explanations=[],
+                    explanation_plan=[approval_result.next_response]
+                )
+            else:
+                # Fallback to empty plan if no alternative was provided
+                plan_result = PlanResultModel(
+                    reasoning="Plan not approved but no alternative provided, creating empty plan.",
+                    new_explanations=[],
+                    explanation_plan=[]
+                )
+
+        # Update user model with plan result using helper method
+        self.update_user_model_from_plan(plan_result)
+
+        # Update log with plan results using helper method
+        self.update_log("plan_approval", approval_result)
+        self.update_log("plan", plan_result)
+
+        await ctx.set("plan_result", plan_result)
+        await ctx.set("approval_result", approval_result)
+        return PlanDoneEvent()
+
+
+class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
+    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
+    async def plan_approval_execute(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
+        user_message = await ctx.get("user_message")
+        last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else None
+
+        # Get the predefined plan as a formatted string
+        predefined_plan_str = self.format_predefined_plan_for_prompt()
+
+        plan_approval_execute_pm = PlanApprovalExecutePrompt()
+        template = plan_approval_execute_pm.get_prompts()["default"].get_template()
+        prompt_str = template.format(
+            domain_description=self.domain_description,
+            feature_names=self.feature_names,
+            instance=self.instance,
+            predicted_class_name=self.predicted_class_name,
+            chat_history=self.chat_history,
+            user_model=self.user_model.get_state_summary(as_dict=False),
+            user_message=user_message,
+            explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
+            explanation_plan=predefined_plan_str,
+            last_shown_explanations=last_exp,
+            understanding_displays=self.understanding_displays.as_text_filtered(self.user_model),
+            modes_of_engagement=self.modes_of_engagement.as_text(),
+        )
+
+        start_time = datetime.datetime.now()
+        with mlflow.start_run():
+            # Log the plan approval execute prompt
+            mlflow.log_param("plan_approval_execute_prompt", prompt_str)
+            plan_approval_execute_prompt = PromptTemplate(prompt_str)
+            result = await self.llm.astructured_predict(PlanApprovalExecuteResultModel, plan_approval_execute_prompt)
+        end_time = datetime.datetime.now()
+        logger.info(f"Time taken for Plan Approval Execute: {end_time - start_time}")
+        logger.info(f"Plan Approval Execute result: {result}.\n")
+
+        # Determine which explanation to use based on approval decision
+        target_explanation = None
+        if result.approved and hasattr(self, 'explanation_plan') and self.explanation_plan:
+            # Use predefined plan
+            target_explanation = self.explanation_plan[0]
+            # Update the predefined plan by removing the first item
+            self.explanation_plan = self.explanation_plan[1:] if len(self.explanation_plan) > 1 else []
+        elif not result.approved and result.next_response:
+            # Use alternative explanation
+            target_explanation = result.next_response
+
+        if target_explanation:
+            # Update user model to mark explanation as shown
+            self.user_model.update_explanation_step_state(
+                target_explanation.explanation_name,
+                target_explanation.step,
+                ExplanationState.SHOWN.value
+            )
+
+            # Record shown explanations and update conversation
+            self.last_shown_explanations.append(target_explanation)
+
+        self.update_conversation_history(user_message, result.response)
+
+        # Process any visual explanations
+        result.response = replace_plot_placeholders(result.response, self.visual_explanations_dict)
+
+        # Update datapoint and log
+        self.user_model.new_datapoint()
+        self.update_log("plan_approval_execute", result)
+        self.finalize_log_row()
+
+        await ctx.set("plan_approval_execute_result", result)
+        return StopEvent(result=result)
+
+
+class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanApprovalExecuteMixin):
+    """
+    2-step MAPE-K agent with approval mechanism: combines Monitor+Analyze and PlanApproval+Execute steps.
+    This agent evaluates predefined explanation plans and either approves them or modifies them
+    based on the user's current needs and understanding state.
+    """
+
+    def __init__(
+            self,
+            llm: LLM = None,
+            experiment_id: str = "",
+            feature_names: str = "",
+            domain_description: str = "",
+            user_ml_knowledge: str = "",
+            timeout: float = 100.0,
+            **kwargs
+    ):
+        Workflow.__init__(self, timeout=timeout, **kwargs)
+        LlamaIndexBaseAgent.__init__(
+            self,
+            experiment_id=experiment_id,
+            feature_names=feature_names,
+            domain_description=domain_description,
+            user_ml_knowledge=user_ml_knowledge
+        )
+        self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
+
+    @timed
+    async def answer_user_question(self, user_question):
+        """
+        Process user question using the approval-based MAPE-K workflow.
+        
+        Args:
+            user_question: The user's question/input
+            
+        Returns:
+            Tuple of (analysis, response) where analysis contains reasoning
+            and response contains the final answer to the user
+        """
+        result = await self.run(input=user_question)
+
+        # Extract reasoning and response from the result
+        analysis = getattr(result, "reasoning", None) or "No reasoning available"
+        response = getattr(result, "response", None) or "No response available"
+
+        return analysis, response
+
+
+class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanApprovalMixin,
+                              ExecuteMixin):
+    """
+    4-step MAPE-K agent with approval mechanism: separate Monitor, Analyze, PlanApproval, Execute steps.
+    This agent evaluates predefined explanation plans in a separate step and either approves them 
+    or modifies them before executing.
+    """
+
+    def __init__(
+            self,
+            llm: LLM = None,
+            experiment_id: str = "",
+            feature_names: str = "",
+            domain_description: str = "",
+            user_ml_knowledge: str = "",
+            timeout: float = 100.0,
+            **kwargs
+    ):
+        Workflow.__init__(self, timeout=timeout, **kwargs)
+        LlamaIndexBaseAgent.__init__(
+            self,
+            experiment_id=experiment_id,
+            feature_names=feature_names,
+            domain_description=domain_description,
+            user_ml_knowledge=user_ml_knowledge
+        )
+        self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
+        self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
+
+    @timed
+    async def answer_user_question(self, user_question):
+        """
+        Process user question using the 4-step approval-based MAPE-K workflow.
+        
+        Args:
+            user_question: The user's question/input
+            
+        Returns:
+            Tuple of (analysis, response) where analysis contains reasoning
+            and response contains the final answer to the user
+        """
+        result = await self.run(input=user_question)
+
+        # Extract reasoning and response from the result
+        analysis = getattr(result, "reasoning", None) or "No reasoning available"
+        response = getattr(result, "response", None) or "No response available"
+
         return analysis, response
