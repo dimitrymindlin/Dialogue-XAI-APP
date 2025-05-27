@@ -316,7 +316,7 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
             # Log the scaffolding prompt
             mlflow.log_param("scaffolding_prompt", prompt_str)
             prompt = PromptTemplate(prompt_str)
-            scaff = await self.llm.astructured_predict(PlanExecuteResultModel, prompt)
+            scaff = await self.llm.astructured_predict(PlanExecuteResultModel, prompt)  # Todo: output_stream = await self.llm.astream_structured_predict(PlanExecuteResultModel, prompt) ... output_stream.response -> response to frontend,
         end = datetime.datetime.now()
         logger.info(f"Time taken for Scaffolding: {end - start}")
 
