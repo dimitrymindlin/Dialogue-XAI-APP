@@ -4,12 +4,8 @@ import logging
 from collections import defaultdict
 from typing import List, Optional, Dict, Union
 
-from pydantic import PrivateAttr
-
 from llm_agents.explanation_state import ExplanationState
-from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import ExplanationStepModel, \
-    NewExplanationModel, \
-    ChosenExplanationModel
+from llm_agents.models import ExplanationStepModel, NewExplanationModel, ChosenExplanationModel
 from llm_agents.utils.definition_wrapper import DefinitionWrapper
 
 logger = logging.getLogger(__name__)
@@ -24,46 +20,16 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 console_handler.setFormatter(formatter)
 
 
-# Custom Classes inheriting from Pydantic Models
-class ExplanationStep(ExplanationStepModel):
-    _state: ExplanationState = PrivateAttr(default=ExplanationState.NOT_YET_EXPLAINED)
-    _explained_content_list: PrivateAttr = PrivateAttr(default=[])
-
-    def update_state(self,
-                     new_state: ExplanationState) -> None:
-        if not isinstance(new_state, ExplanationState):
-            raise ValueError(f"Invalid state: {new_state}")
-        old = self._state
-        self._state = new_state
-        logger.info(
-            f"[Δ] {self.step_name}: {old.value}→{new_state.value}"
-        )
-
-    @property
-    def state(self) -> ExplanationState:
-        return self._state
-
-    @property
-    def explained_content_list(self) -> List[str]:
-        return self._explained_content_list
-
-    def __repr__(self):
-        return f"{self.step_name}: {self.description} | State: {self.state.value}"
-
-
 class Explanation(NewExplanationModel):
     def __init__(self, **data):
         super().__init__(**data)
-        self.explanation_steps = [ExplanationStep(**step.dict()) for step in self.explanation_steps]
+        self.explanation_steps = [ExplanationStepModel(**step.dict()) for step in self.explanation_steps]
 
-    def add_explanation(self, step_name: str, description: str, dependencies: Optional[List[str]] = None):
+    def add_explanation(self, step_name: str, description: str):
         if not any(ex.step_name == step_name for ex in self.explanation_steps):
-            if isinstance(dependencies, str):
-                dependencies = [dependencies]
-            explanation = ExplanationStep(
+            explanation = ExplanationStepModel(
                 step_name=step_name,
-                description=description,
-                dependencies=dependencies or []
+                description=description
             )
             self.explanation_steps.append(explanation)
             logger.info(f"Added step '{step_name}' to explanation '{self.explanation_name}'.")
@@ -72,18 +38,18 @@ class Explanation(NewExplanationModel):
 
     def update_state_of_all(self, new_state: ExplanationState):
         for explanation in self.explanation_steps:
-            explanation.update_state(new_state)
+            explanation.state = new_state
 
     def update_state(self,
                      step_name: str,
                      new_state: ExplanationState) -> None:
         exp_step = self._get_explanation_step(step_name)
         if exp_step:
-            exp_step.update_state(new_state)
+            exp_step.state = new_state
         else:
             logger.warning(f"Explanation step '{step_name}' not found in '{self.explanation_name}'.")
 
-    def _get_explanation_step(self, step_name: str) -> Optional[ExplanationStep]:
+    def _get_explanation_step(self, step_name: str) -> Optional[ExplanationStepModel]:
         for ex in self.explanation_steps:
             if ex.step_name == step_name:
                 return ex
@@ -152,13 +118,12 @@ class UserModelFineGrained:
             self,
             explanation_name: str,
             step_name: str,
-            description: str,
-            dependencies: Optional[List[str]] = None
+            description: str
     ) -> None:
         """Add an explanation step under a specific explanation."""
         explanation = self._get_explanation(explanation_name)
         if explanation:
-            explanation.add_explanation(step_name, description, dependencies)
+            explanation.add_explanation(step_name, description)
         else:
             logger.warning(f"Explanation '{explanation_name}' not found in the model.")
 
@@ -169,7 +134,7 @@ class UserModelFineGrained:
             logger.warning(f"Explanation '{explanation_name}' not found in the model.")
         return explanation
 
-    def _get_explanation_step(self, explanation_name: str, step_name: str) -> Optional[ExplanationStep]:
+    def _get_explanation_step(self, explanation_name: str, step_name: str) -> Optional[ExplanationStepModel]:
         """Retrieve a specific explanation step."""
         explanation = self._get_explanation(explanation_name)
         if explanation:
@@ -200,7 +165,7 @@ class UserModelFineGrained:
         explanation = self._get_explanation(exp_name)
         for step in explanation.explanation_steps:
             if step.step_name != "Concept":
-                step.update_state(ExplanationState.NOT_YET_EXPLAINED)
+                step.state = ExplanationState.NOT_YET_EXPLAINED
 
     def set_model_from_summary(self, summary: Dict) -> None:
         """
@@ -227,8 +192,7 @@ class UserModelFineGrained:
                 for step in item.get("children", []):
                     step_name = step.get("step_name") or step.get("title")
                     step_desc = step.get("description", "")
-                    deps = step.get("dependencies", [])
-                    self.add_explanation_step(exp_name, step_name, step_desc, deps)
+                    self.add_explanation_step(exp_name, step_name, step_desc)
             return
         else:
             understood_exp_concepts = self.get_understood_concepts()
@@ -240,10 +204,7 @@ class UserModelFineGrained:
                 for step in exp_data.get("explanation_steps", []):
                     step_name = step["step_name"]
                     step_description = step["description"]
-                    dependencies = step.get("dependencies", [])
-                    if len(dependencies) > 0:
-                        dependencies = dependencies[0]  # For some reason dependencies are in two lists
-                    self.add_explanation_step(explanation_name, step_name, step_description, dependencies)
+                    self.add_explanation_step(explanation_name, step_name, step_description)
             for exp_name in understood_exp_concepts:
                 self.update_explanation_step_state(exp_name, "Concept", ExplanationState.UNDERSTOOD)
 
@@ -265,8 +226,7 @@ class UserModelFineGrained:
             for ex in new_exp.explanation_steps:  # Updated field name
                 step_name = ex.step_name
                 description = ex.description
-                dependencies = ex.dependencies
-                self.add_explanation_step(explanation_name, step_name, description, dependencies)
+                self.add_explanation_step(explanation_name, step_name, description)
 
     def get_state_summary(self, as_dict: bool = False) -> Union[Dict[str, Dict[str, List[str]]], str]:
         """
@@ -287,7 +247,7 @@ class UserModelFineGrained:
             if exp_name in excluded_explanations:
                 continue
             for step in exp_object.explanation_steps:
-                summary[step.state.name][exp_name].append((step.step_name, step.explained_content_list))
+                summary[step.state.name][exp_name].append(step.step_name)
 
         if as_dict:
             # Convert defaultdict to a regular dict with regular nested dicts
@@ -306,10 +266,8 @@ class UserModelFineGrained:
 
             # Loop through each explanation name and its steps
             for exp_name, steps in exps.items():
-                # Format the steps as "step_name (substep1, substep2, ...)"
-                formatted_steps = ", ".join(
-                    f"{step[0]} ({', '.join(step[1])})" for step in steps
-                )
+                # Format the steps as a simple comma-separated list
+                formatted_steps = ", ".join(steps)
                 # Create the formatted explanation line
                 formatted_explanations.append(f"  - Explanation: {exp_name}, Explanation Steps: [{formatted_steps}]")
 
@@ -399,8 +357,8 @@ class UserModelFineGrained:
             if state != "User Info":
                 if state == "UNDERSTOOD":
                     for exp_name, concepts_list in explanations_dict.items():
-                        for concept_tuple in concepts_list:
-                            if concept_tuple[0] == "Concept":
+                        for concept in concepts_list:
+                            if concept == "Concept":
                                 understood_concepts.append(exp_name)
         return understood_concepts
 

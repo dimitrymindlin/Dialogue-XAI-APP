@@ -14,6 +14,7 @@ from llm_agents.agent_utils import (
 )
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 from llm_agents.mape_k_approach.user_model.user_model_fine_grained import UserModelFineGrained as UserModel
+from llm_agents.models import ChosenExplanationModel
 from llm_agents.utils.definition_wrapper import DefinitionWrapper
 
 
@@ -116,14 +117,13 @@ class BaseAgent(ABC):
         predefined_plan = populated.get("predefined_plan", [])
         if predefined_plan:
             # Convert predefined plan to explanation plan format
-            from llm_agents.mape_k_approach.plan_component.advanced_plan_prompt_multi_step import ChosenExplanationModel
             self.explanation_plan = []
             for plan_item in predefined_plan:
                 for child in plan_item.get("children", []):
                     step_name = child.get("step_name") or child.get("title", "")
                     self.explanation_plan.append(ChosenExplanationModel(
                         explanation_name=plan_item["title"],
-                        step=step_name
+                        step_name=step_name
                     ))
         else:
             # Fallback to empty plan
