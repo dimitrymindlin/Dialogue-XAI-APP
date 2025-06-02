@@ -2,14 +2,9 @@
 
 from llama_index.core.llms.llm import LLM
 from llama_index.llms.openai import OpenAI
-from llm_agents.agent_utils import (
-    timed, OPENAI_MODEL_NAME, OPENAI_MINI_MODEL_NAME, OPENAI_REASONING_MODEL_NAME
-)
+from llm_agents.agent_utils import (timed, OPENAI_MODEL_NAME, OPENAI_MINI_MODEL_NAME, OPENAI_REASONING_MODEL_NAME)
 import logging
 import mlflow
-
-# Configure logger
-logger = logging.getLogger(__name__)
 
 from llama_index.core.workflow import Context, Event, Workflow, StartEvent, StopEvent, step
 from llama_index.core.workflow.retry_policy import ConstantDelayRetryPolicy
@@ -28,6 +23,9 @@ from llm_agents.prompt_mixins import (
 from llm_agents.prompt_mixins import PlanApprovalExecutePrompt
 from llm_agents.models import PlanApprovalExecuteResultModel
 
+# Import dual-mode prediction utilities
+from llm_agents.utils.dual_mode_prediction import astructured_predict_with_fallback
+
 from llm_agents.helper_mixins import (
     UserModelHelperMixin,
     LoggingHelperMixin,
@@ -44,6 +42,8 @@ from llm_agents.llama_index_base_agent import LlamaIndexBaseAgent
 from llm_agents.explanation_state import ExplanationState
 from llm_agents.models import ChosenExplanationModel
 from llm_agents.utils.postprocess_message import replace_plot_placeholders
+
+logger = logging.getLogger(__name__)
 
 
 class MonitorDoneEvent(Event):
@@ -82,7 +82,9 @@ class MonitorMixin(LoggingHelperMixin, UserModelHelperMixin):
         start_time = datetime.datetime.now()
         with mlflow.start_run():
             monitor_prompt = PromptTemplate(prompt_str)
-            monitor_result = await self.mini_llm.astructured_predict(MonitorResultModel, monitor_prompt)
+            monitor_result = await astructured_predict_with_fallback(
+                self.mini_llm, MonitorResultModel, monitor_prompt, use_structured_output=self.structured_output
+            )
             mlflow.log_param("monitor_prompt", prompt_str)
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Monitor: {end_time - start_time}")
@@ -126,7 +128,9 @@ class AnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
             # Log the full analyze prompt
             mlflow.log_param("analyze_prompt", prompt_str)
             analyze_prompt = PromptTemplate(prompt_str)
-            analyze_result = await self.mini_llm.astructured_predict(output_cls=AnalyzeResult, prompt=analyze_prompt)
+            analyze_result = await astructured_predict_with_fallback(
+                self.mini_llm, AnalyzeResult, analyze_prompt, use_structured_output=self.structured_output
+            )
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Analyze: {end_time - start_time}")
         logger.info(f"Analyze result: {analyze_result}.\n")
@@ -172,7 +176,9 @@ class MonitorAnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
         # Log the combined monitor-analyze prompt
         with mlflow.start_run(nested=True):
             prompt = PromptTemplate(prompt_str)
-            result = await self.llm.astructured_predict(MonitorAnalyzeResultModel, prompt)
+            result = await astructured_predict_with_fallback(
+                self.llm, MonitorAnalyzeResultModel, prompt, use_structured_output=self.structured_output
+            )
             mlflow.log_param("monitor_analyze_prompt", prompt_str)
         end = datetime.datetime.now()
         logger.info(f"Time taken for MonitorAnalyze: {end - start}")
@@ -214,7 +220,9 @@ class PlanMixin(LoggingHelperMixin, UserModelHelperMixin):
             # Log the plan prompt
             mlflow.log_param("plan_prompt", prompt_str)
             plan_prompt = PromptTemplate(prompt_str)
-            plan_result = await self.llm.astructured_predict(PlanResultModel, plan_prompt)
+            plan_result = await astructured_predict_with_fallback(
+                self.llm, PlanResultModel, plan_prompt, use_structured_output=self.structured_output
+            )
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Plan: {end_time - start_time}")
         logger.info(f"Plan result: {plan_result}.\n")
@@ -255,7 +263,7 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
             user_message=user_message,
             plan_result=xai_list,
             plan_reasoning=plan_reasoning,
-            next_exp_content=plan_result.next_response,
+            explanation_plan=plan_result.explanation_plan,
         )
 
         start_time = datetime.datetime.now()
@@ -263,7 +271,9 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
             # Log the execute prompt
             mlflow.log_param("execute_prompt", prompt_str)
             execute_prompt = PromptTemplate(prompt_str)
-            execute_result = await self.mini_llm.astructured_predict(ExecuteResult, execute_prompt)
+            execute_result = await astructured_predict_with_fallback(
+                self.mini_llm, ExecuteResult, execute_prompt, use_structured_output=self.structured_output
+            )
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Execute: {end_time - start_time}")
 
@@ -316,7 +326,9 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
             # Log the scaffolding prompt
             mlflow.log_param("scaffolding_prompt", prompt_str)
             prompt = PromptTemplate(prompt_str)
-            scaff = await self.llm.astructured_predict(PlanExecuteResultModel, prompt)  # Todo: output_stream = await self.llm.astream_structured_predict(PlanExecuteResultModel, prompt) ... output_stream.response -> response to frontend,
+            scaff = await astructured_predict_with_fallback(
+                self.llm, PlanExecuteResultModel, prompt, use_structured_output=self.structured_output
+            )  # Todo: output_stream = await self.llm.astream_structured_predict(PlanExecuteResultModel, prompt) ... output_stream.response -> response to frontend,
         end = datetime.datetime.now()
         logger.info(f"Time taken for Scaffolding: {end - start}")
 
@@ -382,8 +394,9 @@ class UnifiedMixin(UnifiedHelperMixin):
             # Wrap the prompt string in a PromptTemplate for structured prediction
             unified_prompt = PromptTemplate(prompt_str)
             # Single LLM call
-            result: SinglePromptResultModel = await self.llm.astructured_predict(SinglePromptResultModel,
-                                                                                 unified_prompt)
+            result: SinglePromptResultModel = await astructured_predict_with_fallback(
+                self.llm, SinglePromptResultModel, unified_prompt, use_structured_output=self.structured_output
+            )
         end = datetime.datetime.now()
         logger.info(f"Time taken for Unified single-prompt: {end - start}")
 
@@ -413,6 +426,7 @@ class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin,
             feature_names: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
+            structured_output: bool = True,
             timeout: float = 100.0,
             **kwargs
     ):
@@ -426,6 +440,7 @@ class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin,
         )
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
+        self.structured_output = structured_output
 
     @timed
     async def answer_user_question(self, user_question):
@@ -449,6 +464,7 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
             feature_names: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
+            structured_output: bool = True,
             timeout: float = 100.0,
             **kwargs
     ):
@@ -461,6 +477,7 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
             user_ml_knowledge=user_ml_knowledge
         )
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
+        self.structured_output = structured_output
 
     @timed
     async def answer_user_question(self, user_question):
@@ -482,6 +499,7 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
             feature_names: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
+            structured_output: bool = True,
             timeout: float = 100.0,
             **kwargs
     ):
@@ -494,6 +512,7 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
             user_ml_knowledge=user_ml_knowledge
         )
         self.llm = llm or OpenAI(model=OPENAI_REASONING_MODEL_NAME, reasoning_effort="low")
+        self.structured_output = structured_output
 
     @timed
     async def answer_user_question(self, user_question):
@@ -538,52 +557,14 @@ class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHe
             # Log the plan approval prompt
             mlflow.log_param("plan_approval_prompt", prompt_str)
             plan_approval_prompt = PromptTemplate(prompt_str)
-            approval_result = await self.llm.astructured_predict(PlanApprovalModel, plan_approval_prompt)
+            approval_result = await astructured_predict_with_fallback(
+                self.llm, PlanApprovalModel, plan_approval_prompt, use_structured_output=self.structured_output
+            )
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Plan Approval: {end_time - start_time}")
         logger.info(f"Plan Approval result: {approval_result}.\n")
 
-        # Create a plan result based on the approval decision
-        if approval_result.approved:
-            # Use the next step from the predefined plan
-            if hasattr(self, 'explanation_plan') and self.explanation_plan:
-                next_explanation = self.explanation_plan[0] if self.explanation_plan else None
-                if next_explanation:
-                    # Create a basic plan result that uses the predefined plan
-                    plan_result = PlanResultModel(
-                        reasoning=approval_result.reasoning,
-                        new_explanations=[],
-                        explanation_plan=[next_explanation]
-                    )
-                else:
-                    # No predefined plan available, create empty plan
-                    plan_result = PlanResultModel(
-                        reasoning="No predefined plan available, creating empty plan.",
-                        new_explanations=[],
-                        explanation_plan=[]
-                    )
-            else:
-                # No predefined plan available, create empty plan
-                plan_result = PlanResultModel(
-                    reasoning="No predefined plan available, creating empty plan.",
-                    new_explanations=[],
-                    explanation_plan=[]
-                )
-        else:
-            # Use the alternative explanation selected by the approval process
-            if approval_result.next_response:
-                plan_result = PlanResultModel(
-                    reasoning=approval_result.reasoning,
-                    new_explanations=[],
-                    explanation_plan=[approval_result.next_response]
-                )
-            else:
-                # Fallback to empty plan if no alternative was provided
-                plan_result = PlanResultModel(
-                    reasoning="Plan not approved but no alternative provided, creating empty plan.",
-                    new_explanations=[],
-                    explanation_plan=[]
-                )
+        plan_result = self.update_explanation_plan_after_approval(approval_result)
 
         # Update user model with plan result using helper method
         self.update_user_model_from_plan(plan_result)
@@ -628,27 +609,31 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
             # Log the plan approval execute prompt
             mlflow.log_param("plan_approval_execute_prompt", prompt_str)
             plan_approval_execute_prompt = PromptTemplate(prompt_str)
-            result = await self.llm.astructured_predict(PlanApprovalExecuteResultModel, plan_approval_execute_prompt)
+            # Use dual-mode prediction with fallback to string parsing
+            result = await astructured_predict_with_fallback(
+                self.llm,
+                PlanApprovalExecuteResultModel,
+                plan_approval_execute_prompt,
+                use_structured_output=self.structured_output
+            )
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Plan Approval Execute: {end_time - start_time}")
         logger.info(f"Plan Approval Execute result: {result}.\n")
 
         # Determine which explanation to use based on approval decision
-        target_explanation = None
-        if result.approved and hasattr(self, 'explanation_plan') and self.explanation_plan:
-            # Use predefined plan
-            target_explanation = self.explanation_plan[0]
-            # Update the predefined plan by removing the first item
-            self.explanation_plan = self.explanation_plan[1:] if len(self.explanation_plan) > 1 else []
-        elif not result.approved and result.next_response:
-            # Use alternative explanation
-            target_explanation = result.next_response
+        target_explanation = self.get_target_explanation_from_approval(result)
+        
+        # Update the plan based on approval decision
+        plan_result = self.update_explanation_plan_after_approval(result)
+        
+        # Update user model with plan result using helper method
+        self.update_user_model_from_plan(plan_result)
 
         if target_explanation:
             # Update user model to mark explanation as shown
             self.user_model.update_explanation_step_state(
                 target_explanation.explanation_name,
-                target_explanation.step,
+                target_explanation.step_name,
                 ExplanationState.SHOWN.value
             )
 
@@ -663,6 +648,7 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
         # Update datapoint and log
         self.user_model.new_datapoint()
         self.update_log("plan_approval_execute", result)
+        self.update_log("plan", plan_result)
         self.finalize_log_row()
 
         await ctx.set("plan_approval_execute_result", result)
@@ -683,6 +669,7 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
             feature_names: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
+            structured_output: bool = True,
             timeout: float = 100.0,
             **kwargs
     ):
@@ -695,6 +682,7 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
             user_ml_knowledge=user_ml_knowledge
         )
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
+        self.structured_output = structured_output
 
     @timed
     async def answer_user_question(self, user_question):
@@ -732,6 +720,7 @@ class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, Analy
             feature_names: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
+            structured_output: bool = True,
             timeout: float = 100.0,
             **kwargs
     ):
@@ -745,6 +734,7 @@ class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, Analy
         )
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
+        self.structured_output = structured_output
 
     @timed
     async def answer_user_question(self, user_question):
