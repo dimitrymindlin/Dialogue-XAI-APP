@@ -187,7 +187,7 @@ class UserModelHelperMixin:
         # Return a new PlanResultModel with the current state of the explanation plan
         return PlanResultModel(
             reasoning="Plan updated based on approval status",
-            new_explanations=[],  # No new explanations added during approval processing
+            new_explanations=result.new_explanations if hasattr(result, 'new_explanations') else [],
             explanation_plan=self.explanation_plan if hasattr(self, 'explanation_plan') else []
         )
 
