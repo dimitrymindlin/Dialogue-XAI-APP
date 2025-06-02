@@ -369,14 +369,12 @@ class ExecuteTaskPrompt(SimplePromptMixin):
             """
 <<Task (Execute)>>
 
-Using the current User Model, generate a concise response (max 3 sentences per Explanation Goal) that fits the user’s ML knowledge, understanding level, and chat history. Respond directly to the user’s query using only the information from the conversation and clear assumptions.
-
+Based on the current User Model, generate a concise (max 3-sentence) response aligned with the user’s ML knowledge and chat history. Answer using only the conversation and reasonable assumptions. Include one or two consecutive explanations from the explanation plan at most to advance the user’s understanding.
 Craft the Response:
 - Content Alignment: Use the explanation plan and chat history. If eliciting knowledge, prompt briefly rather than explaining fully.
-- Tone and Language: Match the user’s cognitive state and ML expertise. Use plain language for lay users; avoid technical terms unless the user is ML-proficient.
+- Tone and Language: Match the user’s cognitive state and ML expertise. Use plain language for lay users; avoid technical terms and XAI method names unless the user is ML-proficient.
 - Clarity and Relevance: Be concise and avoid jargon. Focus on explanation over naming techniques. Maintain the flow of conversation.
 - Stay Focused: If the user goes off-topic, respond that you can only discuss the model’s prediction and the current instance.
-- User Reasoning Context: If the user’s guess was correct (see first agent message), ask them to reflect on their reasoning. Acknowledge or correct their view while continuing with the plan.
 - Formatting: Use HTML tags:
   <b> or <strong> for bold,
   <ul> and <li> for bullet lists,
@@ -410,7 +408,7 @@ class ExecutePrompt(CompositePromptMixin):
             "context": ContextPrompt(),
             "history": HistoryPrompt(),
             "user_message": UserMessagePrompt(),
-            "next_exp_content": NextExplanationPrompt(),
+            "explanation_plan": PreviousPlanPrompt(),
             "task": ExecuteTaskPrompt(),
         }
         super().__init__(modules, exclude_task=exclude_task)
@@ -422,7 +420,7 @@ class PlanExecutePrompt(CompositePromptMixin):
     def __init__(self, exclude_task: bool = False):
         # Get Execute without next_exp_content
         exec_prompt = ExecutePrompt(exclude_task=True)
-        exec_prompt._modules.pop("next_exp_content")
+        exec_prompt._modules.pop("explanation_plan")
         modules = {
             "plan": PlanPrompt(exclude_task=True),
             "execute": exec_prompt,
@@ -576,9 +574,8 @@ class PlanApprovalExecutePrompt(CompositePromptMixin):
     """Composite prompt for Plan Approval + Execute phases with a combined task."""
 
     def __init__(self, exclude_task: bool = False):
-        # Get Execute without next_exp_content since we'll determine that from approval
+        # Get Execute prompt for combined use with plan approval
         exec_prompt = ExecutePrompt(exclude_task=True)
-        exec_prompt._modules.pop("next_exp_content")
         modules = {
             "approval": PlanApprovalPrompt(exclude_task=True),
             "execute": exec_prompt,
