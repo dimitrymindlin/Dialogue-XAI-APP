@@ -4,7 +4,7 @@ Mock backend testing for Dialogue-XAI-APP.
 This script allows testing the performance of the backend without using the frontend.
 It initializes the app, gets a training datapoint, and processes a list of user questions.
 """
-
+import datetime
 import json
 import time
 import argparse
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 DEFAULT_BACKEND_URL = "http://localhost:4555"
-DEFAULT_USER_ID = "TEST_MOCK"
+DEFAULT_USER_ID = f"TEST_MOCK_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 
 class BackendMocker:
