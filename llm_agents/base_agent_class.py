@@ -6,6 +6,7 @@ the LlamaIndex-based and OpenAI-based agent implementations.
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Any
+import os
 
 from create_experiment_data.instance_datapoint import InstanceDatapoint
 from llm_agents.agent_utils import (
@@ -101,7 +102,7 @@ class BaseAgent(ABC):
 
         # Initialize explanations
         self.populator = XAIExplanationPopulator(
-            template_dir="/Users/dimitrymindlin/UniProjects/Dialogue-XAI-APP",
+            template_dir=os.path.abspath(os.path.join(os.path.dirname(__file__), '..')),
             template_file="llm_agents/mape_k_approach/plan_component/explanations_model.yaml",
             xai_explanations=xai_explanations,
             predicted_class_name=predicted_class_name,
