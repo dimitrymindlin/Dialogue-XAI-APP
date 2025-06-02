@@ -526,7 +526,7 @@ class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHe
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def plan_approval(self, ctx: Context, ev: AnalyzeDoneEvent) -> PlanDoneEvent:
         user_message = await ctx.get("user_message")
-        last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else None
+        last_exp = self.last_shown_explanations if self.last_shown_explanations else None
 
         # Import the new prompts and models
         from llm_agents.prompt_mixins import PlanApprovalPrompt
@@ -582,7 +582,7 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def plan_approval_execute(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
         user_message = await ctx.get("user_message")
-        last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else None
+        last_exp = self.last_shown_explanations if self.last_shown_explanations else None
 
         # Get the predefined plan as a formatted string
         predefined_plan_str = self.format_predefined_plan_for_prompt()
