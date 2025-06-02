@@ -337,16 +337,6 @@ class PreviousPlanPrompt(SimplePromptMixin):
         )
 
 
-class NextExplanationPrompt(SimplePromptMixin):
-    def __init__(self):
-        super().__init__(
-            """
-<<The plan suggests that the next explanation should be>>:
-{next_exp_content}
-"""
-        )
-
-
 class PlanTaskPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
