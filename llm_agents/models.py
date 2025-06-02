@@ -45,7 +45,6 @@ class ExplanationStepModel(BaseModel):
     """
     step_name: str = Field(..., description="The name of the explanation step.")
     description: str = Field(..., description="Description of the explanation step.")
-    dependencies: List[str] = Field(default_factory=list, description="List of dependencies for this explanation step.")
     state: ExplanationState = Field(default=ExplanationState.NOT_YET_EXPLAINED, description="The current state of this explanation step.")
 
 

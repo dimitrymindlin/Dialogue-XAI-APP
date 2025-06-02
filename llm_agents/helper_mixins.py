@@ -5,12 +5,12 @@ These functions handle common operations related to user model updates, logging,
 
 import datetime
 import logging
-from typing import List, Dict, Any, Union, Optional
+from typing import Dict, Any, Union, Optional
 
 from llm_agents.agent_utils import append_new_log_row, update_last_log_row
 from llm_agents.explanation_state import ExplanationState
 from llm_agents.models import MonitorResultModel, AnalyzeResult, PlanResultModel, ExecuteResult
-from llm_agents.models import ChosenExplanationModel, SinglePromptResultModel
+from llm_agents.models import ChosenExplanationModel, SinglePromptResultModel, PlanApprovalModel
 from llm_agents.utils.postprocess_message import replace_plot_placeholders
 
 # Configure logger
