@@ -57,37 +57,6 @@ xai_explanations:
         description: >
           Anchor showing which features with their current values need to be present for the model to predict the current model prediction. {{anchor.anchor_text}}
 
-  - explanation_name: "FeatureStatistics"
-    description: "An overview of the statistical distribution of features used in the model, such as minimum and maximum
-    values of features, the mean and occurrences of categories."
-    explanation_steps:
-      - step_name: "Concept"
-        description: >
-          A statistical breakdown of features (ranges, means, distributions) helps understand the dataset, revealing imbalances, value ranges, and categorical options.
-      - step_name: "Feature Statistics"
-        description: >
-          {{feature_statistics.feature_statistics}}
-
-  - explanation_name: "TextualPartialDependence"
-    description: "Understanding the global relationship between a feature and the model's prediction."
-    explanation_steps:
-      - step_name: "Concept"
-        description: >
-          Textual PDP explanations describe how a feature affects the model’s prediction while keeping others constant. They highlight global relationships and how predictions change at specific feature values.
-      - step_name: "PDPDescription"
-        description: >
-          {{pdp.all_pdp_text}}
-
-  - explanation_name: "PossibleClarifications"
-    description: "Here are some clarification with common user questions."
-    explanation_steps:
-      - step_name: "Concept"
-        description: >
-          Possible clarifications provide answers to common user questions and help in understanding the explanations better.
-      - step_name: "ClarificationsList"
-        description: >
-          {{static_clarifications.all_clarifications}}
-
   - explanation_name: "CeterisParibus"
     description: "Understanding the model's decision-making by observing how the model's prediction changes when only one
     feature is changed."
@@ -101,6 +70,37 @@ xai_explanations:
       - step_name: "ImpossibleClassFlips"
         description: >
           {{ceteris_paribus.impossible_class_flips}}
+
+  - explanation_name: "TextualPartialDependence"
+    description: "Understanding the global relationship between a feature and the model's prediction."
+    explanation_steps:
+      - step_name: "Concept"
+        description: >
+          Textual PDP explanations describe how a feature affects the model’s prediction while keeping others constant. They highlight global relationships and how predictions change at specific feature values.
+      - step_name: "PDPDescription"
+        description: >
+          {{pdp.all_pdp_text}}
+
+  - explanation_name: "FeatureStatistics"
+    description: "An overview of the statistical distribution of features used in the model, such as minimum and maximum
+    values of features, the mean and occurrences of categories."
+    explanation_steps:
+      - step_name: "Concept"
+        description: >
+          A statistical breakdown of features (ranges, means, distributions) helps understand the dataset, revealing imbalances, value ranges, and categorical options.
+      - step_name: "Feature Statistics"
+        description: >
+          {{feature_statistics.feature_statistics}}
+
+  - explanation_name: "PossibleClarifications"
+    description: "Here are some clarification with common user questions."
+    explanation_steps:
+      - step_name: "Concept"
+        description: >
+          Possible clarifications provide answers to common user questions and help in understanding the explanations better.
+      - step_name: "ClarificationsList"
+        description: >
+          {{static_clarifications.all_clarifications}}
 
   - explanation_name: "ScaffoldingStrategy"
     description: "A strategy for improving understanding by simplifying, repeating, and eliciting feedback."
