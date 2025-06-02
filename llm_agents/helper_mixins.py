@@ -98,6 +98,122 @@ class UserModelHelperMixin:
             execute_result.response = replace_plot_placeholders(
                 execute_result.response, self.visual_explanations_dict)
 
+    def remove_explanation_from_plan(self, explanation: ChosenExplanationModel) -> None:
+        """
+        Remove a specific explanation from the predefined plan to avoid duplication.
+        
+        This focused helper method handles the removal of explanations from self.explanation_plan
+        by comparing explanation_name and step fields. It handles field name variations between
+        'step_name' and 'step' used in different parts of the codebase.
+        
+        Args:
+            explanation: The ChosenExplanationModel to remove from the predefined plan
+        """
+        if not hasattr(self, 'explanation_plan') or not self.explanation_plan:
+            return
+            
+        # Get the step field name from the explanation (handles step_name vs step variations)
+        explanation_step = getattr(explanation, 'step_name', None) or getattr(explanation, 'step', None)
+        
+        if not explanation_step:
+            logger.warning(f"Cannot remove explanation: no step field found in {explanation}")
+            return
+            
+        # Remove matching explanations from the predefined plan
+        self.explanation_plan = [
+            exp for exp in self.explanation_plan 
+            if not (exp.explanation_name == explanation.explanation_name and 
+                   (getattr(exp, 'step_name', None) == explanation_step or 
+                    getattr(exp, 'step', None) == explanation_step))
+        ]
+
+    def move_explanation_to_front_of_plan(self, explanation: ChosenExplanationModel) -> None:
+        """
+        Move a specific explanation to the front of the predefined plan to prioritize it.
+        
+        This helper method finds a matching explanation in self.explanation_plan and moves it
+        to the front of the list so it will be considered next. It handles field name variations
+        between 'step_name' and 'step' used in different parts of the codebase.
+        
+        Args:
+            explanation: The ChosenExplanationModel to move to the front of the predefined plan
+        """
+        if not hasattr(self, 'explanation_plan') or not self.explanation_plan:
+            return
+            
+        # Get the step field name from the explanation (handles step_name vs step variations)
+        explanation_step = getattr(explanation, 'step_name', None) or getattr(explanation, 'step', None)
+        
+        if not explanation_step:
+            logger.warning(f"Cannot move explanation: no step field found in {explanation}")
+            return
+            
+        # Find the matching explanation in the plan
+        target_index = -1
+        for i, exp in enumerate(self.explanation_plan):
+            if (exp.explanation_name == explanation.explanation_name and 
+                (getattr(exp, 'step_name', None) == explanation_step or 
+                 getattr(exp, 'step', None) == explanation_step)):
+                target_index = i
+                break
+        
+        # If found, move it to the front
+        if target_index >= 0:
+            target_explanation = self.explanation_plan.pop(target_index)
+            self.explanation_plan.insert(0, target_explanation)
+
+    def update_explanation_plan_after_approval(self, result: PlanApprovalModel) -> PlanResultModel:
+        """
+        Update the explanation plan based on plan approval results and return a new plan result.
+        
+        This method handles the plan updating logic based on approval status:
+        - If approved: removes the first explanation from the plan (it will be executed)
+        - If not approved: moves the next_response explanation to the front of the plan
+        
+        Args:
+            result: The plan approval result containing approval status and potential alternative explanations
+            
+        Returns:
+            PlanResultModel: A new plan result with the updated explanation plan
+        """
+        if result.approved and hasattr(self, 'explanation_plan') and self.explanation_plan:
+            # Use predefined plan - remove the first item as it will be executed
+            updated_plan = self.explanation_plan[1:] if len(self.explanation_plan) > 1 else []
+            self.explanation_plan = updated_plan
+        elif not result.approved and result.next_response:
+            # Use alternative explanation - move it to the front of the plan
+            self.move_explanation_to_front_of_plan(result.next_response)
+        
+        # Return a new PlanResultModel with the current state of the explanation plan
+        return PlanResultModel(
+            reasoning="Plan updated based on approval status",
+            new_explanations=[],  # No new explanations added during approval processing
+            explanation_plan=self.explanation_plan if hasattr(self, 'explanation_plan') else []
+        )
+
+    def get_target_explanation_from_approval(self, result: PlanApprovalModel) -> Optional[ChosenExplanationModel]:
+        """
+        Get the target explanation to be executed based on plan approval results.
+        
+        This method determines which explanation should be executed:
+        - If approved: returns the first explanation from the predefined plan
+        - If not approved: returns the next_response explanation
+        
+        Args:
+            result: The plan approval result containing approval status and potential alternative explanations
+            
+        Returns:
+            ChosenExplanationModel: The target explanation to be used, or None if no explanation is available
+        """
+        if result.approved and hasattr(self, 'explanation_plan') and self.explanation_plan:
+            # Use predefined plan
+            return self.explanation_plan[0]
+        elif not result.approved and result.next_response:
+            # Use alternative explanation
+            return result.next_response
+        
+        return None
+
 
 class LoggingHelperMixin:
     """Helper methods for managing logging."""
@@ -120,6 +236,8 @@ class LoggingHelperMixin:
             "monitor": "",
             "analyze": "",
             "plan": "",
+            "plan_approval": "",
+            "plan_approval_execute": "",
             "execute": "",
             "user_model": ""
         }
@@ -131,7 +249,7 @@ class LoggingHelperMixin:
         Update the current log row with results from a MAPE-K component.
         
         Args:
-            component: The name of the component ('monitor', 'analyze', 'plan', 'execute')
+            component: The name of the component ('monitor', 'analyze', 'plan', 'plan_approval', 'plan_approval_execute', 'execute')
             result: The result from the component
         """
         if component not in self.current_log_row:
