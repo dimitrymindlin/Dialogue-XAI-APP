@@ -228,7 +228,7 @@ class PlanMixin(LoggingHelperMixin, UserModelHelperMixin):
         logger.info(f"Plan result: {plan_result}.\n")
 
         # Update user model with plan result using helper method
-        self.update_user_model_from_plan(plan_result)
+        self.update_explanation_plan(plan_result)
 
         # Update log with plan results using helper method
         self.update_log("plan", plan_result)
@@ -248,8 +248,12 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
         if not all(isinstance(exp, ChosenExplanationModel) for exp in plan_result.explanation_plan):
             raise ValueError("Invalid plan_result.explanation_plan")
 
+        # Extract target explanations and plan reasoning from plan_result
+        target_explanations = plan_result.explanation_plan if plan_result.explanation_plan else []
         plan_reasoning = plan_result.reasoning
-        xai_list = self.user_model.get_string_explanations_from_plan(plan_result.explanation_plan)
+
+        # Get XAI explanations from target explanations for execution
+        xai_list = self.user_model.get_string_explanations_from_plan(target_explanations)
 
         execute_pm = ExecutePrompt()
         template = execute_pm.get_prompts()["default"].get_template()
@@ -263,7 +267,7 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
             user_message=user_message,
             plan_result=xai_list,
             plan_reasoning=plan_reasoning,
-            explanation_plan=plan_result.explanation_plan,
+            explanation_plan=target_explanations,
         )
 
         start_time = datetime.datetime.now()
@@ -277,26 +281,25 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Execute: {end_time - start_time}")
 
-        # Update log with execute results
-        self.update_log("execute", execute_result)
-
+        # Update user model with execute results
+        self.update_user_model_from_execute(execute_result, target_explanations)
+        
+        # Mark explanations as shown in the user model
+        self.mark_explanations_as_shown(target_explanations)
+        
         # Update conversation history
         self.update_conversation_history(user_message, execute_result.response)
-
-        # Process visual explanations
+        
+        # Process any visual explanations in the response
         execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
-
-        # Update user model from execute
-        self.update_user_model_from_execute(execute_result, plan_result.explanation_plan[0])
-
-        # Finalize log row
+        
+        # Update the last shown explanations
+        self.update_last_shown_explanations(target_explanations)
+        
+        # Update log with execute results and finalize
+        self.update_log("execute", execute_result)
         self.finalize_log_row()
 
-        # Record shown explanations
-        self.last_shown_explanations.extend(plan_result.next_response)
-
-        # Update datapoint
-        self.user_model.new_datapoint()
         return StopEvent(result=execute_result)
 
 
@@ -348,7 +351,7 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
         # Process any visual explanations
         scaff.response = replace_plot_placeholders(scaff.response, self.visual_explanations_dict)
 
-        self.update_user_model_from_plan(scaff)
+        self.update_explanation_plan(scaff)
         self.update_user_model_from_execute(scaff, target)
 
         # Update datapoint and log
@@ -383,7 +386,7 @@ class UnifiedMixin(UnifiedHelperMixin):
             user_message=user_message,
             user_model=self.user_model.get_state_summary(as_dict=False),
             explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
-            explanation_plan=self.explanation_plan,
+            explanation_plan=self.format_predefined_plan_for_prompt(),
             last_shown_explanations=self.last_shown_explanations,
         )
 
@@ -527,10 +530,6 @@ class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHe
     async def plan_approval(self, ctx: Context, ev: AnalyzeDoneEvent) -> PlanDoneEvent:
         user_message = await ctx.get("user_message")
         last_exp = self.last_shown_explanations if self.last_shown_explanations else None
-
-        # Import the new prompts and models
-        from llm_agents.prompt_mixins import PlanApprovalPrompt
-        from llm_agents.models import PlanApprovalModel
 
         # Get the predefined plan as a formatted string
         predefined_plan_str = self.format_predefined_plan_for_prompt()
