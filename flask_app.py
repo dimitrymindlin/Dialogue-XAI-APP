@@ -1,5 +1,4 @@
 """The app main."""
-import datetime
 import json
 import logging
 import os
@@ -295,9 +294,17 @@ def set_user_prediction():
     if experiment_phase == "teaching":  # Called differently in the frontend
         experiment_phase = "train"
 
-    user_correct, correct_prediction_string = bot.set_user_prediction(experiment_phase,
-                                                                      datapoint_count,
-                                                                      user_prediction)
+    try:
+        user_correct, correct_prediction_string = bot.set_user_prediction(experiment_phase,
+                                                                          datapoint_count,
+                                                                          user_prediction)
+    except ValueError as e:
+        return jsonify({
+            'error': str(e),
+            'suggestion': 'Please request the datapoint first by calling the appropriate get_*_datapoint endpoint'
+        }), 400
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
     # If not in teaching phase, return 200 OK
     if experiment_phase != "train":
