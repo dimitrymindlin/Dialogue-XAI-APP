@@ -344,7 +344,7 @@ class PlanTaskPrompt(SimplePromptMixin):
 <<Task (Plan)>>:
 You have three steps:
 1. **Defining New Explanations if needed**:
-   - First, evaluate whether the user’s message expresses a clear information need. If it does, check whether this need can be satisfied using any existing explanations. If no suitable explanation is available, define a new one tailored to the identified need and add it to the explanation plan.   
+   - First, evaluate whether the user’s message expresses a clear information need. If it does, check whether this need can be satisfied using any existing explanations. If no suitable explanation is available in the collection above, define a new one tailored to the identified need and it will be added to the explanation collection.   
    - If the user’s need is unclear, do not create a new explanation yet. Instead, use scaffolding techniques from the explantion collection.
 
 2. **Construct and maintaining an Explanation Plan**:
@@ -369,17 +369,18 @@ class ExecuteTaskPrompt(SimplePromptMixin):
             """
 <<Task (Execute)>>
 
-Based on the current User Model, generate a concise (max 3-sentence) response aligned with the user’s ML knowledge and chat history. Answer using only the conversation and reasonable assumptions. Include one or two consecutive explanations from the explanation plan at most to advance the user’s understanding.
+Generate a concise response (max 3 sentences) based on the current User Model, conversation history, and explanation plan. Use only information from the chat history or what can be reasonably inferred from the user’s prior behavior and questions. If the user has agreed to revisit or elaborate on an explanation, continue with that before introducing new concepts. Do not repeat information in the same way, check the conversation history to know what was already communicated and don't repeat it.
+
 Craft the Response:
 - Content Alignment: Use the explanation plan and chat history. If eliciting knowledge, prompt briefly rather than explaining fully.
 - Tone and Language: Match the user’s cognitive state and ML expertise. Use plain language for lay users; avoid technical terms and XAI method names unless the user is ML-proficient.
-- Clarity and Relevance: Be concise and avoid jargon. Focus on explanation over naming techniques. Maintain the flow of conversation.
+- Clarity and Relevance: Be concise and avoid jargon. Focus on explanation over naming techniques. Maintain the flow of conversation. Before generating a sentence, check whether the same explanation or wording was used earlier in the conversation. If yes, do not repeat unless the user explicitly asks for it.
 - Stay Focused: If the user goes off-topic, respond that you can only discuss the model’s prediction and the current instance.
 - Formatting: Use HTML tags:
   <b> or <strong> for bold,
   <ul> and <li> for bullet lists,
   <p> for paragraphs.
-- Visuals: Insert placeholders like ##FeatureInfluencesPlot##. Present the plot first, explain briefly, then ask for understanding.
+- Visuals: Insert placeholders like ##FeatureInfluencesPlot##. Present the plot first, explain briefly, then ask for understanding. Do not repeat plots, since the user can see the conversation history.
 - Engagement: End with a prompt or question. Use scaffolding for ambiguous or low-knowledge input. Don’t repeat previous content unless asked.
 """
         )
@@ -392,12 +393,12 @@ class PlanPrompt(CompositePromptMixin):
         modules = {
             "context": ContextPrompt(),
             "collection": ExplanationCollectionPrompt(),
-            "user_message": UserMessagePrompt(),
             "explanation_plan": PreviousPlanPrompt(),
             "user_model": UserModelPrompt(),
             "last_shown_explanations": LastShownExpPrompt(),
-            "task": PlanTaskPrompt(),
             "history": HistoryPrompt(),
+            "user_message": UserMessagePrompt(),
+            "task": PlanTaskPrompt(),
         }
         super().__init__(modules, exclude_task=exclude_task)
 
@@ -406,9 +407,9 @@ class ExecutePrompt(CompositePromptMixin):
     def __init__(self, exclude_task: bool = False):
         modules = {
             "context": ContextPrompt(),
+            "explanation_plan": PreviousPlanPrompt(),
             "history": HistoryPrompt(),
             "user_message": UserMessagePrompt(),
-            "explanation_plan": PreviousPlanPrompt(),
             "task": ExecuteTaskPrompt(),
         }
         super().__init__(modules, exclude_task=exclude_task)
@@ -516,19 +517,19 @@ You are presented with a previous explanation plan that was created based on the
 **Decision Process:**
 1. **Analyze User's Current State**: Consider the user's message, understanding displays, cognitive engagement, and any changes in their information needs since the predefined plan was created.
 
-2. **Evaluate Plan Relevance**: Determine if the next step in the plan above still addresses the user's current question or if their needs have shifted.
+2. **Evaluate Plan Relevance**: Determine if the next step in the plan above still addresses the user's current question or if their needs have shifted. If the user accepts an explanation or elaboration, the plan should adapt by either deepening the explanation or selecting a related, yet unexplored, explanation that better meets the user’s current need.
 
 3. **Make Approval Decision**:
-   - **APPROVE (approved=True)**: If the predefined plan's next step is still relevant and appropriate for the user's current state and message.
+   - **APPROVE (approved=True)**: If the predefined plan's next step is still relevant and appropriate for the user's current need.
    - **MODIFY (approved=False)**: If the user's needs have changed, they're asking about something different, or the predefined plan no longer fits their current understanding level.
 
-4. **Provide Alternative **: When not approving, select a more appropriate explanation step for the next answer from the available collection that better addresses the user's current message and state.
+4. **Provide Alternative **: When not approving, select a select a more suitable next step that directly addresses the user's current message and state that should be prepanded to the ordered plan.
 
 **Guidelines:**
-- Prioritize the user's explicit questions and requests over sticking to the predefined plan
-- Consider the user's demonstrated understanding level and adjust accordingly
-- If the user shows confusion about a concept in the predefined plan, consider scaffolding strategies
-- If the user asks an unrelated question, adapt by selecting relevant explanations from the collection
+- Always prioritize the user’s current question or request over the predefined plan.
+- Adjust the plan to match the user’s demonstrated level of understanding.
+- If the user shows confusion, consider scaffolded or simpler explanations.
+- If the user shifts to a new topic, replace the next step with a relevant explanation from the collection.
 """
         )
 
@@ -538,11 +539,11 @@ class PlanApprovalPrompt(CompositePromptMixin):
         modules = {
             "context": ContextPrompt(),
             "collection": ExplanationCollectionPrompt(),
-            "history": HistoryPrompt(),
-            "user_message": UserMessagePrompt(),
             "user_model": UserModelPrompt(),
             "explanation_plan": PreviousPlanPrompt(),
+            "history": HistoryPrompt(),
             "last_shown": LastShownExpPrompt(),
+            "user_message": UserMessagePrompt(),
             "task": PlanApprovalTaskPrompt(),
         }
         super().__init__(modules, exclude_task=exclude_task)
