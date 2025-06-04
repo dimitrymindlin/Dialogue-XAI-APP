@@ -8,7 +8,7 @@ import mlflow
 
 from llama_index.core.workflow import Context, Event, Workflow, StartEvent, StopEvent, step
 from llama_index.core.workflow.retry_policy import ConstantDelayRetryPolicy
-from llm_agents.models import MonitorResultModel, AnalyzeResult, PlanResultModel, ExecuteResult
+from llm_agents.models import MonitorResultModel, AnalyzeResult, PlanResultModel, ExecuteResult, PlanApprovalModel
 from llm_agents.prompt_mixins import (
     MonitorPrompt,
     AnalyzePrompt,
@@ -17,6 +17,7 @@ from llm_agents.prompt_mixins import (
     MonitorAnalyzePrompt,
     PlanExecutePrompt,
     UnifiedPrompt,
+    PlanApprovalPrompt
 )
 
 # Import the new prompts and models
@@ -335,9 +336,6 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
         end = datetime.datetime.now()
         logger.info(f"Time taken for Scaffolding: {end - start}")
 
-        # Update explanation plan from scaffolding result
-        self.update_user_model_from_plan(scaff)
-
         # Handle target explanations
         target = scaff.explanation_plan[0] if scaff.explanation_plan else None
 
@@ -563,10 +561,12 @@ class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHe
         logger.info(f"Time taken for Plan Approval: {end_time - start_time}")
         logger.info(f"Plan Approval result: {approval_result}.\n")
 
+        # Update the explanation plan based on the approval result
+        # This creates the updated plan that will be passed to execute
         plan_result = self.update_explanation_plan_after_approval(approval_result)
 
-        # Update user model with plan result using helper method
-        self.update_user_model_from_plan(plan_result)
+        # Update user model with the new plan result
+        self.update_explanation_plan(plan_result)
 
         # Update log with plan results using helper method
         self.update_log("plan_approval", approval_result)
@@ -608,7 +608,6 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
             # Log the plan approval execute prompt
             mlflow.log_param("plan_approval_execute_prompt", prompt_str)
             plan_approval_execute_prompt = PromptTemplate(prompt_str)
-            # Use dual-mode prediction with fallback to string parsing
             result = await astructured_predict_with_fallback(
                 self.llm,
                 PlanApprovalExecuteResultModel,
@@ -619,16 +618,19 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
         logger.info(f"Time taken for Plan Approval Execute: {end_time - start_time}")
         logger.info(f"Plan Approval Execute result: {result}.\n")
 
-        # Determine which explanation to use based on approval decision
-        target_explanation = self.get_target_explanation_from_approval(result)
-        
+        # Determine which explanations to use based on approval decision
+        target_explanations = self.get_target_explanations_from_approval(result)
+
         # Update the plan based on approval decision
         plan_result = self.update_explanation_plan_after_approval(result)
-        
-        # Update user model with plan result using helper method
-        self.update_user_model_from_plan(plan_result)
 
-        if target_explanation:
+        # Update user model with plan result using helper method
+        self.update_explanation_plan(plan_result)
+
+        if target_explanations:
+            # Get the first explanation to mark as shown (for single explanation case)
+            target_explanation = target_explanations[0]
+            
             # Update user model to mark explanation as shown
             self.user_model.update_explanation_step_state(
                 target_explanation.explanation_name,
@@ -645,7 +647,7 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
         result.response = replace_plot_placeholders(result.response, self.visual_explanations_dict)
 
         # Update datapoint and log
-        self.user_model.new_datapoint()
+        self.user_model.reset_understanding_displays()
         self.update_log("plan_approval_execute", result)
         self.update_log("plan", plan_result)
         self.finalize_log_row()
