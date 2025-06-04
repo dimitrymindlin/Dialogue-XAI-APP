@@ -272,6 +272,15 @@ class ExplainBot:
     def set_user_prediction(self, experiment_phase, datapoint_count, user_prediction):
         reversed_dict = {v: k for k, v in self.conversation.class_names.items()}
         user_prediction_as_int = reversed_dict.get(user_prediction, 1000)  # 1000 is for "I don't know" option
+        
+        # Check if the experiment_phase exists in user_prediction_dict
+        if experiment_phase not in self.user_prediction_dict:
+            raise ValueError(f"Experiment phase '{experiment_phase}' not found. You must request a datapoint before setting a prediction.")
+        
+        # Check if the datapoint_count exists for this experiment_phase
+        if datapoint_count not in self.user_prediction_dict[experiment_phase]:
+            raise ValueError(f"Datapoint {datapoint_count} not found for phase '{experiment_phase}'. You must request this specific datapoint before setting a prediction.")
+        
         entry = self.user_prediction_dict[experiment_phase][datapoint_count]
         entry['user_prediction'] = user_prediction_as_int
         correct_pred = entry['true_label']
