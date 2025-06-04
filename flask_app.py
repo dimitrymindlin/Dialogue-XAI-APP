@@ -162,7 +162,7 @@ def init():
     study_group = request.args.get("study_group")
     ml_knowledge = request.args.get("ml_knowledge")
     if not user_id:
-        user_id = f"TEST-{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+        user_id = "TEST"
     if not study_group:
         study_group = "interactive"
     if not ml_knowledge:
@@ -200,8 +200,7 @@ def finish():
     """
     user_id = request.args.get("user_id")
     if not user_id:
-        date_now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        user_id = f"TEST-{date_now}"
+        user_id = "TEST"
     # Remove the bot from the dict
     try:
         bot_dict.pop(user_id)
