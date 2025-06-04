@@ -4,9 +4,7 @@ LlamaIndex-specific implementation of the XAI agent.
 This module contains the LlamaIndex-specific implementation of the XAI agent,
 inheriting common functionality from the BaseAgent class.
 """
-from abc import abstractmethod
-from typing import Any, Dict, List
-import logging
+from typing import Any
 
 from llama_index.core.workflow.workflow import WorkflowMeta
 from llm_agents.agent_utils import configure_logger
@@ -47,11 +45,6 @@ class LlamaIndexBaseAgent(BaseAgent, metaclass=XAIBaseAgentMeta):
             user_ml_knowledge=user_ml_knowledge,
             **kwargs
         )
-        # Add any LlamaIndex-specific initialization here
-        
-        logger.info(f"LlamaIndexAgent initialized for experiment: {experiment_id}")
-
-    # Implementation-specific methods can be added here
 
     async def answer_user_question(self, user_question: str) -> Any:
         """
