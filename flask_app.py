@@ -18,7 +18,6 @@ from explain.logic import ExplainBot
 import mlflow
 import mlflow.llama_index
 
-
 from dotenv import load_dotenv
 
 # Define API blueprint at module level
@@ -66,16 +65,6 @@ def create_app():
     # Register the already-defined blueprint
     app.register_blueprint(bp, url_prefix=args.baseurl)
 
-    # Initialize MLflow autolog at startup (requires mlflow UI already running)
-    try:
-        mlflow.set_tracking_uri("http://localhost:5005")
-        mlflow.set_experiment("Dialogue-XAI-Experiment")
-        #mlflow.openai.autolog(log_traces=True)
-        mlflow.llama_index.autolog(log_traces=True)
-        app.logger.info("MLflow autolog initialized at startup.")
-    except Exception as e:
-        app.logger.warning(f"MLflow startup init failed: {e}")
-
     # Any other top‐level setup (cache folder, logging handlers, matplotlib backend)
     if not os.path.exists("cache"):
         os.makedirs("cache")
@@ -91,9 +80,9 @@ def create_app():
     # Set environment variable
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+    _initialize_mlflow(app)
+
     return app
-
-
 
 
 @bp.route('/init', methods=['GET'])
@@ -111,6 +100,8 @@ def init():
     BOT = ExplainBot(study_group, ml_knowledge, user_id)
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
+
+    initialize_mlflow_experiment(user_id)
 
     # Feature tooltip and units
     feature_tooltip = bot_dict[user_id].get_feature_tooltips()
@@ -170,6 +161,8 @@ def get_train_datapoint():
     Get a new datapoint from the dataset.
     """
     user_id = request.args.get("user_id")
+    if not user_id:
+        user_id = "TEST"
     datapoint_count = request.args.get("datapoint_count")
     user_study_group = bot_dict[user_id].get_study_group()
     result_dict = get_datapoint(user_id, "train", datapoint_count)
@@ -322,19 +315,19 @@ def generate_audio_from_text(text, voice="alloy"):
         if not openai.api_key:
             app.logger.warning("OpenAI API key is not configured for text-to-speech!")
             return {"error": "OpenAI API key is not configured"}
-        
+
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        
+
         audio_response = client.audio.speech.create(
             model="tts-1",
             voice=voice,
             input=text
         )
-        
+
         # Convert audio to base64 for sending in JSON response
         audio_data = audio_response.read()
         audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-        
+
         return {
             "data": audio_base64,
             "format": "mp3"
@@ -349,7 +342,7 @@ def generate_audio_from_text(text, voice="alloy"):
 def get_bot_response():
     """Load the box response."""
     user_id = request.args.get("user_id")
-    #bot_dict[user_id].save_all_questions_and_answers_to_csv()
+    # bot_dict[user_id].save_all_questions_and_answers_to_csv()
     if user_id is None:
         user_id = "TEST"
     if request.method == "POST":
@@ -379,18 +372,18 @@ def get_bot_response():
             "followup": followup,
             "reasoning": response[3]
         }
-        
+
         # Check if soundwave parameter is provided in the request
         soundwave = data.get("soundwave", True)
         if soundwave:
             voice = data.get("voice", "alloy")
             audio_result = generate_audio_from_text(response[0], voice)
-            
+
             if "error" in audio_result:
                 message_dict["audio_error"] = audio_result["error"]
             else:
                 message_dict["audio"] = audio_result
-        
+
         return jsonify(message_dict)
 
 
@@ -424,7 +417,7 @@ async def get_bot_response_from_nl():
         assert isinstance(feature_id, int) or feature_id is None
         assert isinstance(followup, list)
         assert isinstance(reasoning, str)
-        
+
         message_dict = {
             "isUser": False,
             "feedback": True,
@@ -434,18 +427,18 @@ async def get_bot_response_from_nl():
             "followup": followup,
             "reasoning": reasoning
         }
-        
+
         # Check if soundwave parameter is provided in the request
         soundwave = data.get("soundwave", True)
         if soundwave:
             voice = data.get("voice", "alloy")
             audio_result = generate_audio_from_text(response, voice)
-            
+
             if "error" in audio_result:
                 message_dict["audio_error"] = audio_result["error"]
             else:
                 message_dict["audio"] = audio_result
-        
+
         return jsonify(message_dict)
 
 
@@ -458,14 +451,14 @@ async def transcribe_audio():
     try:
         user_id = request.form.get("user_id")
         audio_file = request.files.get("audio_file")
-        
+
         if not audio_file:
             return jsonify({"error": "No audio file provided"}), 400
-        
+
         # Save the uploaded file temporarily
         temp_file_path = f"temp_{audio_file.filename}"
         audio_file.save(temp_file_path)
-        
+
         try:
             # Call OpenAI's API to transcribe the audio
 
@@ -475,18 +468,18 @@ async def transcribe_audio():
                     model="whisper-1",
                     file=audio
                 )
-            
+
             # Return the transcribed text
             return jsonify({
                 "text": transcript.text,
                 "user_id": user_id
             })
-            
+
         finally:
             # Clean up the temporary file
             if os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
-                
+
     except Exception as e:
         print(f"Error transcribing audio: {str(e)}")
         print(traceback.format_exc())
@@ -503,32 +496,32 @@ async def text_to_speech():
         data = json.loads(request.data)
         text = data.get("text")
         voice = data.get("voice", "alloy")  # Default voice is alloy
-        
+
         if not text:
             return jsonify({"error": "No text provided"}), 400
-        
+
         # Check if OpenAI API key is configured
         if not openai.api_key:
             print("OpenAI API key is not configured!")
             return jsonify({"error": "API key is not configured"}), 500
-        
+
         # Call OpenAI's API to generate speech
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        
+
         response = client.audio.speech.create(
             model="tts-1",
             voice=voice,
             input=text
         )
-        
+
         # Create a streaming response
         def generate():
             for chunk in response.iter_bytes(chunk_size=4096):
                 yield chunk
-        
+
         # Return the audio stream
         return Response(generate(), mimetype="audio/mpeg")
-        
+
     except Exception as e:
         print(f"Error generating speech: {str(e)}")
         print(traceback.format_exc())
@@ -541,6 +534,61 @@ def test_tts_page():
     Serve the test TTS HTML page.
     """
     return app.send_static_file('test_tts.html')
+
+
+def _get_mlflow_uri():
+    """Get and normalize MLflow tracking URI for local and Docker environments."""
+    mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "file://./cache/mlruns")
+
+    if mlflow_uri.startswith("file://"):
+        # Extract path from file:// URI
+        mlflow_path = mlflow_uri.replace("file://", "")
+
+        # Convert Docker path to local path when running locally
+        if mlflow_path.startswith("/usr/src/app/"):
+            mlflow_path = mlflow_path.replace("/usr/src/app/", "./")
+
+        # Ensure directory exists
+        if not os.path.exists(mlflow_path):
+            os.makedirs(mlflow_path, exist_ok=True)
+
+        # Update URI to use correct local path if not in Docker
+        if not mlflow_uri.startswith("file:///usr/src/app/") or not os.path.exists("/usr/src/app"):
+            mlflow_uri = f"file://{os.path.abspath(mlflow_path)}"
+
+    return mlflow_uri
+
+
+def _initialize_mlflow(app):
+    """Initialize MLflow tracking."""
+    try:
+        mlflow_uri = _get_mlflow_uri()
+        mlflow.set_tracking_uri(mlflow_uri)
+        app.logger.info(f"MLflow tracking URI initialized: {mlflow_uri}")
+    except Exception as e:
+        app.logger.warning(f"MLflow startup init failed: {e}")
+
+
+def initialize_mlflow_experiment(user_id):
+    """Initialize MLflow experiment for a specific user."""
+    try:
+        # Ensure user_id is valid and not empty
+        if not user_id or user_id.strip() == "":
+            user_id = "DEFAULT_USER"
+
+        experiment_name = f"{user_id}"
+
+        # Set the experiment (creates it if it doesn't exist)
+        mlflow.set_experiment(experiment_name)
+
+        # mlflow.openai.autolog(log_traces=True)
+        mlflow.llama_index.autolog(log_traces=True)
+        app.logger.info(f"MLflow experiment '{experiment_name}' initialized for user {user_id}.")
+        return True
+    except Exception as e:
+        app.logger.warning(f"MLflow experiment init failed for user {user_id}: {e}")
+        app.logger.info("Continuing without MLflow tracking. App will function normally.")
+        return False
 
 
 app = create_app()
