@@ -58,8 +58,8 @@ xai_explanations:
           Anchor showing which features with their current values need to be present for the model to predict the current model prediction. {{anchor.anchor_text}}
 
   - explanation_name: "CeterisParibus"
-    description: "Understanding the model's decision-making by observing how the model's prediction changes when only one
-    feature is changed."
+    description: "Understanding the model's local decision-making by observing how the model's prediction changes when only one
+    feature is changed. Similar to TextualPartialDependence, but focused on individual instances. Explain this difference in simple terms to the user."
     explanation_steps:
       - step_name: "Concept"
         description: >
@@ -72,7 +72,7 @@ xai_explanations:
           {{ceteris_paribus.impossible_class_flips}}
 
   - explanation_name: "TextualPartialDependence"
-    description: "Understanding the global relationship between a feature and the model's prediction."
+    description: "Understanding the global relationship between a feature and the model's prediction. Similar to Ceteris Paribus but focused on the global model behavior. They can be used together to describe geenral trends but also local influences for the current datapoint. Explain this difference in simple terms to the user."
     explanation_steps:
       - step_name: "Concept"
         description: >
