@@ -362,7 +362,7 @@ class UserModelFineGrained:
                                 understood_concepts.append(exp_name)
         return understood_concepts
 
-    def new_datapoint(self):
+    def reset_understanding_displays(self):
         self.explicit_understanding_signals = []
 
     def __repr__(self):
