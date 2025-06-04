@@ -74,12 +74,14 @@ class PlanResultModel(BaseModel):
     reasoning: str = Field(...,
                            description=f"{reasoning_prefix} for the decision of new explanations and which explanations to include in the next steps.")
     new_explanations: List[NewExplanationModel] = Field(default_factory=list,
-                                                        description="List of completely new explanations to be added to the explanation collection.")
+                                                        description="List of completely new explanations to be added to the explanation collection. Verify first if they already exist in the explanation collection before adding them.")
     explanation_plan: List[ChosenExplanationModel] = Field(default_factory=list,
                                                            description="List of explanations or scaffolding techniques, indicating the next explanatons and a long-term plan to explain the whole model prediction to the user.")
 
 class ExecuteResult(BaseModel):
     reasoning: str = Field(..., description=f"{reasoning_prefix} on how to craft the response.")
+    explanations_count: int = Field(...,
+                                      description="The number of explanations used in the response in the ordered explanation plan. Used to track how many explanations were actually used from the explanation plan.")
     response: str = Field(...,
                           description="The response to the user's question about the shown instance and prediction only using information from the chat history and explanation plan styled with appropriate html elements such as <b> for bold text or bullet points.")
 
