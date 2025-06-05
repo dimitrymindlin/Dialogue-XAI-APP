@@ -453,10 +453,20 @@ class ExplainBot:
                                                                                     model=model,
                                                                                     y_values=test_data_y,
                                                                                     submodular_pick=False)
+
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         if isinstance(diverse_instance_ids, list) and all(isinstance(i, int) for i in diverse_instance_ids):
+            # Legacy format: List[int]
             diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
+        elif isinstance(diverse_instance_ids, dict):
+            # New format: Dict[int, List[int]] - flatten all clusters
+            flat_instance_ids = []
+            for cluster_id, cluster_instances in diverse_instance_ids.items():
+                flat_instance_ids.extend(cluster_instances)
+            diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in flat_instance_ids]
+            diverse_instance_ids = flat_instance_ids
         else:
+            # Legacy format: List[Dict] with id keys
             diverse_instances = diverse_instance_ids.copy()
             diverse_instance_ids = [instance['id'] for instance in diverse_instances]
         app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")
@@ -568,7 +578,9 @@ class ExplainBot:
                 pdp_explainer.cache = {k: v for k, v in pdp_explainer.cache.items() if k != instance_id}
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
-        diverse_instances_explainer.save_diverse_instances(diverse_instances)
+        
+        # Save the cluster-based diverse instances (not the flattened list format)
+        diverse_instances_explainer.save_diverse_instances(diverse_instances_explainer.diverse_instances)
 
     def load_model(self, filepath: str):
         """Loads a model.
