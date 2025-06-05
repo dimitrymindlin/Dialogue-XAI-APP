@@ -235,6 +235,10 @@ class ExplainBot:
                 from llm_agents.mape_k_mixins import MapeK2BaseAgent as Agent
             elif self.use_llm_agent in ("unified_mape_k", "mape_k_unified"):
                 from llm_agents.mape_k_mixins import MapeKUnifiedBaseAgent as Agent
+            elif self.use_llm_agent == "mape_k_approval_2":
+                from llm_agents.mape_k_mixins import MapeKApprovalBaseAgent as Agent
+            elif self.use_llm_agent in ("mape_k_approval", "mape_k_approval_4"):
+                from llm_agents.mape_k_mixins import MapeKApproval4BaseAgent as Agent
             elif self.use_llm_agent == "mape_k_openai":
                 from llm_agents.openai_mapek_agent import MapeK4OpenAIAgent as Agent
             elif self.use_llm_agent == "mape_k_openai_2":
@@ -268,6 +272,15 @@ class ExplainBot:
     def set_user_prediction(self, experiment_phase, datapoint_count, user_prediction):
         reversed_dict = {v: k for k, v in self.conversation.class_names.items()}
         user_prediction_as_int = reversed_dict.get(user_prediction, 1000)  # 1000 is for "I don't know" option
+        
+        # Check if the experiment_phase exists in user_prediction_dict
+        if experiment_phase not in self.user_prediction_dict:
+            raise ValueError(f"Experiment phase '{experiment_phase}' not found. You must request a datapoint before setting a prediction.")
+        
+        # Check if the datapoint_count exists for this experiment_phase
+        if datapoint_count not in self.user_prediction_dict[experiment_phase]:
+            raise ValueError(f"Datapoint {datapoint_count} not found for phase '{experiment_phase}'. You must request this specific datapoint before setting a prediction.")
+        
         entry = self.user_prediction_dict[experiment_phase][datapoint_count]
         entry['user_prediction'] = user_prediction_as_int
         correct_pred = entry['true_label']
@@ -440,10 +453,20 @@ class ExplainBot:
                                                                                     model=model,
                                                                                     y_values=test_data_y,
                                                                                     submodular_pick=False)
+
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         if isinstance(diverse_instance_ids, list) and all(isinstance(i, int) for i in diverse_instance_ids):
+            # Legacy format: List[int]
             diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
+        elif isinstance(diverse_instance_ids, dict):
+            # New format: Dict[int, List[int]] - flatten all clusters
+            flat_instance_ids = []
+            for cluster_id, cluster_instances in diverse_instance_ids.items():
+                flat_instance_ids.extend(cluster_instances)
+            diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in flat_instance_ids]
+            diverse_instance_ids = flat_instance_ids
         else:
+            # Legacy format: List[Dict] with id keys
             diverse_instances = diverse_instance_ids.copy()
             diverse_instance_ids = [instance['id'] for instance in diverse_instances]
         app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")
@@ -555,7 +578,9 @@ class ExplainBot:
                 pdp_explainer.cache = {k: v for k, v in pdp_explainer.cache.items() if k != instance_id}
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
-        diverse_instances_explainer.save_diverse_instances(diverse_instances)
+        
+        # Save the cluster-based diverse instances (not the flattened list format)
+        diverse_instances_explainer.save_diverse_instances(diverse_instances_explainer.diverse_instances)
 
     def load_model(self, filepath: str):
         """Loads a model.

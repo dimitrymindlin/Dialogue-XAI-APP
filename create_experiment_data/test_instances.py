@@ -5,6 +5,7 @@ import gin
 import pandas as pd
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from .knn_test_instances import get_knn_similar_instances
 
 
 def load_cache(cache_location: str):
@@ -30,9 +31,24 @@ class TestInstances:
                  actionable_features,
                  max_features_to_vary=2,
                  cache_location: str = "./cache/test-instances.pkl",
-                 instance_amount: int = 10):
+                 instance_amount: int = 10,
+                 use_knn: bool = True,
+                 categorical_features: List[str] = None,
+                 min_feature_differences: int = 2,
+                 max_feature_differences: int = 3):
         self.data = data
-        self.diverse_instance_ids = diverse_instance_ids
+        
+        # Handle both new dictionary format and legacy list format for diverse_instance_ids
+        if isinstance(diverse_instance_ids, dict):
+            # New format: Dict[int, List[int]] - flatten all clusters
+            instance_ids = []
+            for cluster_id, cluster_instances in diverse_instance_ids.items():
+                instance_ids.extend(cluster_instances)
+            self.diverse_instance_ids = instance_ids
+        else:
+            # Legacy format: List[int] or other iterable
+            self.diverse_instance_ids = diverse_instance_ids
+            
         self.cache_location = cache_location
         self.model = model
         self.mega_explainer = mega_explainer
@@ -41,6 +57,10 @@ class TestInstances:
         self.test_instances = load_cache(cache_location)
         self.max_features_to_vary = max_features_to_vary
         self.instance_amount = instance_amount
+        self.use_knn = use_knn
+        self.categorical_features = categorical_features or []
+        self.min_feature_differences = min_feature_differences
+        self.max_feature_differences = max_feature_differences
 
     def get_random_instance(self):
         return self.data.sample(1)
@@ -68,7 +88,7 @@ class TestInstances:
 
     def _generate_instances(self,
                             instance_count: int,
-                            close_instances: bool) -> Dict[str, Any]:
+                            close_instances_flag: bool) -> Dict[str, Any]:
         """
         Generates diverse instances for testing based on the provided dataset.
         param: instance_count (int): Number of diverse instances to generate.
@@ -78,7 +98,7 @@ class TestInstances:
         test_instances = {}
         for instance_id in self.diverse_instance_ids:
             original_instance = self._get_instance_dataframe(instance_id)
-            if not close_instances:
+            if not close_instances_flag:
                 test_instances[instance_id] = self._generate_random_instances()
             else:
                 # TODO: Sometimes this method returns None, which causes an error in the next step... Handle somehow
@@ -126,6 +146,61 @@ class TestInstances:
                                original_class_prediction: int,
                                only_correct_model_predictions: bool = True,
                                attempt: int = 1) -> pd.DataFrame:
+        if self.use_knn:
+            return self._get_similar_instances_knn(original_instance, instance_count, original_class_prediction, 
+                                                 only_correct_model_predictions)
+        else:
+            return self._get_similar_instances_original(original_instance, instance_count, original_class_prediction,
+                                                      only_correct_model_predictions, attempt)
+
+    def _get_similar_instances_knn(self, original_instance: pd.DataFrame,
+                                 instance_count: int,
+                                 original_class_prediction: int,
+                                 only_correct_model_predictions: bool = True) -> pd.DataFrame:
+        """
+        Use KNN to find similar instances that differ in only 1-3 features.
+        """
+        try:
+            # Get similar instances using KNN approach
+            similar_instances = get_knn_similar_instances(
+                data=self.data,
+                original_instance=original_instance,
+                instance_count=instance_count * 3,  # Get more candidates for filtering
+                categorical_features=self.categorical_features,
+                max_feature_differences=self.max_feature_differences,
+                min_feature_differences=self.min_feature_differences
+            )
+            
+            if len(similar_instances) == 0:
+                print("KNN: No similar instances found with feature difference constraints")
+                return pd.DataFrame(columns=original_instance.columns)
+            
+            # Filter by prediction class if needed
+            if only_correct_model_predictions and len(similar_instances) > 0:
+                predictions = np.argmax(self.model.predict_proba(similar_instances), axis=1)
+                similar_instances = similar_instances[predictions == original_class_prediction]
+            
+            # Return the requested number of instances
+            result = similar_instances.head(instance_count).reset_index(drop=True)
+            
+            if len(result) < instance_count:
+                print(f"KNN: Only found {len(result)} instances with same prediction class. Requested {instance_count}")
+            
+            return result
+            
+        except Exception as e:
+            print(f"KNN approach failed: {e}. Falling back to original method.")
+            return self._get_similar_instances_original(original_instance, instance_count, original_class_prediction,
+                                                      only_correct_model_predictions, 1)
+
+    def _get_similar_instances_original(self, original_instance: pd.DataFrame,
+                                      instance_count: int,
+                                      original_class_prediction: int,
+                                      only_correct_model_predictions: bool = True,
+                                      attempt: int = 1) -> pd.DataFrame:
+        """
+        Original method for generating similar instances.
+        """
         similar_instances_list = []
         for _ in range(instance_count):
             num_changed_features = 0
@@ -163,7 +238,8 @@ class TestInstances:
                     )
                 else:
                     print("Max attempts reached. Returning available similar instances.")
-            return similar_instances
+        
+        return similar_instances
 
     def _sort_and_select_instances(self,
                                    original_instance: pd.DataFrame,

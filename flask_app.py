@@ -25,9 +25,14 @@ bp = Blueprint('host', __name__, template_folder='templates')
 # Allow CORS for our React frontend
 CORS(bp)
 
-# gunicorn doesn't have command line flags, using a gin file to pass command line args
+
 @gin.configurable
 class GlobalArgs:
+    """Global configuration arguments for the application.
+    
+    This class is configured via gin files and provides command line
+    argument functionality for gunicorn deployments.
+    """
     def __init__(self, config, baseurl):
         self.config = config
         self.baseurl = baseurl
@@ -36,52 +41,117 @@ class GlobalArgs:
 # Setup the explainbot dict to run multiple bots
 bot_dict = {}
 
-"""@bp.route('/')
-def home():
-    # Load the explanation interface.
-    user_id = request.args.get("user_id")
-    study_group = request.args.get("study_group")
-    if user_id is None:
-        user_id = "TEST"
-    BOT = ExplainBot(study_group)
-    bot_dict[user_id] = BOT
-    app.logger.info("Loaded Login and created bot")
-    objective = bot_dict[user_id].conversation.describe.get_dataset_objective()
-    return render_template("index.html", currentUserId=user_id, datasetObjective=objective)"""
 
-
-def create_app():
-    # Load .env / .flaskenv variables
+def _load_environment():
+    """Load environment variables from .env files."""
     load_dotenv()
-    # Parse gin configs
+    
+    # Load local environment file if it exists (for development)
+    if os.path.exists('.env.local'):
+        load_dotenv('.env.local', override=True)
+
+
+def _configure_gin():
+    """Parse and configure gin configuration files."""
     gin.parse_config_file("global_config.gin")
     args = GlobalArgs()
     gin.parse_config_file(args.config)
+    return args
 
-    # Initialize Flask app and CORS
-    app = Flask(__name__)
-    CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
-    # Register the already-defined blueprint
-    app.register_blueprint(bp, url_prefix=args.baseurl)
+def _setup_directories():
+    """Create necessary directories for the application."""
+    directories = ["cache", "cache/mlruns"]
+    for directory in directories:
+        if not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
 
-    # Any other top‐level setup (cache folder, logging handlers, matplotlib backend)
-    if not os.path.exists("cache"):
-        os.makedirs("cache")
+
+def _get_mlflow_uri():
+    """Get and normalize MLflow tracking URI for local and Docker environments."""
+    mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "file://./cache/mlruns")
+    
+    if mlflow_uri.startswith("file://"):
+        # Extract path from file:// URI
+        mlflow_path = mlflow_uri.replace("file://", "")
+        
+        # Convert Docker path to local path when running locally
+        if mlflow_path.startswith("/usr/src/app/"):
+            mlflow_path = mlflow_path.replace("/usr/src/app/", "./")
+        
+        # Ensure directory exists
+        if not os.path.exists(mlflow_path):
+            os.makedirs(mlflow_path, exist_ok=True)
+        
+        # Update URI to use correct local path if not in Docker
+        if not mlflow_uri.startswith("file:///usr/src/app/") or not os.path.exists("/usr/src/app"):
+            mlflow_uri = f"file://{os.path.abspath(mlflow_path)}"
+    
+    return mlflow_uri
+
+
+def _initialize_mlflow(app):
+    """Initialize MLflow tracking."""
+    try:
+        mlflow_uri = _get_mlflow_uri()
+        mlflow.set_tracking_uri(mlflow_uri)
+        app.logger.info(f"MLflow tracking URI initialized: {mlflow_uri}")
+    except Exception as e:
+        app.logger.warning(f"MLflow startup init failed: {e}")
+
+
+def _configure_logging(app):
+    """Configure application logging."""
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO)
     app.logger.addHandler(stream_handler)
     app.logger.setLevel(logging.INFO)
-    matplotlib.use('Agg')
 
-    # Make app available to route functions
-    globals()["app"] = app
 
-    # Set environment variable
+def _set_environment_variables():
+    """Set required environment variables."""
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-    _initialize_mlflow(app)
 
+def create_app():
+    """Create and configure the Flask application.
+    
+    Returns:
+        Flask: Configured Flask application instance.
+    """
+    # Load environment configuration
+    _load_environment()
+    
+    # Configure gin settings
+    args = _configure_gin()
+    
+    # Create necessary directories
+    _setup_directories()
+    
+    # Initialize Flask app
+    app = Flask(__name__)
+    
+    # Configure CORS
+    CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+    
+    # Register blueprints
+    app.register_blueprint(bp, url_prefix=args.baseurl)
+    
+    # Initialize external services
+    _initialize_mlflow(app)
+    
+    # Configure logging
+    _configure_logging(app)
+    
+    # Configure matplotlib for headless operation
+    matplotlib.use('Agg')
+    
+    # Set environment variables
+    _set_environment_variables()
+    
+    # Make app available to route functions
+    globals()["app"] = app
+    
     return app
 
 
@@ -91,17 +161,19 @@ def init():
     user_id = request.args.get("user_id")
     study_group = request.args.get("study_group")
     ml_knowledge = request.args.get("ml_knowledge")
-    if user_id is None or "":
+    if not user_id:
         user_id = "TEST"
-    if study_group is None or "":
+    if not study_group:
         study_group = "interactive"
-    if ml_knowledge is None or "":
+    if not ml_knowledge:
         ml_knowledge = "low"
     BOT = ExplainBot(study_group, ml_knowledge, user_id)
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
 
+    # Initialize MLflow experiment for this user
     initialize_mlflow_experiment(user_id)
+    app.logger.info("MLflow experiment initialized for user: %s", user_id)
 
     # Feature tooltip and units
     feature_tooltip = bot_dict[user_id].get_feature_tooltips()
@@ -127,7 +199,7 @@ def finish():
     Finish the experiment.
     """
     user_id = request.args.get("user_id")
-    if user_id is None:
+    if not user_id:
         user_id = "TEST"
     # Remove the bot from the dict
     try:
@@ -146,7 +218,7 @@ def get_datapoint(user_id, datapoint_type, datapoint_count, return_probability=F
     # convert to 0-indexed count
     datapoint_count = int(datapoint_count) - 1
 
-    if user_id is None:
+    if not user_id:
         user_id = "TEST"
     instance = bot_dict[user_id].get_next_instance(datapoint_type,
                                                    datapoint_count,
@@ -215,15 +287,23 @@ def set_user_prediction():
     experiment_phase = data.get("experiment_phase")
     datapoint_count = int(data.get("datapoint_count")) - 1  # 0 indexed for backend
     user_prediction = data.get("user_prediction")
-    if user_id is None:
+    if not user_id:
         user_id = "TEST"  # Default user_id for testing
     bot = bot_dict[user_id]
     if experiment_phase == "teaching":  # Called differently in the frontend
         experiment_phase = "train"
 
-    user_correct, correct_prediction_string = bot.set_user_prediction(experiment_phase,
-                                                                      datapoint_count,
-                                                                      user_prediction)
+    try:
+        user_correct, correct_prediction_string = bot.set_user_prediction(experiment_phase,
+                                                                          datapoint_count,
+                                                                          user_prediction)
+    except ValueError as e:
+        return jsonify({
+            'error': str(e),
+            'suggestion': 'Please request the datapoint first by calling the appropriate get_*_datapoint endpoint'
+        }), 400
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
     # If not in teaching phase, return 200 OK
     if experiment_phase != "train":
@@ -233,28 +313,14 @@ def set_user_prediction():
         user_study_group = bot.get_study_group()
         if user_study_group == "interactive":
             if user_correct:
-                prompt = f"""
-                    <b>Correct!</b> The model predicted <b>{correct_prediction_string}</b> for the current {bot.instance_type_naming}. <br>
-                    The model <b>starts with a 75% chance that the person earns below $50K</b>, based on general trends and then considers
-                    the individual's attributes to make a prediction. <br>
-                    If you want to <b>verify if your reasoning</b> aligns with the model, <b>select questions</b> from the right.
-                    """
+                prompt = f"""<b>Correct!</b> The model predicted <b>{correct_prediction_string}</b> for the current {bot.instance_type_naming}. <br>The model <b>starts with a 75% chance that the person earns below $50K</b>, based on general trends and then considers the individual's attributes to make a prediction. <br>If you want to <b>verify if your reasoning</b> aligns with the model, <b>select questions</b> from the right."""
             else:
-                prompt = f"""
-                    Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}.
-                    The model <b>starts with a 75% chance that the person earns below $50K</b>, based on general trends and then considers
-                    the individual's attributes to make a prediction. <br>
-                    To <b>understand the model's reasoning</b> and improve your future predictions, <b>select questions</b> from the right.
-                    """
+                prompt = f"""Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. The model <b>starts with a 75% chance that the person earns below $50K</b>, based on general trends and then considers the individual's attributes to make a prediction. <br>To <b>understand the model's reasoning</b> and improve your future predictions, <b>select questions</b> from the right."""
         else:  # chat
             if user_correct:
-                prompt = f"""
-                    <b>Correct!</b> The model predicted <b>{correct_prediction_string}</b>. <br>
-                    If you want to <b>verify if your reasoning</b> aligns with the model, <b>type your questions</b> about the model prediction in the chat."""
+                prompt = f"""<b>Correct!</b> The model predicted <b>{correct_prediction_string}</b>. <br>If you want to <b>verify if your reasoning</b> aligns with the model, <b>type your questions</b> about the model prediction in the chat."""
             else:
-                prompt = f"""
-                Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. <br>
-                To understand its reasoning and improve your predictions, <b>type your questions</b> in the chat, and I will answer them."""
+                prompt = f"""Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. <br>To understand its reasoning and improve your predictions, <b>type your questions</b> in the chat, and I will answer them."""
             if bot_dict[user_id].use_llm_agent:
                 bot_dict[user_id].agent.append_to_history("agent", prompt)
 
@@ -273,7 +339,7 @@ def set_user_prediction():
 @bp.route("/get_user_correctness", methods=['GET'])
 def get_user_correctness():
     user_id = request.args.get("user_id")
-    if user_id is None:
+    if not user_id:
         user_id = "TEST"
     bot = bot_dict[user_id]
     correctness_string = bot.get_user_correctness()
@@ -284,7 +350,7 @@ def get_user_correctness():
 @bp.route("/get_proceeding_okay", methods=['GET'])
 def get_proceeding_okay():
     user_id = request.args.get("user_id")
-    if user_id is None:
+    if not user_id:
         user_id = "TEST"
     bot = bot_dict[user_id]
     proceeding_okay, follow_up_questions, response_text = bot.get_proceeding_okay()
@@ -343,7 +409,7 @@ def get_bot_response():
     """Load the box response."""
     user_id = request.args.get("user_id")
     # bot_dict[user_id].save_all_questions_and_answers_to_csv()
-    if user_id is None:
+    if not user_id:
         user_id = "TEST"
     if request.method == "POST":
         app.logger.info("generating the bot response")
@@ -391,7 +457,7 @@ def get_bot_response():
 async def get_bot_response_from_nl():
     """Load the box response."""
     user_id = request.args.get("user_id")
-    if user_id is None:
+    if not user_id:
         user_id = "TEST"
     if request.method == "POST":
         app.logger.info("generating the bot response for nl input")
@@ -536,51 +602,18 @@ def test_tts_page():
     return app.send_static_file('test_tts.html')
 
 
-def _get_mlflow_uri():
-    """Get and normalize MLflow tracking URI for local and Docker environments."""
-    mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "file://./cache/mlruns")
-
-    if mlflow_uri.startswith("file://"):
-        # Extract path from file:// URI
-        mlflow_path = mlflow_uri.replace("file://", "")
-
-        # Convert Docker path to local path when running locally
-        if mlflow_path.startswith("/usr/src/app/"):
-            mlflow_path = mlflow_path.replace("/usr/src/app/", "./")
-
-        # Ensure directory exists
-        if not os.path.exists(mlflow_path):
-            os.makedirs(mlflow_path, exist_ok=True)
-
-        # Update URI to use correct local path if not in Docker
-        if not mlflow_uri.startswith("file:///usr/src/app/") or not os.path.exists("/usr/src/app"):
-            mlflow_uri = f"file://{os.path.abspath(mlflow_path)}"
-
-    return mlflow_uri
-
-
-def _initialize_mlflow(app):
-    """Initialize MLflow tracking."""
-    try:
-        mlflow_uri = _get_mlflow_uri()
-        mlflow.set_tracking_uri(mlflow_uri)
-        app.logger.info(f"MLflow tracking URI initialized: {mlflow_uri}")
-    except Exception as e:
-        app.logger.warning(f"MLflow startup init failed: {e}")
-
-
 def initialize_mlflow_experiment(user_id):
     """Initialize MLflow experiment for a specific user."""
     try:
         # Ensure user_id is valid and not empty
         if not user_id or user_id.strip() == "":
             user_id = "DEFAULT_USER"
-
+        
         experiment_name = f"{user_id}"
-
+        
         # Set the experiment (creates it if it doesn't exist)
         mlflow.set_experiment(experiment_name)
-
+        
         # mlflow.openai.autolog(log_traces=True)
         mlflow.llama_index.autolog(log_traces=True)
         app.logger.info(f"MLflow experiment '{experiment_name}' initialized for user {user_id}.")

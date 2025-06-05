@@ -27,7 +27,8 @@ class TabularDice(Explanation):
                  categorical_mapping: dict = None,
                  background_dataset=None,
                  final_cfe_amount: int = 5,
-                 features_to_vary="all"):
+                 features_to_vary="all",
+                 max_features_to_change: int = None):
         """Init.
 
         Arguments:
@@ -40,6 +41,9 @@ class TabularDice(Explanation):
             desired_class: Set to "opposite" to compute opposite class
             cache_location: Location to store cache.
             class_names: The map between class names and text class description.
+            max_features_to_change: Maximum number of features allowed to change in counterfactuals.
+                                   If None, no limit is imposed. If set, only counterfactuals that 
+                                   change <= this many features will be returned.
         """
         super().__init__(cache_location, class_names)
         self.temp_outcome_name = 'y'
@@ -54,6 +58,7 @@ class TabularDice(Explanation):
         self.background_data = background_dataset
         self.final_cfe_amount = final_cfe_amount
         self.features_to_vary = features_to_vary
+        self.max_features_to_change = max_features_to_change
         self.ids_without_cfes = []
 
         # Format data in dice accepted format
@@ -257,6 +262,11 @@ class TabularDice(Explanation):
                     continue
                 if row[feature] != data.loc[ids[0]][feature]:
                     cfe_feature_mentions.add(feature)
+            
+            # Apply feature change limit if specified
+            if self.max_features_to_change is not None and len(cfe_feature_mentions) > self.max_features_to_change:
+                continue
+                
             # Check if such a set of features has already been used
             if cfe_feature_mentions not in cfe_feature_mentions_list:
                 diverse_cfe_ids.append(index)

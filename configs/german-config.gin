@@ -32,6 +32,7 @@ MegaExplainer.use_selection = False
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/german-dice-tabular.pkl"
 TabularDice.final_cfe_amount = 3
+TabularDice.max_features_to_change = 2
 
 # Tabular Anchor Params
 TabularAnchor.cache_location = "./cache/german-anchor-tabular.pkl"

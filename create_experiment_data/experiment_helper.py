@@ -27,14 +27,35 @@ class ExperimentHelper:
         self.feature_ordering = list(template_manager.feature_display_names.feature_name_to_display_name.values())
         self.actionable_features = actionable_features
 
+        # Cluster-related attributes
+        self.cluster_data = {}  # Will store the original cluster structure
+        self.use_clusters = False  # Flag to indicate if we're using cluster-based selection
+
     def load_instances(self):
         self._load_train_instances()
         self._load_test_instances()
+        # Only keep train instances that are also in test instances by checking ids
+        test_ids = set(self.instances["test"].keys())
+        self.instances["train"] = [instance for instance in self.instances["train"] if instance.instance_id in test_ids]
 
     def _load_train_instances(self):
         diverse_instances = self.conversation.get_var("diverse_instances").contents
+
+        # Handle both new dictionary format and legacy list format
+        if isinstance(diverse_instances, dict):
+            # New format: Dict[int, List[int]] - use cluster-aware selection
+            self.cluster_data = diverse_instances
+            self.use_clusters = True
+            # Create a round-robin ordered list from clusters
+            instance_ids = self._create_cluster_round_robin_order(diverse_instances)
+        else:
+            # Legacy format: List[int] - no clusters
+            self.cluster_data = {0: diverse_instances}  # Put all in cluster 0
+            self.use_clusters = False
+            instance_ids = diverse_instances
+
         # Turn into InstanceDatapoint
-        self.instances["train"] = [self._prepare_train_instance(instance) for instance in diverse_instances]
+        self.instances["train"] = [self._prepare_train_instance(instance) for instance in instance_ids]
 
     def _load_test_instances(self):
         test_instances = self.conversation.get_var("test_instances").contents
@@ -212,13 +233,6 @@ class ExperimentHelper:
         return train_instance_id, instance
 
     def _get_intro_test_instance(self, datapoint_count, instance_type="intro-test"):
-        if not self.instances["test"]:
-            # Load test instances if not already loaded
-            self._load_test_instances()
-        if not self.instances["train"]:
-            # Load training instances if not already loaded
-            self._load_train_instances()
-
         instance_key = "most_complex_instance"  # Random for now.
         # Get intro test instance based on train instance id
         train_instance_id = self.instances["train"][datapoint_count].instance_id
@@ -242,16 +256,29 @@ class ExperimentHelper:
         # Turn original intstance into a dataframe
         if not isinstance(original_instance, pd.DataFrame):
             original_instance = pd.DataFrame.from_dict(original_instance["values"], orient="index").transpose()
-        cfes = dice_tabular.run_explanation(original_instance, "opposite")
-        try:
-            original_instance_id = original_instance.index[0]
-        except IndexError:
-            original_instance_id = 0
 
-        final_cfs_df = cfes[original_instance_id].cf_examples_list[0].final_cfs_df
-        # drop y column
-        final_cfs_df = final_cfs_df.drop(columns=["y"])
-        return final_cfs_df
+        # Use the same flow as regular counterfactual explanations to ensure feature limits are applied
+        ids = list(original_instance.index)
+        final_cfes, final_cfe_ids, desired_class = dice_tabular.get_final_cfes(
+            original_instance,
+            ids,
+            ids_to_regenerate=None,
+            save_to_cache=False
+        )
+
+        # Log feature changes for each counterfactual
+        for idx, (cfe_id, row) in enumerate(final_cfes.iterrows()):
+            changed_features = []
+            for feature in row.index:
+                if feature == "y":
+                    continue
+                if row[feature] != original_instance.loc[ids[0]][feature]:
+                    changed_features.append(feature)
+        # drop y column if it exists
+        if "y" in final_cfes.columns:
+            final_cfes = final_cfes.drop(columns=["y"])
+
+        return final_cfes
 
     def get_similar_instance(self,
                              original_instance,
@@ -327,3 +354,96 @@ class ExperimentHelper:
                 break
 
         return result_instance, changed_features
+
+    def _create_cluster_round_robin_order(self, cluster_data):
+        """
+        Create a round-robin ordering of instances across clusters.
+        This ensures balanced representation from all clusters.
+        
+        Args:
+            cluster_data: Dict[int, List[int]] mapping cluster IDs to instance lists
+            
+        Returns:
+            List[int]: Ordered list of instance IDs with round-robin cluster selection
+        """
+        if not cluster_data:
+            return []
+
+        # Get all cluster instance lists
+        cluster_lists = list(cluster_data.values())
+        max_cluster_size = max(len(cluster_list) for cluster_list in cluster_lists)
+
+        round_robin_instances = []
+
+        # Round-robin through clusters
+        for i in range(max_cluster_size):
+            for cluster_list in cluster_lists:
+                if i < len(cluster_list):  # If this cluster still has instances at this position
+                    round_robin_instances.append(cluster_list[i])
+
+        if self.use_clusters:
+            # Log the cluster distribution in the final order
+            cluster_positions = {}
+            for idx, instance_id in enumerate(round_robin_instances):
+                for cluster_id, cluster_instances in cluster_data.items():
+                    if instance_id in cluster_instances:
+                        if cluster_id not in cluster_positions:
+                            cluster_positions[cluster_id] = []
+                        cluster_positions[cluster_id].append(idx)
+                        break
+        return round_robin_instances
+
+    def get_current_instance_cluster_info(self):
+        """
+        Get cluster information for the current instance.
+        
+        Returns:
+            dict: Contains cluster_id, cluster_size, position_in_cluster, total_clusters
+        """
+        if not self.use_clusters or not self.current_instance:
+            return {"cluster_id": 0, "cluster_size": len(self.instances["train"]),
+                    "position_in_cluster": 0, "total_clusters": 1}
+
+        instance_id = self.current_instance.instance_id
+
+        # Find which cluster this instance belongs to
+        for cluster_id, cluster_instances in self.cluster_data.items():
+            if instance_id in cluster_instances:
+                position_in_cluster = cluster_instances.index(instance_id)
+                return {
+                    "cluster_id": cluster_id,
+                    "cluster_size": len(cluster_instances),
+                    "position_in_cluster": position_in_cluster,
+                    "total_clusters": len(self.cluster_data)
+                }
+
+        # Fallback if not found
+        return {"cluster_id": -1, "cluster_size": 0, "position_in_cluster": -1,
+                "total_clusters": len(self.cluster_data)}
+
+    def get_cluster_summary(self):
+        """
+        Get a summary of all clusters.
+        
+        Returns:
+            dict: Summary of cluster information
+        """
+        if not self.use_clusters:
+            return {"total_instances": len(self.instances["train"]), "clusters": 1, "cluster_info": {}}
+
+        cluster_info = {}
+        total_instances = 0
+
+        for cluster_id, cluster_instances in self.cluster_data.items():
+            cluster_info[cluster_id] = {
+                "size": len(cluster_instances),
+                "instances": cluster_instances
+            }
+            total_instances += len(cluster_instances)
+
+        return {
+            "total_instances": total_instances,
+            "clusters": len(self.cluster_data),
+            "cluster_info": cluster_info,
+            "using_round_robin": True
+        }

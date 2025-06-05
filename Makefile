@@ -23,7 +23,7 @@ remove:
 # Run locally
 run: remove
 	docker run -d --name dialogue-xai-app \
-		-p 4000:4000 \
+		-p 4555:4555 \
 		--cpus=2 \
 		--memory=2g \
 		dialogue-xai-app

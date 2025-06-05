@@ -44,6 +44,7 @@ MegaExplainer.use_selection = False
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/adult-dice-tabular.pkl"
 TabularDice.final_cfe_amount = 3
+TabularDice.max_features_to_change = 3
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"

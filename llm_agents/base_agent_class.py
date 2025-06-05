@@ -6,6 +6,7 @@ the LlamaIndex-based and OpenAI-based agent implementations.
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Any
+import os
 
 from create_experiment_data.instance_datapoint import InstanceDatapoint
 from llm_agents.agent_utils import (
@@ -14,6 +15,7 @@ from llm_agents.agent_utils import (
 )
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 from llm_agents.mape_k_approach.user_model.user_model_fine_grained import UserModelFineGrained as UserModel
+from llm_agents.models import ChosenExplanationModel
 from llm_agents.utils.definition_wrapper import DefinitionWrapper
 
 
@@ -100,7 +102,7 @@ class BaseAgent(ABC):
 
         # Initialize explanations
         self.populator = XAIExplanationPopulator(
-            template_dir="/Users/dimitrymindlin/UniProjects/Dialogue-XAI-APP",
+            template_dir=os.path.abspath(os.path.join(os.path.dirname(__file__), '..')),
             template_file="llm_agents/mape_k_approach/plan_component/explanations_model.yaml",
             xai_explanations=xai_explanations,
             predicted_class_name=predicted_class_name,
@@ -111,6 +113,22 @@ class BaseAgent(ABC):
         self.populator.validate_substitutions()
         populated = self.populator.get_populated_json(as_dict=True)
         self.user_model.set_model_from_summary(populated)
+
+        # Initialize explanation plan from predefined plan if available
+        predefined_plan = populated.get("predefined_plan", [])
+        if predefined_plan:
+            # Convert predefined plan to explanation plan format
+            self.explanation_plan = []
+            for plan_item in predefined_plan:
+                for child in plan_item.get("children", []):
+                    step_name = child.get("step_name") or child.get("title", "")
+                    self.explanation_plan.append(ChosenExplanationModel(
+                        explanation_name=plan_item["title"],
+                        step_name=step_name
+                    ))
+        else:
+            # Fallback to empty plan
+            self.explanation_plan = []
 
         # Set visual explanations
         self.visual_explanations_dict = xai_visual_explanations
@@ -124,6 +142,7 @@ class BaseAgent(ABC):
             The initial chat history string
         """
         self.chat_history = "No history available, beginning of the chat."
+        self.last_shown_explanations = ["No explanations shown yet, beginning of the chat."]
         return self.chat_history
 
     def append_to_history(self, role: str, msg: str) -> None:
