@@ -48,6 +48,7 @@ Conversation.class_names = {0: "likely to commit a crime", 1: "unlikely to commi
 
 # Tabular dice params
 TabularDice.cache_location = "./cache/compas-dice-tabular.pkl"
+TabularDice.max_features_to_change = 2
 
 # Dataset description
 DatasetDescription.dataset_objective = "predict whether someone will commit a crime"

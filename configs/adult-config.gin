@@ -37,16 +37,18 @@ MegaExplainer.use_tree_shap = True
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/adult-dice-tabular.pkl"
 TabularDice.final_cfe_amount = 3
+TabularDice.max_features_to_change = 3
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"
 DiverseInstances.instance_amount = 15
+DiverseInstances.n_clusters = 2
 
 
 # Test Instances
 TestInstances.cache_location = "./cache/adult-test-instances.pkl"
 TestInstances.max_features_to_vary = 2
-TestInstances.instance_amount = 10
+TestInstances.instance_amount = 5
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/adult-ceteris-paribus.pkl"
