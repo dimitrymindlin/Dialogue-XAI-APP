@@ -369,11 +369,11 @@ class ExecuteTaskPrompt(SimplePromptMixin):
             """
 <<Task (Execute)>>
 
-Generate a concise response (max 3 sentences) based on the current User Model, conversation history, and explanation plan. Use only information from the chat history or what can be reasonably inferred from the user’s prior behavior and questions. If the user has agreed to revisit or elaborate on an explanation, continue with that before introducing new concepts. Do not repeat information in the same way, check the conversation history to know what was already communicated and don't repeat it.
+Generate a concise response (max 3 sentences) based on the current User Model, conversation history, and explanation plan. Use only information from the chat history or what can be reasonably inferred from the user’s prior behavior and questions. If the user has agreed to revisit or elaborate on an explanation, continue with that before introducing new concepts. Do not repeat information in the same way, check the conversation history to know what was already communicated and don't repeat it. When ending with an open question, consider proposing to dive deeper or pitch another explanation by showing it's value.
 
 Craft the Response:
 - Content Alignment: Use the explanation plan and chat history. If eliciting knowledge, prompt briefly rather than explaining fully.
-- Tone and Language: Match the user’s cognitive state and ML expertise. Use plain language for lay users; avoid technical terms and XAI method names unless the user is ML-proficient.
+- Tone and Language: Match the user’s cognitive state and ML expertise. Use plain language for lay users; DO NOT USE technical terms and XAI method names unless the user is ML-proficient as indicated in his profile.
 - Clarity and Relevance: Be concise and avoid jargon. Focus on explanation over naming techniques. Maintain the flow of conversation. Before generating a sentence, check whether the same explanation or wording was used earlier in the conversation. If yes, do not repeat unless the user explicitly asks for it.
 - Stay Focused: If the user goes off-topic, respond that you can only discuss the model’s prediction and the current instance.
 - Formatting: Use HTML tags:
