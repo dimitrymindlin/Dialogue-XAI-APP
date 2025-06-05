@@ -216,7 +216,8 @@ class ExperimentHelper:
         if not self.instances[instance_type]:
             return None
 
-        instance_key = "least_complex_instance" if datapoint_count % 2 == 0 else "easy_counterfactual_instance"
+        instance_keys = ["least_complex_instance", "most_complex_instance", "easy_counterfactual_instance"]
+        instance_key = instance_keys[datapoint_count % 3]
         test_instances_dict = self.instances[instance_type][train_instance_id]
         instance = test_instances_dict[instance_key]
         return train_instance_id, instance
