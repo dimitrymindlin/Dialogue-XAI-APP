@@ -161,12 +161,16 @@ def explain_feature_importances_as_plot(conversation,
                                         only_plot=False):
     """
     Get feature importances as a plot for a specific prediction. The red bars represent features that push the prediction
-    toward over 50k, while the blue bars represent features that push the prediction toward under 50k, this is
-    enforrced by
+    toward the positive class, while the blue bars represent features that push the prediction toward the negative class.
     """
     explanation_dict, _ = explain_local_feature_importances(conversation, data, parse_op, regen, as_text=False)
     labels = list(explanation_dict.keys())
     values = [val[0] for val in explanation_dict.values()]
+
+    # Get class names dynamically from conversation
+    class_names = conversation.class_names if hasattr(conversation, 'class_names') else {0: "Class 0", 1: "Class 1"}
+    positive_class = class_names.get(1, "Class 1")
+    negative_class = class_names.get(0, "Class 0")
 
     # get current attribute values
     tm = conversation.get_var('template_manager').contents
@@ -176,8 +180,8 @@ def explain_feature_importances_as_plot(conversation,
     labels = labels[::-1]
     values = values[::-1]
 
-    # Enforce fixed ordering: positive values (right/red) always represent "over 50k"
-    if current_prediction_string != "over 50k":
+    # Enforce fixed ordering: positive values (right/red) always represent the positive class
+    if current_prediction_string != positive_class:
         values = [-v for v in values]
 
     # Turn labels to display names
@@ -206,13 +210,34 @@ def explain_feature_importances_as_plot(conversation,
     plt.close()
 
     if not only_plot:
-        # Updated explanation text: blue bars always for "under 50k" and red bars for "over 50k"
-        html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">' \
-                      f"This chart shows how different attributes <i>influence</i> the model’s prediction, pushing it either above or below $50K. " \
-                      f'The model <b>starts with a 75% likelihood</b> that a person earns <b>less than $50K</b>, based on general trends in the data. ' \
-                      f'To predict an income above $50K, the positive factors must be <b>three times stronger</b> than the negative ones.<br>' \
-                      f'<span><b>Blue bars</b> represent factors push the model’s likelihood toward predicting <b>under 50K</b>. <br>' \
-                      f'<b>Red bars</b> represent factors pushing the prediction toward <b>over 50K</b>.</span>'
+        # Get base value dynamically from SHAP explainer
+        mega_explainer = conversation.get_var('mega_explainer').contents
+        
+        # Try to access SHAP explainer to get base value
+        try:
+            if 'shap' in mega_explainer.mega_explainer.explanation_methods:
+                shap_explainer = mega_explainer.mega_explainer.explanation_methods['shap']
+                base_value = shap_explainer.explainer.expected_value[0]
+            else:
+                # Fallback: use a default base value if SHAP is not available
+                base_value = 0.5  # neutral probability
+        except (AttributeError, KeyError, IndexError):
+            # Fallback: use a default base value if SHAP access fails
+            base_value = 0.5  # neutral probability
+            
+        base_likelihood_percent = round(base_value * 100)
+        
+        # Calculate how much stronger positive factors need to be
+        strength_ratio = int(round(base_value / (1 - base_value)))
+        
+        html_string = (
+            f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">'
+            f"This chart shows how different attributes <i>influence</i> the model’s prediction — either pushing it toward <b>{positive_class}</b> or <b>{negative_class}</b>.<br><br>"
+            f'The model initially assumes a <b>{base_likelihood_percent}% chance</b> of being <b>{negative_class}</b>, based on general patterns.<br><br>'
+            f'To flip the prediction, red bars must outweigh blue ones by about <b>{strength_ratio} to 1</b>.<br><br>'
+            f'<b>Blue</b> means leaning toward <b>{negative_class}</b>,<br>'
+            f'<b>Red</b> means leaning toward <b>{positive_class}</b>.'
+        )
     else:
         html_string = f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">'
     return html_string

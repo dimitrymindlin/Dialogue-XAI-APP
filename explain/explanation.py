@@ -473,7 +473,8 @@ class MegaExplainer(Explanation):
         response = textual_fi_with_values(sig_coefs,
                                           filtering_text=filtering_text,
                                           template_manager=template_manager,
-                                          current_prediction_str=current_prediction_str)
+                                          current_prediction_str=current_prediction_str,
+                                          class_names=self.class_names)
 
         # follow_up_questions = self.get_follow_up_questions(data, sig_coefs)
 
