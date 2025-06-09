@@ -27,7 +27,7 @@ def label_encode_and_save_classes(df, config):
         # categorical_mapping: map from integer to list of strings, names for each
         # value of the categorical features.
         col_id = df.columns.get_loc(col)
-        categorical_mapping[col_id] = list(mapping_dict.values())
+        categorical_mapping[str(col_id)] = list(mapping_dict.values())
 
     # Enrich both mappings with mappings from config "ordinal_mapping"
     ordinal_mapping = config.get("ordinal_mapping", {})

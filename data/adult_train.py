@@ -9,7 +9,7 @@ from data.train_utils import (
     setup_training_environment, save_train_test_data, setup_feature_display_names,
     apply_display_names, save_config_file, save_categorical_mapping,
     save_model_and_features, evaluate_model, update_config_with_metrics,
-    print_feature_importances, generate_feature_names_output, check_nan_values
+    print_feature_importances, get_and_store_feature_importances, generate_feature_names_output, check_nan_values
 )
 
 DATASET_NAME = "adult"
@@ -357,7 +357,18 @@ def main():
     check_nan_values(X_train)
 
     # Change list of column names to be encoded to a list of column indices
-    columns_to_encode = [X_train.columns.get_loc(col) for col in config["columns_to_encode"]]
+    # Map column names to their display names for index lookup
+    columns_for_encoding = []
+    for feature in config["columns_to_encode"]:
+        display_name = feature_display_names.get_display_name(feature)
+        if display_name in X_train.columns:
+            columns_for_encoding.append(display_name)
+        elif feature in X_train.columns:
+            columns_for_encoding.append(feature)
+        else:
+            print(f"Warning: Column '{feature}' not found in DataFrame")
+    
+    columns_to_encode = [X_train.columns.get_loc(col) for col in columns_for_encoding]
     pipeline = construct_pipeline(columns_to_encode, RandomForestClassifier())
 
     # Set up model parameters
@@ -386,8 +397,8 @@ def main():
     # Generate feature names output after transformation
     feature_names_out = generate_feature_names_output(X_train, config, categorical_mapping)
 
-    # Print feature importances
-    print_feature_importances(best_model, feature_names_out)
+    # Get and store feature importances in config
+    feature_importances = get_and_store_feature_importances(best_model, feature_names_out, config, save_path, DATASET_NAME)
 
     print("Saved model!")
 

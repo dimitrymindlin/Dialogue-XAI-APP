@@ -69,7 +69,9 @@ def preprocess_data_specific(data, config):
     standardize_column_names(data)
     target_col = config["target_col"]
     control_variable_name = "BloodGroup"
-    config["ordinal_mapping"][control_variable_name] = add_control_variable(data, control_variable_name)
+    # Add BloodGroup as a categorical variable (not ordinal)
+    add_control_variable(data, control_variable_name)
+    # Note: BloodGroup should be in columns_to_encode, not ordinal_mapping
 
     # Following functions assume capitalized col names
     columns_with_nan = data.columns[data.isna().any()].tolist()
@@ -180,6 +182,17 @@ def main():
     # Apply display names to the dataframes
     X_train, X_test = apply_display_names(X_train, X_test, feature_display_names)
 
+    # Update columns_to_encode to use the renamed columns after display names are applied
+    updated_columns_to_encode = []
+    for feature in config["columns_to_encode"]:
+        # Map original column names to display names
+        display_name = feature_display_names.get_display_name(feature)
+        if display_name in X_train.columns:
+            updated_columns_to_encode.append(display_name)
+        else:
+            # Fallback to original name if display name not found
+            updated_columns_to_encode.append(feature)
+
     # Save the updated config
     save_config_file(config, save_path, DATASET_NAME)
 
@@ -187,15 +200,8 @@ def main():
     X_train_with_names = X_train.copy()
     X_test_with_names = X_test.copy()
 
-    # Save categorical mapping from preprocess function
-    categorical_mapping = {}
-    for feature in config["columns_to_encode"]:
-        # Create mappings based on encoded_classes
-        if feature in encoded_classes:
-            categorical_mapping[feature] = {str(v): k for k, v in encoded_classes[feature].items()}
-
-    # Save categorical mapping
-    save_categorical_mapping(categorical_mapping, save_path)
+    # Note: categorical_mapping.json is already created by label_encode_and_save_classes in ml_utilities.py
+    # No need to create a duplicate mapping here that would overwrite the correct format
 
     # Remove target column for model training
     X_train.drop(columns=[target_col], inplace=True)
@@ -204,8 +210,8 @@ def main():
     # Check for NaN values
     check_nan_values(X_train)
 
-    # Change list of column names to be encoded to a list of column indices
-    columns_to_encode = [X_train.columns.get_loc(col) for col in config["columns_to_encode"]]
+    # Change list of column names to be encoded to a list of column indices (using updated names)
+    columns_to_encode = [X_train.columns.get_loc(col) for col in updated_columns_to_encode]
     pipeline = construct_pipeline(columns_to_encode, RandomForestClassifier())
 
     # Set up model parameters
@@ -232,7 +238,19 @@ def main():
         save_model_and_features(best_model, X_train, config, save_path, DATASET_NAME)
 
     # Generate feature names output after transformation
-    feature_names_out = generate_feature_names_output(X_train, config, categorical_mapping)
+    # Create feature mapping for generate_feature_names_output (different format than categorical_mapping.json)
+    # Use original column names (not display names) for the mapping
+    feature_mapping_for_names = {}
+    original_columns_to_encode = ["BloodGroup"]  # Use original column names
+    for feature in original_columns_to_encode:
+        if feature in encoded_classes:
+            feature_mapping_for_names[feature] = {str(v): k for k, v in encoded_classes[feature].items()}
+    
+    # Create a temporary config with original column names for generate_feature_names_output
+    temp_config = config.copy()
+    temp_config["columns_to_encode"] = original_columns_to_encode
+    
+    feature_names_out = generate_feature_names_output(X_train, temp_config, feature_mapping_for_names)
 
     # Get and store feature importances in config
     feature_importances = get_and_store_feature_importances(best_model, feature_names_out, config, save_path,
