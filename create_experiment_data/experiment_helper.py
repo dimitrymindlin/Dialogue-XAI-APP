@@ -24,7 +24,25 @@ class ExperimentHelper:
         self.instances = {"train": [], "test": {}}
         self.current_instance = None
         self.current_instance_type = None
-        self.feature_ordering = list(template_manager.feature_display_names.feature_name_to_display_name.values())
+
+        # Get feature ordering from column_details to preserve the order specified in config
+        if hasattr(template_manager.feature_display_names, 'config') and 'column_details' in template_manager.feature_display_names.config:
+            # Extract display names in the order they appear in column_details
+            self.feature_ordering = []
+
+            for item in template_manager.feature_display_names.config['column_details']:
+                if isinstance(item, list) and len(item) >= 2:
+                    orig_name = item[0]
+                    if isinstance(item[1], list) and len(item[1]) > 0:
+                        display_name = item[1][0]  # First item is display name
+                        self.feature_ordering.append(display_name)
+                    else:
+                        # Fallback to original name
+                        self.feature_ordering.append(orig_name)
+        else:
+            # Fallback to existing behavior
+            self.feature_ordering = list(template_manager.feature_display_names.feature_name_to_display_name.values())
+
         self.actionable_features = actionable_features
 
         # Cluster-related attributes
