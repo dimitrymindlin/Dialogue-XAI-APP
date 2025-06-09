@@ -1,10 +1,10 @@
-# ExplainBot Params
+# User provided prediction model file path
 ExplainBot.model_file_path = "./data/diabetes/diabetes_model_rf.pkl"
 ExplainBot.encoded_col_mapping_path = "./data/diabetes/encoded_col_mapping.json"
 ExplainBot.categorical_mapping_path = "./data/diabetes/categorical_mapping.json"
 ExplainBot.background_dataset_file_path = "./data/diabetes/diabetes_train.csv"
 ExplainBot.dataset_file_path = "./data/diabetes/diabetes_test.csv"
-ExplainBot.name = "diabetes"
+ExplainBot.name = "diabetes dataset"
 
 # Seed
 ExplainBot.seed = 0
@@ -15,16 +15,16 @@ ExplainBot.instance_type_naming = "Patient"
 ExplainBot.target_variable_name = "Y"
 ExplainBot.categorical_features = ['BloodGroup']
 ExplainBot.ordinary_features = None
-ExplainBot.numerical_features = ['Age', 'Pregnancies', 'Glucose', 'BloodPressure', 'Insulin', 'BodyMassIndex', 'DiabetesPedigreeFunction']
+ExplainBot.numerical_features = ['Age', 'Pregnancies', 'Glucose', 'Bloodpressure', 'Insulin', 'Bmi', 'Diabetespedigreefunction']
 ExplainBot.remove_underscores = True
 ExplainBot.use_intent_recognition = "openAI"
 ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
-ExplainBot.use_llm_agent = "mape_k_openai_2_enhanced" # one of False, "simple", "mape_k", "o1", "mape_k_openai_2", "mape_k_openai_2_enhanced"
+ExplainBot.use_llm_agent = "mape_k_approval_2" # one of False, "make_k", "mape_k_2"
+ExplainBot.use_two_prompts = False
 
 # Experiment Helper
-ExperimentHelper.actionable_features = ['Glucose', 'BloodPressure', 'Insulin', 'BodyMassIndex', 'DiabetesPedigreeFunction']
-
+ExperimentHelper.actionable_features = ['Glucose', 'Bloodpressure', 'Insulin', 'Bmi', 'Diabetespedigreefunction']
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
@@ -42,11 +42,15 @@ TabularDice.max_features_to_change = 2
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/diabetes-diverse-instances.pkl"
 DiverseInstances.instance_amount = 15
+DiverseInstances.n_clusters = 3
 
-# Test Instances
-TestInstances.cache_location = "./cache/diabetes-test-instances.pkl"
-TestInstances.max_features_to_vary = 2
-TestInstances.instance_amount = 10
+# Test Instances - using StreamlinedTestInstances with DiverseKNNInstanceSelector
+StreamlinedTestInstances.cache_location = "./cache/diabetes-test-instances.pkl"
+StreamlinedTestInstances.max_features_to_vary = 2
+StreamlinedTestInstances.instance_amount = 10
+StreamlinedTestInstances.min_feature_differences = 2
+StreamlinedTestInstances.max_feature_differences = 3
+StreamlinedTestInstances.categorical_features = ['BloodGroup']
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/diabetes-ceteris-paribus.pkl"
@@ -60,31 +64,9 @@ Conversation.class_names = {0: "unlikely to have diabetes", 1: "likely to have d
 Conversation.question_bank_path =  "./data/question_bank.csv"
 
 # Dataset description
-DatasetDescription.dataset_objective = "predict whether someone has diabetes"
-DatasetDescription.user_study_objective = "whether a person has diabetes"
-DatasetDescription.dataset_description = "diabetes prediction"
-DatasetDescription.model_description = "gradient boosted tree"
-
-# Feature Tooltip
-ExplainBot.feature_tooltip_mapping = {
-    "age": "The person's age.",
-    "pregnancies": "Number of times pregnant.",
-    "glucose": "Plasma glucose concentration after 2 hours in an oral glucose tolerance test.",
-    "bloodpressure": "Diastolic blood pressure.",
-    "skinthickness": "Triceps skin fold thickness. ",
-    "insulin": "The amount of insulin in the blood two hours after eating.",
-    "bodymassindex": "Body mass index is a number calculated from weight and height, used to assess if a person's weight is in a healthy range.",
-    "diabetespedigreefunction": "A score that represents the likelihood of diabetes based on family history.",
-}
-
-# Feature Units
-ExplainBot.feature_units_mapping = {
-    "age": "years",
-    "pregnancies": "times",
-    "glucose": "mg/dL",
-    "bloodpressure": "mm Hg",
-    "skinthickness": "mm",
-    "insulin": "mu U/ml",
-    "bodymassindex": "kg/m^2",
-    "diabetespedigreefunction": "score",
-}
+DatasetDescription.dataset_name = "diabetes"
+DatasetDescription.dataset_objective = "Predict whether an individual is likely to have diabetes based on medical indicators."
+## Dataset description for context for llm agent
+DatasetDescription.dataset_description = "Diabetes prediction dataset containing medical and demographic features used for binary classification to determine diabetes likelihood. The dataset includes features like glucose levels, blood pressure, BMI, and family history indicators to predict whether a patient has diabetes."
+DatasetDescription.model_description = "random forest model"
+DatasetDescription.user_study_objective = "guess the model's prediction for the shown individual"

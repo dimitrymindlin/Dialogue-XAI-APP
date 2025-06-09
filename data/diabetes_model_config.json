@@ -1,12 +1,21 @@
 {
-  "dataset_path": "./diabetesSmall.csv",
   "target_col": "Y",
-  "drop_columns": [
-  ],
   "columns_to_encode": [
+    "BloodGroup"
   ],
   "ordinal_mapping": {
+    "Y": {
+      "0": 0,
+      "1": 1
+    },
+    "BloodGroup": {
+      "O": 0,
+      "A": 1,
+      "B": 2,
+      "AB": 3
+    }
   },
+  "rename_columns": {},
   "model_params": {
     "n_estimators": [
       100
@@ -33,7 +42,7 @@
       [
         "Age",
         "years",
-        "The person’s age in years."
+        "The person's age in years."
       ]
     ],
     [
@@ -53,7 +62,7 @@
       ]
     ],
     [
-      "BloodPressure",
+      "Bloodpressure",
       [
         "Blood Pressure",
         "mm Hg",
@@ -69,7 +78,7 @@
       ]
     ],
     [
-      "BMI",
+      "Bmi",
       [
         "Body Mass Index",
         "kg/m^2",
@@ -77,7 +86,7 @@
       ]
     ],
     [
-      "DiabetesPedigreeFunction",
+      "Diabetespedigreefunction",
       [
         "Diabetes Pedigree Function",
         "score",
@@ -89,7 +98,7 @@
       [
         "Blood Group",
         "",
-        "The person’s blood type (A, B, AB, or O)."
+        "The person's blood type (A, B, AB, or O)."
       ]
     ]
   ],
@@ -99,5 +108,7 @@
     "scoring": "roc_auc",
     "n_jobs": -1,
     "verbose": 1
-  }
+  },
+  "drop_columns": [],
+  "dataset_path": "./diabetesSmall.csv"
 }
