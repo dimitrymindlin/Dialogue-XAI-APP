@@ -114,7 +114,7 @@ class Explainer:
         if self.use_tree_shap:
             # Use tree shap for exact shap values
             shap_explainer = SHAPExplainer(self.model, self.data, method='tree')
-            available_explanations = {"shap": shap_explainer}
+            available_explanations = {"shap": shap_explainer, "lime_0.75": lime_template(kernel_width=0.75)}
         else:
             # Use kernel shap for approximate shap values and select the best kernel width
             shap_explainer = SHAPExplainer(self.model, self.predict_fn, self.data)
