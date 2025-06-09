@@ -61,14 +61,35 @@ def explain_operation(conversation, parse_text, i, **kwargs):
     raise NameError(f"No explanation operation defined for {parse_text}")
 
 
-def explain_model_confidence(model_pred_probas, predicted_class):
+def explain_model_confidence(model_pred_probas, predicted_class, class_names=None):
     """
-    Given the model confidence values, explain how confident the model is in predicting the predicted class.
+    Given the model confidence values, explain how confident the model is in predicting the predicted_class.
+    
+    Args:
+        model_pred_probas: Model prediction probabilities
+        predicted_class: The predicted class name 
+        class_names: Optional dictionary mapping class indices to class names {0: "class0", 1: "class1"}
+                    If None, will attempt to determine index from predicted_class string
     """
-    if predicted_class == "under 50k":
-        predicted_class_index = 0
+    # Determine the index of the predicted class
+    if class_names is not None:
+        # Find the index by looking up the predicted_class in the class_names values
+        predicted_class_index = None
+        for idx, class_name in class_names.items():
+            if class_name == predicted_class:
+                predicted_class_index = idx
+                break
+        
+        if predicted_class_index is None:
+            # Fallback: assume binary classification and use index 1 for positive class
+            predicted_class_index = 1
     else:
-        predicted_class_index = 1
+        # Legacy fallback: assume binary classification with specific class names
+        # This maintains backward compatibility for the "under 50k" case
+        if predicted_class == "under 50k":
+            predicted_class_index = 0
+        else:
+            predicted_class_index = 1
 
     predicted_class_confidence = model_pred_probas[0][predicted_class_index]
     # Multiply to make it a percentage and round to int

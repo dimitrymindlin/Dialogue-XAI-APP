@@ -219,7 +219,7 @@ def run_action_new(conversation: Conversation,
 
     if question_id == "modelConfidence":
         # How confident is the model in its prediction?
-        model_confidence_exp = explain_model_confidence(model_prediction_probas, current_prediction_str)
+        model_confidence_exp = explain_model_confidence(model_prediction_probas, current_prediction_str, conversation.class_names)
         return model_confidence_exp
 
     if question_id == "mostImportantFeature":
@@ -334,7 +334,7 @@ def compute_explanation_report(conversation,
         pdp_explanations[feature] = pdp_explanation
 
     # get model confidence
-    model_confidence_exp = explain_model_confidence(model_prediction_probas, current_prediction_str)
+    model_confidence_exp = explain_model_confidence(model_prediction_probas, current_prediction_str, conversation.class_names)
 
     # get the followups
     followupWhyThisFeatureImportant = explainConceptOfFeatureImportance()
@@ -347,6 +347,19 @@ def compute_explanation_report(conversation,
         "Why are all these attributes considered?": followupWhyAreTheseFeaturesConsidered
     }
 
+    # Extract SHAP base value from mega_explainer for use in XAIExplanationPopulator
+    shap_base_value = 0.5  # Default neutral probability
+    try:
+        mega_explainer = conversation.get_var('mega_explainer').contents
+        if 'shap' in mega_explainer.mega_explainer.explanation_methods:
+            shap_explainer = mega_explainer.mega_explainer.explanation_methods['shap']
+            shap_base_value = shap_explainer.explainer.expected_value[0]
+    except (AttributeError, KeyError, IndexError):
+        pass  # Use default value
+
+    # Get class names in proper order (class 0, class 1) for SHAP bias interpretation
+    class_names = getattr(conversation, 'class_names', [opposite_class, model_prediction_str])
+
     return {
         "model_prediction": model_prediction_str,
         "instance_type": instance_type_naming,
@@ -358,7 +371,9 @@ def compute_explanation_report(conversation,
         "ceteris_paribus": ceteris_paribus_sentences,
         "pdp": pdp_explanations,
         "model_confidence": model_confidence_exp,
-        "static_clarifications": clarification_explanations
+        "static_clarifications": clarification_explanations,
+        "shap_base_value": shap_base_value,
+        "class_names": class_names
     }
 
     """# Fill static report template

@@ -4,7 +4,7 @@ import io
 
 
 def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=None, template_manager=None,
-                           current_prediction_str=None):
+                           current_prediction_str=None, class_names=None):
     """Formats sorted list of (feature name, feature importance) tuples into a string.
 
     Arguments:
@@ -12,6 +12,8 @@ def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=
         num_features_to_show: Number of features to show in the output. If None, all features are shown.
         filtering_text: Text to control output formatting (e.g., "least 3", "top 3", "only_positive").
         template_manager: Object to access feature display names.
+        current_prediction_str: The current prediction class string.
+        class_names: Dictionary mapping class indices to class names (e.g., {0: "under 50k", 1: "over 50k"}).
     Returns:
         String with the formatted feature importances.
     """
@@ -39,16 +41,23 @@ def textual_fi_with_values(sig_coefs, num_features_to_show=None, filtering_text=
         else:
             position = "most" if i == 0 else f"{position_prefix} most"
 
-        # Adapt increases/decreases to always refer to over 50k.
-        # If current_prediction_str is 'under 50k', then a positive importance (which increases under 50k)
-        # actually means it decreases the likelihood of over 50k.
-        if current_prediction_str == "under 50k":
+        # Adapt increases/decreases to always refer to positive class.
+        # Get class names dynamically, with fallback to defaults
+        if class_names is None:
+            class_names = {0: "negative class", 1: "positive class"}
+        
+        negative_class = class_names.get(0, "negative class")
+        positive_class = class_names.get(1, "positive class")
+        
+        # If current_prediction_str is the negative class, then a positive importance (which increases negative class)
+        # actually means it decreases the likelihood of positive class.
+        if current_prediction_str == negative_class:
             increase_decrease = "decreases" if feature_importance > 0 else "increases"
         else:
             increase_decrease = "increases" if feature_importance > 0 else "decreases"
 
         output_text += (f"<li><b>{feature_display_name}</b> is the <b>{position}</b> important attribute and "
-                        f"<b>{increase_decrease}</b> the model's likelihood of predicting an income <b>above 50K</b>.</li>")
+                        f"<b>{increase_decrease}</b> the model's likelihood of predicting <b>{positive_class}</b>.</li>")
         describing_features += 1
     output_text += "</ol>"
     return output_text
