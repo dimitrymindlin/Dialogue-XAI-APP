@@ -39,10 +39,22 @@ class TabularAnchor(Explanation):
 
         """
         super().__init__(cache_location, class_names)
-        self.data = data.to_numpy()
+        self.data = data.to_numpy().astype(np.float64)  # Ensure consistent data type
         self.mode = mode
         self.model = model
-        self.categorical_names = categorical_mapping if categorical_mapping is not None else {}
+        
+        # Convert categorical mapping keys from strings to integers if needed
+        self.categorical_names = categorical_mapping
+        if categorical_mapping is not None:
+            for key, value in categorical_mapping.items():
+                try:
+                    # Convert string keys to integers
+                    int_key = int(key)
+                    self.categorical_names[int_key] = value
+                except (ValueError, TypeError):
+                    # If key is already an integer or conversion fails, use as-is
+                    self.categorical_names[key] = value
+        
         self.class_names = list(class_names.values())
         self.feature_names = feature_names
 
@@ -65,12 +77,19 @@ class TabularAnchor(Explanation):
         """
         if self.mode == "tabular":
             try:
-                output = self.explainer.explain_instance(data_x[0],
+                # Ensure data is in the correct format for anchor explainer
+                instance_data = data_x[0].astype(np.float64)
+                
+                output = self.explainer.explain_instance(instance_data,
                                                          self.model.predict,
                                                          threshold=0.98,
                                                          max_anchor_size=3)
-            except IndexError:
-                print("HEY")
+            except IndexError as e:
+                # Return None when IndexError occurs
+                return None
+            except Exception as e:
+                # Return None for any other exceptions
+                return None
 
             return output
 
@@ -90,7 +109,11 @@ class TabularAnchor(Explanation):
         anchors = {}
         for d in tqdm(list(data.index)):
             cur_anchor = self.get_explanation(data.loc[[d]].to_numpy())
-            anchors[d] = cur_anchor
+            if cur_anchor is not None:
+                anchors[d] = cur_anchor
+            else:
+                # Skip this instance or provide a default explanation
+                anchors[d] = None
         return anchors
 
     def summarize_explanations(self,

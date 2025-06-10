@@ -136,18 +136,18 @@ class CeterisParibus(Explanation):
     def get_explanation(self, data_df, feature_name=None, as_plot=True):
         id = data_df.index[0]
         cp_data = self.get_explanations([id], self.background_data, save_to_cache=True)
-        feature_id = self.feature_names.index(feature_name)
+        feature_id_str = str(self.feature_names.index(feature_name))
         if not as_plot:
             return cp_data
         else:
-            if feature_id in self.categorical_mapping.keys():
+            if feature_id_str in self.categorical_mapping.keys():
                 variables_type = 'categorical'
             else:
                 variables_type = 'numerical'
             fig = cp_data[id].plot(variables=[feature_name], show=False, variable_type=variables_type)
             # Update the y-axis tick labels
-            if feature_id in self.categorical_mapping.keys():
-                categorical_mapping_for_feature = self.categorical_mapping[feature_id]
+            if feature_id_str in self.categorical_mapping.keys():
+                categorical_mapping_for_feature = self.categorical_mapping[feature_id_str]
                 # Convert the list to a dictionary
                 categorical_mapping_for_feature_dict = {i: val for i, val in enumerate(categorical_mapping_for_feature)}
                 fig.update_yaxes(tickvals=list(categorical_mapping_for_feature_dict.keys()),
@@ -170,8 +170,8 @@ class CeterisParibus(Explanation):
         cp_data = self.get_explanations([id], self.background_data, save_to_cache=True)
         fig = cp_data[id].plot(variables=[feature_name], show=False)
         # For numerical feature, find the x value for y = 0.5
-        feature_id = self.feature_names.index(feature_name)
-        if feature_id in self.categorical_mapping.keys():
+        feature_id_str = str(self.feature_names.index(feature_name))
+        if feature_id_str in self.categorical_mapping.keys():
             x_value = find_categories_crossing_threshold_scatter(fig, 0.5, current_feature_value)
         else:
             x_value = find_x_for_y_plotly(fig, 0.5)
