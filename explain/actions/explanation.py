@@ -415,11 +415,11 @@ def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name
         return sign, x_flip_value
 
     ceteris_paribus_exp = conversation.get_var('ceteris_paribus').contents
-    feature_id = data.columns.get_loc(feature_name)
+    feature_id_str = str(data.columns.get_loc(feature_name))
     if as_text:
         # Check if categorical or numerical
-        if feature_id in ceteris_paribus_exp.categorical_mapping.keys():
-            tipping_categories = write_tipping_point_cp_categorical(feature_id)
+        if feature_id_str in ceteris_paribus_exp.categorical_mapping.keys():
+            tipping_categories = write_tipping_point_cp_categorical(feature_id_str)
             return cp_categorical_template(feature_name, opposite_class, tipping_categories,
                                            template_manager=conversation.get_var('template_manager').contents)
         else:
@@ -435,7 +435,7 @@ def explain_ceteris_paribus(conversation, data, feature_name, instance_type_name
     fig.show()
     # Convert the figure to PNG as a BytesIO object
     image_base64 = save_plot_as_base64(fig)
-    if feature_id in ceteris_paribus_exp.categorical_mapping.keys():
+    if feature_id_str in ceteris_paribus_exp.categorical_mapping.keys():
         axis = 'X-axis'
     else:
         axis = 'Y-axis'
