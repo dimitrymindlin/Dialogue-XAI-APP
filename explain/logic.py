@@ -351,18 +351,42 @@ class ExplainBot:
 
     def get_feature_names(self):
         template_manager = self.conversation.get_var("template_manager").contents
+        experiment_helper = self.conversation.get_var("experiment_helper").contents
         feature_display_names = template_manager.feature_display_names.feature_name_to_display_name
         feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
         original_feature_names = list(self.conversation.get_var("dataset").contents['X'].columns)
 
-        # Sort
-        if self.feature_ordering is not None:
-            # Sort feature names by feature_ordering
-            feature_names_ordering = [feature.replace(" ", "") for feature in
-                                      self.feature_ordering]  # From display names to feature names
-            feature_names = sorted(feature_names, key=lambda k: feature_names_ordering)
+        # Use experiment helper's feature ordering which preserves config order
+        if hasattr(experiment_helper, 'feature_ordering') and experiment_helper.feature_ordering:
+            # Convert display names back to feature names and maintain order
+            display_name_to_feature_name = {v: k for k, v in feature_display_names.items()}
+            ordered_feature_names = []
+
+            for display_name in experiment_helper.feature_ordering:
+                # Find the corresponding feature name (original column name)
+                feature_name = display_name_to_feature_name.get(display_name, display_name)
+                # Handle cases where display name doesn't match exactly - try without spaces
+                if feature_name not in feature_names:
+                    feature_name = display_name.replace(" ", "")
+                if feature_name in feature_names:
+                    ordered_feature_names.append(feature_name)
+
+            # Add any remaining feature names that weren't in the ordering
+            for feature_name in feature_names:
+                if feature_name not in ordered_feature_names:
+                    ordered_feature_names.append(feature_name)
+
+            feature_names = ordered_feature_names
         else:
-            feature_names = sorted(feature_names)
+            # Fallback: use existing ordering or sort alphabetically
+            if self.feature_ordering is not None:
+                # Sort feature names by feature_ordering
+                feature_names_ordering = [feature.replace(" ", "") for feature in
+                                          self.feature_ordering]  # From display names to feature names
+                feature_names = sorted(feature_names, key=lambda k: feature_names_ordering.index(
+                    k) if k in feature_names_ordering else len(feature_names_ordering))
+            else:
+                feature_names = sorted(feature_names)
 
         # Map feature names to their original IDs and display names, if available
         feature_names_id_mapping = [
