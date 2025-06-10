@@ -2,6 +2,7 @@
 from collections import defaultdict
 import numpy as np
 import shap
+from scipy.special import expit
 from explain.mega_explainer.base_explainer import BaseExplainer
 
 
@@ -33,7 +34,7 @@ class SHAPExplainer(BaseExplainer):
         # Use the SHAP kernel explainer in all cases. We can consider supporting
         # domain specific methods in the future.
         if method == 'tree':
-            self.explainer = shap.TreeExplainer(model.named_steps["model"])
+            self.explainer = shap.TreeExplainer(model.named_steps["model"], model_output="raw")
         else:
             self.explainer = shap.KernelExplainer(self.model, self.data, link=link)
 
@@ -125,5 +126,7 @@ class SHAPExplainer(BaseExplainer):
             else:
                 final_shap_values = shap_vals
 
-        print(self.explainer.expected_value[0])
-        return final_shap_values, 1.0
+        # Convert base log-odds to probability for the specified class
+        base_log_odds = self.explainer.expected_value[label]
+        base_probability = expit(base_log_odds)
+        return final_shap_values, base_probability
