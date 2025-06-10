@@ -72,12 +72,12 @@ class FeatureDisplayNames:
             # Determine display name, unit, and tooltip
             if isinstance(value, list):
                 display_name = value[0]
-                self.feature_units[orig_name] = value[1] if len(value) > 1 else ""
-                self.feature_tooltips[orig_name] = value[2] if len(value) > 2 else ""
+                self.feature_units[display_name] = value[1] if len(value) > 1 else ""
+                self.feature_tooltips[display_name] = value[2] if len(value) > 2 else ""
             else:
                 display_name = value
-                self.feature_units[orig_name] = ""
-                self.feature_tooltips[orig_name] = ""
+                self.feature_units[display_name] = ""
+                self.feature_tooltips[display_name] = ""
 
             # Store mapping
             self.feature_name_to_display_name[orig_name] = display_name
