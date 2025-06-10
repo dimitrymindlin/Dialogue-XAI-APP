@@ -130,6 +130,40 @@ class XAIExplanationPopulator:
             "confidence_description": model_confidence
         }
 
+        # Add new template fillers for the dynamic placeholders
+        # Extract possible classes from predicted and opposite class names
+        possible_classes = f"{self.predicted_class_name} or {self.opposite_class_name}"
+        
+        # Extract SHAP base value from xai_explanations if available
+        shap_base_value = 0.5  # Default neutral probability
+        try:
+            # Get SHAP base value directly from the xai_explanations dict
+            shap_base_value = self.xai_explanations.get("shap_base_value", 0.5)
+        except (KeyError, TypeError):
+            pass  # Use default value
+        
+        # Get class names in proper order for SHAP bias interpretation
+        class_names = self.xai_explanations.get("class_names", [self.opposite_class_name, self.predicted_class_name])
+        
+        # Determine which class the SHAP initial bias favors
+        # If base_value > 0.5, it favors the positive class (class 1)
+        # If base_value <= 0.5, it favors the negative class (class 0)
+        # Note: This is independent of the current instance's prediction
+        if shap_base_value > 0.5:
+            # Favors positive class (class 1)
+            shap_initial_bias = class_names[1] if len(class_names) > 1 else "positive class"
+        else:
+            # Favors negative class (class 0) 
+            shap_initial_bias = class_names[0] if len(class_names) > 0 else "negative class"
+
+        # Add the new dynamic placeholders to substitution dictionary
+        substitution_dict.update({
+            "possible_classes": possible_classes,
+            "negative_class": self.opposite_class_name,
+            "shap_base_value": round(shap_base_value, 3),
+            "shap_initial_bias": shap_initial_bias
+        })
+
         return substitution_dict
 
     def populate_yaml(self):

@@ -68,26 +68,10 @@ def _setup_directories():
 
 
 def _get_mlflow_uri():
-    """Get and normalize MLflow tracking URI for local and Docker environments."""
-    mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "file://./cache/mlruns")
-    
-    if mlflow_uri.startswith("file://"):
-        # Extract path from file:// URI
-        mlflow_path = mlflow_uri.replace("file://", "")
-        
-        # Convert Docker path to local path when running locally
-        if mlflow_path.startswith("/usr/src/app/"):
-            mlflow_path = mlflow_path.replace("/usr/src/app/", "./")
-        
-        # Ensure directory exists
-        if not os.path.exists(mlflow_path):
-            os.makedirs(mlflow_path, exist_ok=True)
-        
-        # Update URI to use correct local path if not in Docker
-        if not mlflow_uri.startswith("file:///usr/src/app/") or not os.path.exists("/usr/src/app"):
-            mlflow_uri = f"file://{os.path.abspath(mlflow_path)}"
-    
-    return mlflow_uri
+    """Always point MLflow to ./cache/mlruns (absolute)."""
+    target = os.path.abspath(os.path.join("cache", "mlruns"))
+    os.makedirs(target, exist_ok=True)
+    return f"file://{target}"
 
 
 def _initialize_mlflow(app):
@@ -145,6 +129,9 @@ def create_app():
     
     # Configure matplotlib for headless operation
     matplotlib.use('Agg')
+    
+    # Suppress matplotlib font manager DEBUG messages
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
     
     # Set environment variables
     _set_environment_variables()
@@ -311,11 +298,15 @@ def set_user_prediction():
     else:
         # Create initial message depending on the user study group and whether the user was correct
         user_study_group = bot.get_study_group()
+        
+        # Generate dataset-dependent baseline probability text
+        baseline_prob_text = bot.generate_baseline_probability_text()
+        
         if user_study_group == "interactive":
             if user_correct:
-                prompt = f"""<b>Correct!</b> The model predicted <b>{correct_prediction_string}</b> for the current {bot.instance_type_naming}. <br>The model <b>starts with a 75% chance that the person earns below $50K</b>, based on general trends and then considers the individual's attributes to make a prediction. <br>If you want to <b>verify if your reasoning</b> aligns with the model, <b>select questions</b> from the right."""
+                prompt = f"""<b>Correct!</b> The model predicted <b>{correct_prediction_string}</b> for the current {bot.instance_type_naming}. <br>{baseline_prob_text} <br>If you want to <b>verify if your reasoning</b> aligns with the model, <b>select questions</b> from the right."""
             else:
-                prompt = f"""Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. The model <b>starts with a 75% chance that the person earns below $50K</b>, based on general trends and then considers the individual's attributes to make a prediction. <br>To <b>understand the model's reasoning</b> and improve your future predictions, <b>select questions</b> from the right."""
+                prompt = f"""Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. {baseline_prob_text} <br>To <b>understand the model's reasoning</b> and improve your future predictions, <b>select questions</b> from the right."""
         else:  # chat
             if user_correct:
                 prompt = f"""<b>Correct!</b> The model predicted <b>{correct_prediction_string}</b>. <br>If you want to <b>verify if your reasoning</b> aligns with the model, <b>type your questions</b> about the model prediction in the chat."""
@@ -627,4 +618,4 @@ def initialize_mlflow_experiment(user_id):
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=4555, host='0.0.0.0', use_reloader=False)
+    app.run(debug=True, host='0.0.0.0', use_reloader=False)
