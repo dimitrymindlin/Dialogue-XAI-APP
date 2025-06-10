@@ -349,6 +349,56 @@ class ExplainBot:
         template_manager = self.conversation.get_var("template_manager").contents
         return template_manager.feature_display_names.feature_units
 
+    def generate_baseline_probability_text(self) -> str:
+        """
+        Generate dataset-dependent baseline probability text for user feedback.
+        
+        Returns:
+            String describing the baseline probability and model approach
+        """
+        class_names = self.conversation.class_names
+
+        if not class_names:
+            return "The model looks at the person's information to make a prediction."
+
+        # Try to get actual SHAP base value from the conversation
+        base_value = None
+        try:
+            mega_explainer = self.conversation.get_var('mega_explainer').contents
+            if 'shap' in mega_explainer.mega_explainer.explanation_methods:
+                shap_explainer = mega_explainer.mega_explainer.explanation_methods['shap']
+                base_value = shap_explainer.explainer.expected_value[0]
+            elif hasattr(mega_explainer.mega_explainer,
+                         'explanation_methods') and mega_explainer.mega_explainer.explanation_methods:
+                # Try to get base value from any available SHAP explainer
+                for method_name, explainer in mega_explainer.mega_explainer.explanation_methods.items():
+                    if hasattr(explainer, 'explainer') and hasattr(explainer.explainer, 'expected_value'):
+                        base_value = explainer.explainer.expected_value[0]
+                        break
+        except (AttributeError, KeyError, IndexError):
+            base_value = None
+
+        # Extract class labels
+        class_labels = list(class_names.values())
+
+        # If we have a base value, use it; otherwise use a generic message
+        if base_value is not None:
+            base_percentage = round(base_value * 100)
+
+            # Determine which class the base value represents
+            # If base_value > 0.5, it favors the positive class (class_labels[1])
+            # If base_value <= 0.5, it favors the negative class (class_labels[0])
+            if base_value > 0.5:
+                baseline_class = class_labels[1] if len(class_labels) > 1 else class_labels[0]
+            else:
+                baseline_class = class_labels[0]
+
+            return f"The model starts by assuming a <b>{base_percentage}% chance</b> that someone is <b>{baseline_class}</b>, then looks at this person's specific information to adjust that prediction."
+        else:
+            # Use the first class (typically negative class) as baseline for generic message
+            baseline_class = class_labels[0]
+            return f"The model looks at this person's information to decide if they are more likely to be <b>{baseline_class}</b> or <b>{class_labels[1] if len(class_labels) > 1 else 'the other class'}</b>."
+
     def get_feature_names(self):
         template_manager = self.conversation.get_var("template_manager").contents
         experiment_helper = self.conversation.get_var("experiment_helper").contents
