@@ -49,11 +49,32 @@ class DiverseInstances:
         self.categorical_features = categorical_features or []
         self.actionable_features = actionable_features
         self.feature_thresholds = None  # Will be set when data is available
+        self.n_clusters = n_clusters
 
     def get_all_instance_ids(self) -> List[int]:
         all_instances = []
-        for cluster_instances in self.diverse_instances.values():
-            all_instances.extend(cluster_instances)
+        
+        # Collect all cluster lists, handling scalars
+        cluster_lists = []
+        for cluster_id, cluster_instances in self.diverse_instances.items():
+            if isinstance(cluster_instances, list):
+                cluster_lists.append(cluster_instances)
+            else:
+                # Handle case where cluster_instances is a scalar (corrupted cache)
+                cluster_lists.append([cluster_instances])
+        
+        # If we have multiple clusters, interleave them using zip logic
+        if len(cluster_lists) > 1:
+            from itertools import zip_longest
+            # Interleave instances from all clusters
+            for instances_tuple in zip_longest(*cluster_lists, fillvalue=None):
+                for instance in instances_tuple:
+                    if instance is not None:
+                        all_instances.append(instance)
+        elif len(cluster_lists) == 1:
+            # Single cluster, just extend normally
+            all_instances.extend(cluster_lists[0])
+        
         return all_instances
 
     def _meaningful_feature_difference_count(self, row1, row2, data):
@@ -93,14 +114,18 @@ class DiverseInstances:
 
         if not self.categorical_features:
             self.categorical_features = self._auto_detect_categorical_features(data)
+        
+        # Calculate feature thresholds if not already set
+        if self.feature_thresholds is None:
+            from create_experiment_data.feature_difference_utils import calculate_feature_thresholds
+            self.feature_thresholds = calculate_feature_thresholds(data, self.categorical_features)
 
-        n_clusters = getattr(self, 'n_clusters', None)
         if submodular_pick:
-            if not n_clusters:
-                raise ValueError("DiverseInstances.n_clusters must be specified in config for submodular pick.") 
-            print(f"Using submodular pick to find {n_clusters} diverse instances.")
-            diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, n_clusters)
-            diverse_instances = [data.index[i] for i in diverse_instances]
+            if not self.n_clusters:
+                raise ValueError("DiverseInstances.n_clusters must be specified in config for submodular pick.")
+            diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, self.n_clusters)
+            # Convert all indices to Python integers to avoid numpy.int64 issues
+            diverse_instances = [int(data.index[i]) for i in diverse_instances]
             print(f"Found {len(diverse_instances)} diverse instances using submodular pick.")
             # Assign each seed to a cluster (round robin if not provided)
             cluster_to_seeds = {i: [diverse_instances[i]] for i in range(len(diverse_instances))}
@@ -120,11 +145,8 @@ class DiverseInstances:
                 # If no more neighbors can be found for any cluster, break
                 if cluster_ptr > len(cluster_indices) * self.instance_amount:
                     break
-            # Flatten and truncate to instance_amount
-            all_indices = []
-            for cluster in cluster_indices:
-                all_indices.extend(cluster_to_seeds[cluster])
-            self.diverse_instances[0] = all_indices[:self.instance_amount]
+            # Preserve cluster structure instead of flattening
+            self.diverse_instances = cluster_to_seeds
 
         else:
             # Random selection
