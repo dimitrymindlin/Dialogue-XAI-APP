@@ -53,14 +53,6 @@ def add_control_variable(data, variable_name):
     # Generate random blood group assignments based on the defined probabilities
     data[variable_name] = np.random.choice(categories, size=len(data), p=probabilities)
 
-    # Create a mapping from string values to integers
-    mapping = {category: i for i, category in enumerate(categories)}
-
-    # Apply the mapping to the new variable
-    data[variable_name] = data[variable_name].map(mapping)
-
-    return mapping
-
 
 def preprocess_data_specific(data, config):
     if "drop_columns" in config:
