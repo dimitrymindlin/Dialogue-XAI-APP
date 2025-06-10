@@ -85,7 +85,8 @@ class ExplainBot:
                  use_active_dialogue_manager: bool = False,
                  use_llm_agent=False,
                  use_static_followup=False,
-                 use_two_prompts=False):
+                 use_two_prompts=False,
+                 submodular_pick: bool = False):
         """The init routine.
 
         Arguments:
@@ -145,6 +146,7 @@ class ExplainBot:
         self.encoded_col_mapping_path = encoded_col_mapping_path
         self.feature_name_mapping_path = feature_name_mapping_path
         self.feature_ordering = None
+        self.submodular_pick = submodular_pick
         self.use_selection = use_selection
         self.use_intent_recognition = use_intent_recognition
         self.use_active_dialogue_manager = use_active_dialogue_manager
@@ -514,9 +516,8 @@ class ExplainBot:
 
         # Load diverse instances (explanations)
         app.logger.info("...loading DiverseInstances...")
-        submodular_pick = True
 
-        if submodular_pick:
+        if self.submodular_pick:
             lime_for_submodular = mega_explainer.mega_explainer.explanation_methods['lime_0.75']
         else:
             lime_for_submodular = None
@@ -526,19 +527,11 @@ class ExplainBot:
         diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=test_data,
                                                                                     model=model,
                                                                                     y_values=test_data_y,
-                                                                                    submodular_pick=False)
-
+                                                                                    submodular_pick=self.submodular_pick)
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         if isinstance(diverse_instance_ids, list) and all(isinstance(i, int) for i in diverse_instance_ids):
-            # Legacy format: List[int]
+            # List[int] format (with zip logic already applied)
             diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
-        elif isinstance(diverse_instance_ids, dict):
-            # New format: Dict[int, List[int]] - flatten all clusters
-            flat_instance_ids = []
-            for cluster_id, cluster_instances in diverse_instance_ids.items():
-                flat_instance_ids.extend(cluster_instances)
-            diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in flat_instance_ids]
-            diverse_instance_ids = flat_instance_ids
         else:
             # Legacy format: List[Dict] with id keys
             diverse_instances = diverse_instance_ids.copy()
@@ -606,7 +599,8 @@ class ExplainBot:
                                        feature_names=list(test_data.columns),
                                        categorical_features=self.categorical_features,
                                        numerical_features=self.numerical_features,
-                                       categorical_mapping=self.categorical_mapping)
+                                       categorical_mapping=self.categorical_mapping,
+                                       dataset_name=self.conversation.describe.dataset_name)
         pdp_explainer.get_explanations()
         self.conversation.add_var('pdp', pdp_explainer, 'explanation')
 
@@ -631,7 +625,9 @@ class ExplainBot:
                                                 self.conversation.get_var("experiment_helper").contents,
                                                 diverse_instance_ids=diverse_instance_ids,
                                                 actionable_features=self.conversation.get_var(
-                                                    "experiment_helper").contents.actionable_features)
+                                                    "experiment_helper").contents.actionable_features,
+                                                categorical_features=self.categorical_features, )
+
         test_instances, remove_instances_from_experiment = test_instance_explainer.get_test_instances()
         # given the list of remove_instances_from_experiment, remove them from the experiment in all explanations
         if len(remove_instances_from_experiment) > 0:
