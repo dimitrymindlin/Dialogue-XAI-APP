@@ -53,6 +53,7 @@ class TabularDice(Explanation):
         self.num_cfes_per_instance = num_cfes_per_instance
         self.num_in_short_summary = num_in_short_summary
         self.categorical_mapping = categorical_mapping
+        self.rounding_precision = 2  # Default rounding precision for numeric values
         self.dice_model = dice_ml.Model(model=self.model, backend="sklearn")
         self.permitted_range_dict = None
         self.background_data = background_dataset
@@ -167,7 +168,19 @@ class TabularDice(Explanation):
                 pass
         
         for feature in cfe_features:
-            feature_index = cfe_features.index(feature)
+            # Get the actual column index from the original dataset for categorical mapping
+            # This is different from the position in the current DataFrame
+            try:
+                # Try to get the column index from the dice_data if available
+                if hasattr(self, 'dice_data') and hasattr(self.dice_data, 'data_df'):
+                    feature_column_index = self.dice_data.data_df.columns.get_loc(feature)
+                else:
+                    # Fallback: use position in current DataFrame (original behavior)
+                    feature_column_index = cfe_features.index(feature)
+            except (AttributeError, KeyError):
+                # Fallback: use position in current DataFrame 
+                feature_column_index = cfe_features.index(feature)
+            
             orig_f = original_instance[feature].values[0]
             cfe_f = cfe[feature].values[0]
 
@@ -188,13 +201,16 @@ class TabularDice(Explanation):
                 # Turn feature to categorical name if possible
                 if self.categorical_mapping is not None:
                     try:
-                        # Convert to int if possible
+                        # Convert to int if possible and use the correct column index
                         if isinstance(cfe_f, (int, float)):
-                            cfe_f = self.categorical_mapping[feature_index][int(cfe_f)]
-                            inc_dec = "Changing"
-                    except (KeyError, IndexError):
-                        # Log error with the feature name for debugging
-                        print(f"Error in categorical mapping for feature '{feature}' with value {cfe_f}")
+                            # Use string key for categorical_mapping lookup
+                            feature_column_index_str = str(feature_column_index)
+                            if feature_column_index_str in self.categorical_mapping:
+                                cfe_f = self.categorical_mapping[feature_column_index_str][int(cfe_f)]
+                                inc_dec = "Changing"
+                    except (KeyError, IndexError, ValueError) as e:
+                        # Log error with more details for debugging
+                        print(f"Error in categorical mapping for feature '{feature}' (column index {feature_column_index}) with value {cfe_f}: {e}")
                 
                 # Process the value for display
                 if isinstance(cfe_f, float):
