@@ -184,7 +184,7 @@ class ExplainBot:
         if categorical_mapping_path is not None:
             with open(categorical_mapping_path, "r") as f:
                 categorical_mapping = json.load(f)
-                self.categorical_mapping = {int(k): v for k, v in categorical_mapping.items()}
+                self.categorical_mapping = {str(k): v for k, v in categorical_mapping.items()}
         else:
             self.categorical_mapping = None
 

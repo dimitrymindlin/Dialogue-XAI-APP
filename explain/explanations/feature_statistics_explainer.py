@@ -94,8 +94,8 @@ class FeatureStatisticsExplainer:
         if all(tick.is_integer() for tick in ax.get_yticks()):
             ax.set_yticklabels([f"{int(tick):,}" for tick in ax.get_yticks()])
 
-        feature_id = self.data.columns.get_loc(feature_name)
-        categorical_mapping_for_feature_list = self.categorical_mapping.get(feature_id, None)
+        feature_id_str = str(self.data.columns.get_loc(feature_name))
+        categorical_mapping_for_feature_list = self.categorical_mapping.get(feature_id_str, None)
         categorical_mapping_for_feature_dict = {i: v for i, v in enumerate(categorical_mapping_for_feature_list)}
         ax = plt.gca()  # get current axis
 
@@ -132,11 +132,11 @@ class FeatureStatisticsExplainer:
         """
         feature_value_frequencies = self.data[feature_name].value_counts().to_dict()
         # Map feature indices to feature names if needed
-        feature_id = self.data.columns.get_loc(feature_name)
+        feature_id_str = str(self.data.columns.get_loc(feature_name))
 
-        if feature_id in self.categorical_mapping:
+        if feature_id_str in self.categorical_mapping:
             # Replace numerical keys with categorical values
-            feature_value_frequencies = {self.categorical_mapping[feature_id][k]: v for k, v in
+            feature_value_frequencies = {self.categorical_mapping[feature_id_str][k]: v for k, v in
                                          feature_value_frequencies.items()}
         feature_value_frequencies = pd.Series(feature_value_frequencies).sort_values(ascending=False)
 
