@@ -22,6 +22,7 @@ ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
 ExplainBot.use_llm_agent = "mape_k_approval_2" # one of False, "make_k", "mape_k_2"
 ExplainBot.use_two_prompts = False
+ExplainBot.submodular_pick = True
 
 # Experiment Helper
 ExperimentHelper.actionable_features = ['Glucose', 'Bloodpressure', 'Insulin', 'Bmi', 'Diabetespedigreefunction']
@@ -44,13 +45,14 @@ DiverseInstances.cache_location = "./cache/diabetes-diverse-instances.pkl"
 DiverseInstances.instance_amount = 15
 DiverseInstances.n_clusters = 3
 
-# Test Instances - using StreamlinedTestInstances with DiverseKNNInstanceSelector
-StreamlinedTestInstances.cache_location = "./cache/diabetes-test-instances.pkl"
-StreamlinedTestInstances.max_features_to_vary = 2
-StreamlinedTestInstances.instance_amount = 10
-StreamlinedTestInstances.min_feature_differences = 2
-StreamlinedTestInstances.max_feature_differences = 3
-StreamlinedTestInstances.categorical_features = ['BloodGroup']
+# Test Instances - using TestInstances with DiverseKNNInstanceSelector
+TestInstances.cache_location = "./cache/diabetes-test-instances.pkl"
+TestInstances.max_features_to_vary = 2
+TestInstances.instance_amount = 10
+TestInstances.min_feature_differences = 2
+TestInstances.max_feature_differences = 3
+TestInstances.categorical_features = ['BloodGroup']
+
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/diabetes-ceteris-paribus.pkl"

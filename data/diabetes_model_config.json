@@ -44,7 +44,7 @@
       [
         "Pregnancies",
         "times",
-        "How many times the person has been pregnant."
+        "The number of times the person has been pregnant."
       ]
     ],
     [
@@ -52,7 +52,7 @@
       [
         "Glucose",
         "mg/dL",
-        "Blood sugar level measured two hours after drinking a sugary solution."
+        "The person's blood sugar level measured two hours after consuming a sugary drink. Levels below 140 mg/dL are usually considered normal."
       ]
     ],
     [
@@ -60,15 +60,15 @@
       [
         "Blood Pressure",
         "mm Hg",
-        "Diastolic blood pressure: the lower number showing artery pressure when the heart is resting."
-      ]
+        "Diastolic blood pressure: the pressure when the heart is resting. It helps show how healthy the blood flow is. Values around 80 mm Hg are considered normal; much higher or lower can signal health risks."
+  ]
     ],
     [
       "Insulin",
       [
         "Insulin",
         "mu U/ml",
-        "Amount of insulin in the blood two hours after eating."
+        "The amount of insulin in the blood two hours after eating. Normal values are usually between 16 and 166 mu U/ml; very low or high levels can indicate issues with blood sugar regulation."
       ]
     ],
     [
@@ -76,7 +76,7 @@
       [
         "Body Mass Index",
         "kg/m^2",
-        "A value from weight and height that indicates if weight is in a healthy range."
+        "A value based on weight and height that shows if a person’s weight is in a healthy range. A BMI between 18.5 and 24.9 is generally considered healthy."
       ]
     ],
     [
@@ -84,7 +84,7 @@
       [
         "Diabetes Pedigree Function",
         "score",
-        "A score based on family history showing likelihood of diabetes."
+        "A score that estimates a person’s risk of diabetes based on their family history. Higher values mean a stronger genetic link."
       ]
     ],
     [
@@ -92,7 +92,7 @@
       [
         "Blood Group",
         "",
-        "The person's blood type (A, B, AB, or O)."
+        "The person's blood group (A, B, AB, or O)."
       ]
     ]
   ],
