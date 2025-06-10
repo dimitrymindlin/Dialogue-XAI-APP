@@ -157,6 +157,8 @@ def run_action_new(conversation: Conversation,
 
     if question_id == "globalPdp":
         explanation = explain_pdp(conversation, feature_name)
+        if explanation.startswith("Sorry"):
+            return explanation + " Please try another feature."
         explanation = explanation + f"<br> This is a general trend, but it may vary for a specific {instance_type_naming}."
         return explanation
 
