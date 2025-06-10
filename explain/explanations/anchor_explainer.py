@@ -44,7 +44,7 @@ class TabularAnchor(Explanation):
         self.model = model
         
         # Convert categorical mapping keys from strings to integers if needed
-        self.categorical_names = categorical_mapping
+        self.categorical_names = {}
         if categorical_mapping is not None:
             for key, value in categorical_mapping.items():
                 try:
