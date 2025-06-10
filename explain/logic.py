@@ -514,7 +514,7 @@ class ExplainBot:
 
         # Load diverse instances (explanations)
         app.logger.info("...loading DiverseInstances...")
-        submodular_pick = False
+        submodular_pick = True
 
         if submodular_pick:
             lime_for_submodular = mega_explainer.mega_explainer.explanation_methods['lime_0.75']
