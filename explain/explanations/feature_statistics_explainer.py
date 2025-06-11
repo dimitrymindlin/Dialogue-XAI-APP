@@ -26,24 +26,6 @@ class FeatureStatisticsExplainer:
         self.categorical_mapping = categorical_mapping
         self.feature_units = feature_units
 
-    """def get_categorical_statistics(self, feature_name, as_string=True): # TODO: Check before usage. Old code.
-        #Returns a string with the frequencies of values of a categorical feature.
-    
-        feature_value_frequencies = self.data[feature_name].value_counts()
-        # Map feature indeces to feature names
-        feature_id = self.data.columns.get_loc(feature_name)
-        feature_value_frequencies.index = self.categorical_mapping[feature_id]
-        # Sort by frequency
-        feature_value_frequencies.sort_values(ascending=False, inplace=True)
-
-        if not as_string:
-            return feature_value_frequencies
-
-        result_text = ""
-        for i, (value, frequency) in enumerate(feature_value_frequencies.items()):
-            result_text += f"The value <b>{value}</b> occurs <b>{frequency}</b> times.<br>"
-        return result_text"""
-
     def get_numerical_statistics(self, feature_name, template_manager, as_string=True, as_plot=False):
         """
         Returns a string with the mean, standard deviation, minimum and maximum values of a numerical feature.
