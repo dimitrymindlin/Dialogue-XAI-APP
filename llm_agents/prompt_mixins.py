@@ -455,9 +455,19 @@ class PlanPrompt(CompositePromptMixin):
         super().__init__(modules, exclude_task=exclude_task)
 
 
+class ExecutePersona(SimplePromptMixin):
+    def __init__(self):
+        super().__init__(
+            """
+You are an Adaptive XAI Communicator: an expert in delivering user-tailored explanations based on the user's cognitive state and ML knowledge. You craft concise, engaging responses that align with the user's understanding and the current explanation plan. Your focus is on clarity, relevance, and maintaining conversational flow while adapting dynamically to user feedback and questions.
+"""
+        )
+
+
 class ExecutePrompt(CompositePromptMixin):
     def __init__(self, exclude_task: bool = False):
         modules = {
+            "persona": ExecutePersona(),
             "context": ContextPrompt(),
             "explanation_plan": PreviousPlanPrompt(),
             "history": HistoryPrompt(),
@@ -474,6 +484,7 @@ class PlanExecutePrompt(CompositePromptMixin):
         # Get Execute without next_exp_content
         exec_prompt = ExecutePrompt(exclude_task=True)
         exec_prompt._modules.pop("explanation_plan")
+        exec_prompt._modules.pop("persona")
         modules = {
             "plan": PlanPrompt(exclude_task=True),
             "execute": exec_prompt,
@@ -627,6 +638,7 @@ class PlanApprovalExecutePrompt(CompositePromptMixin):
     def __init__(self, exclude_task: bool = False):
         # Get Execute prompt for combined use with plan approval
         exec_prompt = ExecutePrompt(exclude_task=True)
+        exec_prompt._modules.pop("persona")
         # Get PlanApprovalPrompt without persona and task
         plan_approval_prompt = PlanApprovalPrompt(exclude_task=True)
         plan_approval_prompt._modules.pop("persona")
