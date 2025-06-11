@@ -33,6 +33,7 @@ class GlobalArgs:
     This class is configured via gin files and provides command line
     argument functionality for gunicorn deployments.
     """
+
     def __init__(self, config, baseurl):
         self.config = config
         self.baseurl = baseurl
@@ -45,7 +46,7 @@ bot_dict = {}
 def _load_environment():
     """Load environment variables from .env files."""
     load_dotenv()
-    
+
     # Load local environment file if it exists (for development)
     if os.path.exists('.env.local'):
         load_dotenv('.env.local', override=True)
@@ -77,7 +78,7 @@ def _get_mlflow_uri():
 def _initialize_mlflow(app):
     """Initialize MLflow tracking."""
     try:
-        mlflow_uri = _get_mlflow_uri()
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", _get_mlflow_uri())
         mlflow.set_tracking_uri(mlflow_uri)
         app.logger.info(f"MLflow tracking URI initialized: {mlflow_uri}")
     except Exception as e:
@@ -105,40 +106,40 @@ def create_app():
     """
     # Load environment configuration
     _load_environment()
-    
+
     # Configure gin settings
     args = _configure_gin()
-    
+
     # Create necessary directories
     _setup_directories()
-    
+
     # Initialize Flask app
     app = Flask(__name__)
-    
+
     # Configure CORS
     CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
-    
+
     # Register blueprints
     app.register_blueprint(bp, url_prefix=args.baseurl)
-    
+
     # Initialize external services
     _initialize_mlflow(app)
-    
+
     # Configure logging
     _configure_logging(app)
-    
+
     # Configure matplotlib for headless operation
     matplotlib.use('Agg')
-    
+
     # Suppress matplotlib font manager DEBUG messages
     logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
-    
+
     # Set environment variables
     _set_environment_variables()
-    
+
     # Make app available to route functions
     globals()["app"] = app
-    
+
     return app
 
 
@@ -160,7 +161,6 @@ def init():
 
     # Initialize MLflow experiment for this user
     initialize_mlflow_experiment(user_id)
-    app.logger.info("MLflow experiment initialized for user: %s", user_id)
 
     # Feature tooltip and units
     feature_tooltip = bot_dict[user_id].get_feature_tooltips()
@@ -223,6 +223,11 @@ def get_train_datapoint():
     if not user_id:
         user_id = "TEST"
     datapoint_count = request.args.get("datapoint_count")
+
+    # Update MLflow experiment for the current chat round
+    if datapoint_count:
+        update_mlflow_experiment_for_round(user_id, int(datapoint_count))
+
     user_study_group = bot_dict[user_id].get_study_group()
     result_dict = get_datapoint(user_id, "train", datapoint_count)
     if bot_dict[user_id].use_active_dialogue_manager:
@@ -298,10 +303,10 @@ def set_user_prediction():
     else:
         # Create initial message depending on the user study group and whether the user was correct
         user_study_group = bot.get_study_group()
-        
+
         # Generate dataset-dependent baseline probability text
         baseline_prob_text = bot.generate_baseline_probability_text()
-        
+
         if user_study_group == "interactive":
             if user_correct:
                 prompt = f"""<b>Correct!</b> The model predicted <b>{correct_prediction_string}</b> for the current {bot.instance_type_naming}. <br>{baseline_prob_text} <br>If you want to <b>verify if your reasoning</b> aligns with the model, <b>select questions</b> from the right."""
@@ -593,18 +598,23 @@ def test_tts_page():
     return app.send_static_file('test_tts.html')
 
 
-def initialize_mlflow_experiment(user_id):
-    """Initialize MLflow experiment for a specific user."""
+def initialize_mlflow_experiment(user_id, datapoint_count=None):
+    """Initialize MLflow experiment for a specific user and chat round."""
     try:
-        # Ensure user_id is valid and not empty
-        if not user_id or user_id.strip() == "":
-            user_id = "DEFAULT_USER"
-        
-        experiment_name = f"{user_id}"
-        
+        if user_id == "TEST" and not datapoint_count:  # for testing purposes
+            datapoint_count = 0
+
+        # Create hierarchical experiment name including chat round
+        if datapoint_count is not None:
+            # Format: USERID_N (e.g., user_998852294013090438_0)
+            experiment_name = f"{user_id}_{datapoint_count}"
+        else:
+            # Fallback for initialization without datapoint_count
+            experiment_name = f"{user_id}_session"
+
         # Set the experiment (creates it if it doesn't exist)
         mlflow.set_experiment(experiment_name)
-        
+
         # mlflow.openai.autolog(log_traces=True)
         mlflow.llama_index.autolog(log_traces=True)
         app.logger.info(f"MLflow experiment '{experiment_name}' initialized for user {user_id}.")
@@ -613,6 +623,12 @@ def initialize_mlflow_experiment(user_id):
         app.logger.warning(f"MLflow experiment init failed for user {user_id}: {e}")
         app.logger.info("Continuing without MLflow tracking. App will function normally.")
         return False
+
+
+def update_mlflow_experiment_for_round(user_id, datapoint_count):
+    """Update MLflow experiment when moving to a new chat round."""
+    datapoint_count -= 1  # Convert to 0-indexed count
+    return initialize_mlflow_experiment(user_id, datapoint_count)
 
 
 app = create_app()
