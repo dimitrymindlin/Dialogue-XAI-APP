@@ -8,7 +8,7 @@ RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 
 # Upgrade pip to avoid dependency resolution issues
-RUN pip install --upgrade pip
+RUN pip install --upgrade pip setuptools wheel
 
 # Install system dependencies required for building some Python packages
 RUN apt-get update && apt-get install -y \
