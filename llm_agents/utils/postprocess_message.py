@@ -4,6 +4,41 @@ import re
 logger = logging.getLogger(__name__)
 
 
+def remove_html_plots_and_restore_placeholders(response, visual_explanations_dict):
+    """
+    Removes HTML plot content from the response and replaces it with placeholders.
+    This is the reverse operation of replace_plot_placeholders.
+
+    Args:
+        response (str): The response containing HTML plot content
+        visual_explanations_dict (dict): A dictionary mapping plot names to their corresponding HTML representations
+
+    Returns:
+        str: The response with HTML plots replaced by placeholders
+    """
+    if not visual_explanations_dict or not response:
+        return response
+    
+    # Pattern to match HTML img tags with base64 content
+    img_pattern = re.compile(r'<img src="data:image/[^"]*"[^>]*>', re.IGNORECASE)
+    
+    # Iterate over each plot name and replace its HTML content with placeholder
+    for plot_name, plot_html in visual_explanations_dict.items():
+        if plot_html and plot_html in response:
+            placeholder = f'##{plot_name}##'
+            response = response.replace(plot_html, placeholder)
+    
+    # Also remove any remaining base64 img tags that might not be in the dictionary
+    # This is a fallback to catch any HTML plots that weren't properly mapped
+    remaining_imgs = img_pattern.findall(response)
+    for img_tag in remaining_imgs:
+        # Replace with a generic placeholder
+        response = response.replace(img_tag, "##PlotRemoved##")
+        logger.warning(f"Removed unmapped HTML plot from conversation history: {img_tag[:100]}...")
+    
+    return response
+
+
 def replace_plot_placeholders(response, visual_explanations_dict):
     """
     Replaces all plot placeholders in the execute_result.response with their corresponding plots.
