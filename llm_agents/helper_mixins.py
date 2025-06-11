@@ -415,18 +415,25 @@ class LoggingHelperMixin:
 
     def format_predefined_plan_for_prompt(self) -> str:
         """
-        Format the current predefined explanation plan as a numbered list for LLM prompts.
+        Format the current predefined explanation plan as XML structure for LLM prompts.
         
         Returns:
-            str: A formatted string with numbered plan items, or a fallback message if no plan exists.
+            str: An XML-formatted string with plan items, or a fallback message if no plan exists.
         """
         if hasattr(self, 'explanation_plan') and self.explanation_plan:
-            predefined_plan_items = []
-            for number, plan_item in enumerate(self.explanation_plan):
-                predefined_plan_items.append(f"{number + 1}. {plan_item.explanation_name}: {plan_item.step_name}")
-            return "\n".join(predefined_plan_items)
+            plan_items = []
+            for plan_item in self.explanation_plan:
+                # Create XML structure for each plan item
+                plan_xml = f'        <plan_item>'
+                plan_xml += f' <explanation_name>{plan_item.explanation_name}</explanation_name>'
+                plan_xml += f' <step_name>{plan_item.step_name}</step_name>'
+                plan_xml += ' </plan_item>'
+                plan_items.append(plan_xml)
+            
+            # Return as a single-line XML structure to avoid YAML multiline issues
+            return "<explanation_plan> " + " ".join(plan_items) + " </explanation_plan>"
         else:
-            return "No predefined plan available."
+            return "<explanation_plan>No predefined plan available.</explanation_plan>"
 
 
 class ConversationHelperMixin:

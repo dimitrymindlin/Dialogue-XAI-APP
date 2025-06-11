@@ -7,7 +7,7 @@ xai_explanations:
           The model prediction confidence explanation shows how certain the model is in its decision, influenced by dataset features. Confidence can be high or low.
       - step_name: "Confidence"
         description: >
-          {{model_confidence.confidence_description}}
+          {{model_confidence}}
 
   - explanation_name: "FeatureImportances"
     description: "Understanding the importance and influence of features in the model's decision-making."
@@ -41,12 +41,9 @@ xai_explanations:
       - step_name: "Concept"
         description: >
           Counterfactual explanations highlight feature changes that alter a model’s prediction. The method prioritizes minimal counterfactuals, modifying only one attribute.
-      - step_name: "ImpactMultipleFeatures"
+      - step_name: "PossibleChanges"
         description: >
-          {{counterfactuals.possible_counterfactuals}}
-      - step_name: "ImpactSingleFeature"
-        description: >
-          Understanding individual feature impact on model predictions. If no single-feature counterfactuals are found, check the CeterisParibus explanation. {{counterfactuals.single_feature_cf}}
+          {{counterfactuals}}
 
   - explanation_name: "AnchorExplanation"
     description: "Finding the minimal set of features that define or anchor the prediction."
@@ -59,8 +56,7 @@ xai_explanations:
           Anchor showing which features with their current values need to be present for the model to predict the current model prediction. {{anchor.anchor_text}}
 
   - explanation_name: "CeterisParibus"
-    description: "Understanding the model's local decision-making by observing how the model's prediction changes when only one
-    feature is changed. Similar to TextualPartialDependence, but focused on individual instances. Explain this difference in simple terms to the user."
+    description: "Understanding the model's local decision-making by observing how the model's prediction changes when only one feature is changed. Similar to TextualPartialDependence, but focused on individual instances. Explain this difference in simple terms to the user."
     explanation_steps:
       - step_name: "Concept"
         description: >
@@ -83,8 +79,7 @@ xai_explanations:
           {{pdp.all_pdp_text}}
 
   - explanation_name: "FeatureStatistics"
-    description: "An overview of the statistical distribution of features used in the model, such as minimum and maximum
-    values of features, the mean and occurrences of categories."
+    description: "An overview of the statistical distribution of features used in the model, such as minimum and maximum values of features, the mean and occurrences of categories."
     explanation_steps:
       - step_name: "Concept"
         description: >

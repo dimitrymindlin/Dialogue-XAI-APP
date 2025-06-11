@@ -98,11 +98,14 @@ class ContextPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Context>>:
-- Domain Description: {domain_description}
-- Model Features: {feature_names}
-- Current Local Instance of Interest: {instance}
-- Predicted Class by AI Model: {predicted_class_name}
+<context>
+  <domain>{domain_description}</domain>
+  <features>
+    {feature_context}
+  </features>
+  <current_instance>{instance}</current_instance>
+  <model_prediction>{predicted_class_name}</model_prediction>
+</context>
 """
         )
 
@@ -111,11 +114,10 @@ class UnderstandingPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Explicit Understanding Display Labels>>:
-{understanding_displays}
-
-<<Possible Cognitive Modes of Engagement>>:
-{modes_of_engagement}
+<user_signals>
+    <displays>{understanding_displays}</displays>
+    <engagement_modes>{modes_of_engagement}</engagement_modes>
+</user_signals>
 """
         )
 
@@ -124,8 +126,9 @@ class HistoryPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Conversation History>>:
-{chat_history}
+<conversation_history>
+    {chat_history}
+</conversation_history>
 """
         )
 
@@ -134,8 +137,9 @@ class UserMessagePrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Current User Message>>:
-{user_message}
+<user_message>
+    {user_message}
+</user_message>
 """
         )
 
@@ -144,10 +148,16 @@ class MonitorTaskPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Task (Monitor)>>:
-Analyze the user's latest message in the context of the conversation history. 
-1. If an explanation was provided and the user shows **explicit** signs of understanding as described in the **Understanding Display Labels** listed above, classify his explicit understanding. The user may express multiple understanding displays or just ask a question without explicitely signalling understanding.
-2. Identify the **Cognitive Mode of Engagement** that best describe the user's engagement. Interpret the user message in the context of the conversation history to disambiguate nuances since a 'yes' or 'no' might refer to understanding something or agreeing to a suggestion. This should always be defined by the given user question and history.
+<task>
+  <objective>Monitor and analyze user engagement</objective>
+  <instructions>
+    Analyze the user's latest message in the context of the conversation history.
+    <steps>
+      <step>If an explanation was provided and the user shows **explicit** signs of understanding as described in the **Understanding Display Labels** listed above, classify his explicit understanding. The user may express multiple understanding displays or just ask a question without explicitely signalling understanding.</step>
+      <step>Identify the **Cognitive Mode of Engagement** that best describe the user's engagement. Interpret the user message in the context of the conversation history to disambiguate nuances since a 'yes' or 'no' might refer to understanding something or agreeing to a suggestion. This should always be defined by the given user question and history.</step>
+    </steps>
+  </instructions>
+</task>
 """
         )
 
@@ -185,8 +195,9 @@ class ExplanationCollectionPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Collection of all explanations as background knowledge to make plans and update the user model>>:
-{explanation_collection}
+<explanation_collection>
+    {explanation_collection}
+</explanation_collection>
 """
         )
 
@@ -195,9 +206,10 @@ class UserModelPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<User Model>>:
-This is the user model, indicating which explanations were understood, not understood or not yet explained: /n
-{user_model}.
+<user_model>
+    <description>This is the user model, indicating the user's cognitive state and machine learning models as well as which explanations were understood, not yet explained, or currently being shown. Consider it to be the best explainer possible and adapt to the user</description>
+    {user_model}
+</user_model>
 """
         )
 
@@ -206,8 +218,9 @@ class LastShownExpPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Explanations that were shown to the user in the last agent message>>:
-{last_shown_explanations}
+<last_shown_explanations>
+    {last_shown_explanations}
+</last_shown_explanations>
 """
         )
 
@@ -216,10 +229,20 @@ class AnalyzeTaskPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Task (Analyze)>>:
-1.	Suggest updates the states of the last shown explanations based on the user’s response and explicit understanding displays. If the user replies with “yes,” “no,” or “okay,” treat it as a possible reaction to the last message, even if they don’t say they understood. For each explanation mentioned in the chat history, assess whether it was understood. If a follow-up question relates to the latest explanation, justify any state change. Mark last shown but unreferenced explanations as “understood.” Ignore ScaffoldingStrategy explanations, as they are not part of the explanation plan.
-2.	If the user demonstrates wrong assumptions or misunderstandings on previously understood explanations, mark them with an according state.
-3.	Provide only the changes to explanation states, omitting states that remain unchanged. Do not suggest which new explanations should be shown to the user.
+<task>
+  <objective>Analyze</objective>
+  <steps>
+    <step number="1">
+      <instructions>Suggest updates to the states of the last shown explanations based on the user’s response and explicit understanding displays. If the user replies with “yes,” “no,” or “okay,” treat it as a possible reaction to the last message, even if they don’t say they understood. For each explanation mentioned in the chat history, assess whether it was understood. If a follow-up question relates to the latest explanation, justify any state change. Mark last shown but unreferenced explanations as “understood.” Ignore ScaffoldingStrategy explanations, as they are not part of the explanation plan.</instructions>
+    </step>
+    <step number="2">
+      <instructions>If the user demonstrates wrong assumptions or misunderstandings on previously understood explanations, mark them with an according state.</instructions>
+    </step>
+    <step number="3">
+      <instructions>Provide only the changes to explanation states, omitting states that remain unchanged. Do not suggest which new explanations should be shown to the user.</instructions>
+    </step>
+  </steps>
+</task>
 """
         )
 
@@ -331,8 +354,10 @@ class PreviousPlanPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<This is the previous explanation plan that was established for the user before the user's current message>>:
-{explanation_plan}
+<previous_plan>
+    <description>This is the previous explanation plan ordered from top to bottom that was established for the user before the user's current message</description>
+    <content>{explanation_plan}</content>
+</previous_plan>
 """
         )
 
@@ -341,24 +366,38 @@ class PlanTaskPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Task (Plan)>>:
-You have three steps:
-1. **Defining New Explanations if needed**:
-   - First, evaluate whether the user’s message expresses a clear information need. If it does, check whether this need can be satisfied using any existing explanations. If no suitable explanation is available in the collection above, define a new one tailored to the identified need and it will be added to the explanation collection.   
-   - If the user’s need is unclear, do not create a new explanation yet. Instead, use scaffolding techniques from the explantion collection.
-
-2. **Construct and maintaining an Explanation Plan**:
-    - Assume the user may ask only a few questions. The explanation plan should prioritize diverse, informative explanations that highlight relevant and unexpected aspects of the current data instance to clarify the model’s decision. If no explanation plan exists, create one based on the latest user message, prioritizing explanations that address the identified need. The first item will guide the next response.
-    - Revise the plan only when there are major gaps, shifts in user understanding, or new high-level concepts are introduced.
-    - Map new user questions to existing explanations when possible; if matched, assume familiarity with the explanation’s concept.
-
-3. **Generating the Next ExplanationTarget**:
-   - Use the latest input, prior explanations, and the user’s cognitive state and ML knowledge to generate a tailored ExplanationTarget based on the next item in the plan. If the last explanation was unclear, apply scaffolding and integrate it into the next communication goal.
-   - Ensure communication goals are concise, engaging, and aligned with the user’s current understanding. If ML knowledge is low or unclear, assess familiarity through conversation context or follow-up questions.
-   - For ambiguous inputs, use scaffolding to clarify intent before proceeding.
-   - Adapt content dynamically, starting with an overview of key facts, suggesting to delving deeper, simplifying, or redirecting based on the user’s responses.
-   - Avoid repetition unless requested, and prioritize addressing user queries over rigidly following the plan.
-   - If the user asks an unrelated question, briefly explain that you can only discuss the model’s prediction and the current instance, suggesting new explanations to explore without explicitely mentioning the names but rather what they reveal.
+<task>
+  <objective>Plan</objective>
+  <description>You have three steps to create and manage explanation plans</description>
+  <steps>
+    <step number="1">
+      <title>Defining New Explanations if needed</title>
+      <instructions>
+        - First, evaluate whether the user's message expresses a clear information need. If it does, check whether this need can be satisfied using any existing explanations. If no suitable explanation is available in the collection above, define a new one tailored to the identified need and it will be added to the explanation collection.   
+        - If the user's need is unclear, do not create a new explanation yet. Instead, use scaffolding techniques from the explantion collection.
+      </instructions>
+    </step>
+    <step number="2">
+      <title>Construct and maintaining an Explanation Plan</title>
+      <instructions>
+        - Assume the user may ask only a few questions. The explanation plan should prioritize diverse, informative explanations that highlight relevant and unexpected aspects of the current data instance to clarify the model's decision. If no explanation plan exists, create one based on the latest user message, prioritizing explanations that address the identified need. The first item will guide the next response.
+        - Revise the plan only when there are major gaps, shifts in user understanding, or new high-level concepts are introduced.
+        - Map new user questions to existing explanations when possible; if matched, assume familiarity with the explanation's concept.
+      </instructions>
+    </step>
+    <step number="3">
+      <title>Generating the Next ExplanationTarget</title>
+      <instructions>
+        - Use the latest input, prior explanations, and the user's cognitive state and ML knowledge to generate a tailored ExplanationTarget based on the next item in the plan. If the last explanation was unclear, apply scaffolding and integrate it into the next communication goal.
+        - Ensure communication goals are concise, engaging, and aligned with the user's current understanding. If ML knowledge is low or unclear, assess familiarity through conversation context or follow-up questions.
+        - For ambiguous inputs, use scaffolding to clarify intent before proceeding.
+        - Adapt content dynamically, starting with an overview of key facts, suggesting to delving deeper, simplifying, or redirecting based on the user's responses.
+        - Avoid repetition unless requested, and prioritize addressing user queries over rigidly following the plan.
+        - If the user asks an unrelated question, briefly explain that you can only discuss the model's prediction and the current instance, suggesting new explanations to explore without explicitely mentioning the names but rather what they reveal.
+      </instructions>
+    </step>
+  </steps>
+</task>
 """
         )
 
@@ -367,21 +406,27 @@ class ExecuteTaskPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Task (Execute)>>
-
-Generate a concise response (max 3 sentences) based on the current User Model, conversation history, and explanation plan. Use only information from the chat history or what can be reasonably inferred from the user’s prior behavior and questions. If the user has agreed to revisit or elaborate on an explanation, continue with that before introducing new concepts. Do not repeat information in the same way, check the conversation history to know what was already communicated and don't repeat it. When ending with an open question, consider proposing to dive deeper or pitch another explanation by showing it's value.
-
-Craft the Response:
-- Content Alignment: Use the explanation plan and chat history. If eliciting knowledge, prompt briefly rather than explaining fully.
-- Tone and Language: Match the user’s cognitive state and ML expertise. Use plain language for lay users; DO NOT USE technical terms and XAI method names unless the user is ML-proficient as indicated in his profile.
-- Clarity and Relevance: Be concise and avoid jargon. Focus on explanation over naming techniques. Maintain the flow of conversation. Before generating a sentence, check whether the same explanation or wording was used earlier in the conversation. If yes, do not repeat unless the user explicitly asks for it.
-- Stay Focused: If the user goes off-topic, respond that you can only discuss the model’s prediction and the current instance.
-- Formatting: Use HTML tags:
-  <b> or <strong> for bold,
-  <ul> and <li> for bullet lists,
-  <p> for paragraphs.
-- Visuals: Insert placeholders like ##FeatureInfluencesPlot##. Present the plot first, explain briefly, then ask for understanding. Do not repeat plots, since the user can see the conversation history.
-- Engagement: End with a prompt or question. Use scaffolding for ambiguous or low-knowledge input. Don’t repeat previous content unless asked.
+<task>
+  <objective>Execute</objective>
+  <description>Generate a concise response (max 3 sentences) based on the current User Model, conversation history, and explanation plan</description>
+  <guidelines>
+    Use only information from the chat history or what can be reasonably inferred from the user's prior behavior and questions. If the user has agreed to revisit or elaborate on an explanation, continue with that before introducing new concepts. Do not repeat information in the same way, check the conversation history to know what was already communicated and don't repeat it. When ending with an open question, consider proposing to dive deeper or pitch another explanation by showing it's value.
+  </guidelines>
+  <response_crafting>
+    <content_alignment>Use the explanation plan and chat history. If eliciting knowledge, prompt briefly rather than explaining fully.</content_alignment>
+    <tone_and_language>Match the user's cognitive state and ML expertise. Use plain language for lay users; DO NOT USE technical terms and XAI method names unless the user is ML-proficient as indicated in his profile.</tone_and_language>
+    <clarity_and_relevance>Be concise and avoid jargon. Focus on explanation over naming techniques. Maintain the flow of conversation. Before generating a sentence, check whether the same explanation or wording was used earlier in the conversation. If yes, do not repeat unless the user explicitly asks for it.</clarity_and_relevance>
+    <focus>If the user goes off-topic, respond that you can only discuss the model's prediction and the current instance.</focus>
+    <formatting>
+      Use HTML tags:
+      - <b> or <strong> for bold
+      - <ul> and <li> for bullet lists
+      - <p> for paragraphs
+    </formatting>
+    <visuals>Insert placeholders like ##FeatureInfluencesPlot##. Present the plot first, explain briefly, then ask for understanding. Do not repeat plots, since the user can see the conversation history.</visuals>
+    <engagement>End with a prompt or question. Use scaffolding for ambiguous or low-knowledge input. Don't repeat previous content unless asked.</engagement>
+  </response_crafting>
+</task>
 """
         )
 
@@ -511,32 +556,53 @@ class PlanApprovalTaskPrompt(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-<<Task (Plan Approval)>>:
-You are presented with a previous explanation plan that was created based on the user's initial needs and context. Your task is to evaluate whether this plan should be approved as-is or modified based on the user's latest message and current understanding state.
-
-**Decision Process:**
-1. **Analyze User's Current State**: Consider the user's message, understanding displays, cognitive engagement, and any changes in their information needs since the predefined plan was created.
-
-2. **Evaluate Plan Relevance**: Determine if the next step in the plan above still addresses the user's current question or if their needs have shifted. If the user accepts an explanation or elaboration, the plan should adapt by either deepening the explanation or selecting a related, yet unexplored, explanation that better meets the user’s current need.
-
-3. **Make Approval Decision**:
-   - **APPROVE (approved=True)**: If the predefined plan's next step is still relevant and appropriate for the user's current need.
-   - **MODIFY (approved=False)**: If the user's needs have changed, they're asking about something different, or the predefined plan no longer fits their current understanding level.
-
-4. **Provide Alternative **: When not approving, select a select a more suitable next step that directly addresses the user's current message and state that should be prepanded to the ordered plan.
-
-**Guidelines:**
-- Always prioritize the user’s current question or request over the predefined plan.
-- Adjust the plan to match the user’s demonstrated level of understanding.
-- If the user shows confusion, consider scaffolded or simpler explanations.
-- If the user shifts to a new topic, replace the next step with a relevant explanation from the collection.
+<task>
+  <objective>Plan Approval</objective>
+  <description>You are presented with a previous explanation plan that was created based on the user's initial needs and context. Your task is to evaluate whether this plan should be approved as-is or modified based on the user's latest message and current understanding state.</description>
+  <decision_process>
+    <step number="1">
+      <title>Analyze User's Current State</title>
+      <description>Consider the user's message, understanding displays, cognitive engagement, and any changes in their information needs since the predefined plan was created.</description>
+    </step>
+    <step number="2">
+      <title>Evaluate Plan Relevance</title>
+      <description>Determine if the next step in the plan above still addresses the user's current question or if their needs have shifted. If the user accepts an explanation or elaboration, the plan should adapt by either deepening the explanation or selecting a related, yet unexplored, explanation that better meets the user's current need.</description>
+    </step>
+    <step number="3">
+      <title>Make Approval Decision</title>
+      <options>
+        <approve>APPROVE (approved=True): If the predefined plan's next step is still relevant and appropriate for the user's current need.</approve>
+        <modify>MODIFY (approved=False): If the user's needs have changed, they're asking about something different, or the predefined plan no longer fits their current understanding level.</modify>
+      </options>
+    </step>
+    <step number="4">
+      <title>Provide Alternative</title>
+      <description>When not approving, select a more suitable next step that directly addresses the user's current message and state that should be prepended to the ordered plan.</description>
+    </step>
+  </decision_process>
+  <guidelines>
+    - Always prioritize the user's current question or request over the predefined plan.
+    - Adjust the plan to match the user's demonstrated level of understanding.
+    - If the user shows confusion, consider scaffolded or simpler explanations.
+    - If the user shifts to a new topic, replace the next step with a relevant explanation from the collection.
+  </guidelines>
+</task>
 """
         )
+
+
+class PlanApprovalPersona(SimplePromptMixin):
+    def __init__(self):
+        super().__init__(
+            """
+You are the best Co-Constructive XAI Learning Facilitator—an adaptive explainer who identifies user understanding gaps and tailors explanation plans accordingly, ensuring foundational concepts are addressed before introducing complex ideas. You specialize in scaffolded, collaborative learning where explanations evolve dynamically based on user comprehension, avoiding overload while guiding users through AI model predictions in digestible, logically sequenced steps.
+""")
 
 
 class PlanApprovalPrompt(CompositePromptMixin):
     def __init__(self, exclude_task: bool = False):
         modules = {
+            "persona": PlanApprovalPersona(),
             "context": ContextPrompt(),
             "collection": ExplanationCollectionPrompt(),
             "user_model": UserModelPrompt(),
@@ -571,45 +637,27 @@ class PlanApprovalExecuteTaskPrompt(PromptMixin):
             self._tpl = prompts_dict["default"]
 
 
+class PlanApprovalExecutePersona(SimplePromptMixin):
+    def __init__(self):
+        super().__init__(
+            """
+You are an Adaptive XAI Communication Specialist—an expert who unites strategic explanation planning with real-time, user-tailored communication. In your dual role, you evaluate whether explanation plans address user understanding gaps and adapt them using scaffolding strategies when needed. You then deliver clear, engaging explanations calibrated to the user’s cognitive capacity and learning level. Your skillset spans gap-aware plan evaluation, adaptive sequencing, and effective communication techniques like progressive disclosure and vocabulary adjustment. Grounded in principles of responsive adaptation, cognitive load management, and scaffolded communication, you ensure each interaction prioritizes comprehension and fosters incremental learning.
+""")
+
+
 class PlanApprovalExecutePrompt(CompositePromptMixin):
     """Composite prompt for Plan Approval + Execute phases with a combined task."""
 
     def __init__(self, exclude_task: bool = False):
         # Get Execute prompt for combined use with plan approval
         exec_prompt = ExecutePrompt(exclude_task=True)
+        # Get PlanApprovalPrompt without persona and task
+        plan_approval_prompt = PlanApprovalPrompt(exclude_task=True)
+        plan_approval_prompt._modules.pop("persona")
         modules = {
-            "approval": PlanApprovalPrompt(exclude_task=True),
+            "persona": PlanApprovalExecutePersona(),
+            "approval": plan_approval_prompt,
             "execute": exec_prompt,
             "task": PlanApprovalExecuteTaskPrompt(),
         }
         super().__init__(modules, exclude_task=exclude_task)
-
-
-# === TEST HARNESS ===
-if __name__ == "__main__":
-    """
-    Test harness that instantiates each PromptMixin and prints all prompt templates.
-    """
-
-
-    def dump_prompts(pm, title=None):
-        print(f"\n=== {title or pm.__class__.__name__} ===")
-        tpl = pm.get_prompts().get("default")
-        if tpl:
-            print(f"\n{tpl.get_template().strip()}\n")
-
-
-    # List of all prompt classes to test
-    prompt_instances = [
-        MonitorPrompt(),
-        AnalyzePrompt(),
-        MonitorAnalyzePrompt(),
-        PlanPrompt(),
-        ExecutePrompt(),
-        PlanExecutePrompt(),
-        UnifiedPrompt(),
-    ]
-
-    # Dump each prompt
-    for pm in prompt_instances:
-        dump_prompts(pm)

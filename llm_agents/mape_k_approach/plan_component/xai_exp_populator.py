@@ -31,6 +31,155 @@ class XAIExplanationPopulator:
         self.template = self.env.get_template(self.template_file)
         self.populated_yaml_content = None
 
+    def clean_html_tags(self, text):
+        """
+        Removes common HTML tags from text and returns cleaned text.
+        Carefully preserves word boundaries by adding spaces where needed.
+        
+        :param text: Text that may contain HTML tags.
+        :return: Cleaned text with HTML tags removed and proper spacing.
+        """
+        if not isinstance(text, str):
+            return str(text) if text is not None else ""
+        
+        cleaned_text = text
+        
+        # First, handle line break tags by replacing them with spaces
+        line_break_tags = ["<br>", "<br/>", "<br />"]
+        for tag in line_break_tags:
+            cleaned_text = cleaned_text.replace(tag, " ")
+        
+        # Handle block-level tags that should add spaces around them
+        block_tags = [
+            "<p>", "</p>", "<div>", "</div>", "<h1>", "</h1>", "<h2>", "</h2>",
+            "<h3>", "</h3>", "<h4>", "</h4>", "<h5>", "</h5>", "<h6>", "</h6>",
+            "<ul>", "</ul>", "<ol>", "</ol>", "<li>", "</li>", 
+            "<blockquote>", "</blockquote>", "<pre>", "</pre>"
+        ]
+        for tag in block_tags:
+            # Add space before and after block tags to prevent word merging
+            cleaned_text = cleaned_text.replace(tag, f" {tag} ")
+        
+        # Handle inline tags that might need spacing
+        inline_tags = [
+            "<b>", "</b>", "<i>", "</i>", "<strong>", "</strong>", "<em>", "</em>",
+            "<span>", "</span>", "<u>", "</u>", "<a>", "</a>", "<code>", "</code>",
+            "<small>", "</small>", "<sup>", "</sup>", "<sub>", "</sub>"
+        ]
+        
+        # For inline tags, be more careful about spacing
+        for tag in inline_tags:
+            # Check if the tag is at word boundaries
+            import re
+            # Replace tags that are not already surrounded by whitespace
+            pattern = rf'(\S){re.escape(tag)}(\S)'
+            cleaned_text = re.sub(pattern, rf'\1 {tag} \2', cleaned_text)
+            # Now remove the tags themselves
+            cleaned_text = cleaned_text.replace(tag, "")
+        
+        # Remove any remaining tags we might have missed
+        remaining_block_tags = [
+            "<p>", "</p>", "<div>", "</div>", "<h1>", "</h1>", "<h2>", "</h2>",
+            "<h3>", "</h3>", "<h4>", "</h4>", "<h5>", "</h5>", "<h6>", "</h6>",
+            "<ul>", "</ul>", "<ol>", "</ol>", "<li>", "</li>", 
+            "<blockquote>", "</blockquote>", "<pre>", "</pre>"
+        ]
+        for tag in remaining_block_tags:
+            cleaned_text = cleaned_text.replace(tag, "")
+        
+        # Clean up multiple spaces and normalize whitespace
+        import re
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
+        
+        return cleaned_text.strip()
+
+    def format_pdp_as_xml(self, pdp_dict):
+        """
+        Formats PDP (Partial Dependence Plot) data as XML structure.
+        
+        :param pdp_dict: Dictionary containing PDP explanations for each feature
+        :return: XML-formatted string with PDP results (YAML-safe)
+        """
+        if not pdp_dict:
+            return "<pdp_results />"
+        
+        formatted_pdp = []
+        for feature, pdp_text in pdp_dict.items():
+            # Clean HTML tags from the PDP text
+            cleaned_text = self.clean_html_tags(pdp_text) if isinstance(pdp_text, str) else str(pdp_text)
+            
+            # Escape any characters that might cause YAML parsing issues
+            cleaned_text = cleaned_text.replace('"', '&quot;').replace("'", '&apos;')
+            
+            # Create XML structure for each PDP result with proper escaping
+            pdp_xml = f'      <pdp_feature name="{feature}">'
+            pdp_xml += f' <pdp_result_summary>{cleaned_text}</pdp_result_summary>'
+            pdp_xml += ' </pdp_feature>'
+            
+            formatted_pdp.append(pdp_xml)
+        
+        # Return as a single line to avoid YAML multiline issues
+        return "<pdp_results> " + " ".join(formatted_pdp) + " </pdp_results>"
+
+    def format_clarifications_as_xml(self, clarifications_dict):
+        """
+        Formats clarifications data as XML structure.
+        
+        :param clarifications_dict: Dictionary containing clarification questions and answers
+        :return: XML-formatted string with clarifications (YAML-safe)
+        """
+        if not clarifications_dict:
+            return "<clarifications />"
+        
+        formatted_clarifications = []
+        for question, answer in clarifications_dict.items():
+            # Clean HTML tags from both question and answer
+            cleaned_question = self.clean_html_tags(question) if isinstance(question, str) else str(question)
+            cleaned_answer = self.clean_html_tags(answer) if isinstance(answer, str) else str(answer)
+            
+            # Escape any characters that might cause YAML parsing issues
+            cleaned_question = cleaned_question.replace('"', '&quot;').replace("'", '&apos;')
+            cleaned_answer = cleaned_answer.replace('"', '&quot;').replace("'", '&apos;')
+            
+            # Create XML structure for each clarification
+            clarification_xml = f'      <clarification>'
+            clarification_xml += f' <question>{cleaned_question}</question>'
+            clarification_xml += f' <answer>{cleaned_answer}</answer>'
+            clarification_xml += ' </clarification>'
+            
+            formatted_clarifications.append(clarification_xml)
+        
+        # Return as a single line to avoid YAML multiline issues
+        return "<clarifications> " + " ".join(formatted_clarifications) + " </clarifications>"
+
+    def format_feature_statistics_as_xml(self, feature_statistics_dict):
+        """
+        Formats feature statistics data as XML structure.
+        
+        :param feature_statistics_dict: Dictionary containing feature statistics
+        :return: XML-formatted string with feature statistics (YAML-safe)
+        """
+        if not feature_statistics_dict:
+            return "<feature_statistics />"
+        
+        formatted_stats = []
+        for feature_name, stat_text in feature_statistics_dict.items():
+            # Clean HTML tags from the statistics text
+            cleaned_text = self.clean_html_tags(stat_text) if isinstance(stat_text, str) else str(stat_text)
+            
+            # Escape any characters that might cause YAML parsing issues
+            cleaned_text = cleaned_text.replace('"', '&quot;').replace("'", '&apos;')
+            
+            # Create XML structure for each feature's statistics
+            stat_xml = f'      <feature_stat name="{feature_name}">'
+            stat_xml += f' <stat_summary>{cleaned_text}</stat_summary>'
+            stat_xml += ' </feature_stat>'
+            
+            formatted_stats.append(stat_xml)
+        
+        # Return as a single line to avoid YAML multiline issues
+        return "<feature_statistics> " + " ".join(formatted_stats) + " </feature_statistics>"
+
     def process_xai_explanations(self):
         """
         Processes the xai_explanations and creates a substitution dictionary
@@ -83,21 +232,18 @@ class XAIExplanationPopulator:
         counterfactuals = self.xai_explanations.get("counterfactuals", {})
         substitution_dict["counterfactuals"] = {
             "possible_counterfactuals": counterfactuals,
-            "single_feature_cf": "No single feature CF found. Provide Ceteris Paribus explanations instead."
         }
 
         # Process Feature Statistics
         feature_statistics = self.xai_explanations.get("feature_statistics", {})
         substitution_dict["feature_statistics"] = {
-            "feature_statistics": " ".join(
-                f"{k}: {v}" for k, v in feature_statistics.items()
-            )
+            "feature_statistics": self.format_feature_statistics_as_xml(feature_statistics)
         }
 
         # Process Anchor explanation
         anchor = self.xai_explanations.get("anchors", {})
         substitution_dict["anchor"] = {
-            "anchor_text": anchor
+            "anchor_text": self.clean_html_tags(anchor)
         }
 
         # Process Ceteris Paribus with PossibleClassFlips and ImpossibleClassFlips
@@ -105,23 +251,21 @@ class XAIExplanationPopulator:
         impossible_flips = [flip for flip in ceteris_paribus if "No changes" in flip]
         possible_flips = [flip for flip in ceteris_paribus if "No changes" not in flip]
         substitution_dict["ceteris_paribus"] = {
-            "possible_class_flips": " ".join(f"{flip}" for flip in possible_flips),
-            "impossible_class_flips": " ".join(f"{flip}" for flip in impossible_flips)
+            "possible_class_flips": " ".join(f"{self.clean_html_tags(flip)}" for flip in possible_flips),
+            "impossible_class_flips": " ".join(f"{self.clean_html_tags(flip)}" for flip in impossible_flips)
         }
 
         # Get pdp textual explanation
         pdp = self.xai_explanations.get("pdp", {})
 
         substitution_dict["pdp"] = {
-            "all_pdp_text": [{f"PDP result for {feature}": pdp_text} for feature, pdp_text in pdp.items()],
+            "all_pdp_text": self.format_pdp_as_xml(pdp),
         }
 
         # Get followup clarifications
         followup_clarifications = self.xai_explanations.get("static_clarifications", {})
-        # Make a Question: question, Answer: answer pair
         substitution_dict["static_clarifications"] = {
-            "all_clarifications": [{"question": question, "possible_answer": answer} for question, answer in
-                                   followup_clarifications.items()]
+            "all_clarifications": self.format_clarifications_as_xml(followup_clarifications)
         }
 
         # Model confidence
@@ -133,7 +277,7 @@ class XAIExplanationPopulator:
         # Add new template fillers for the dynamic placeholders
         # Extract possible classes from predicted and opposite class names
         possible_classes = f"{self.predicted_class_name} or {self.opposite_class_name}"
-        
+
         # Extract SHAP base value from xai_explanations if available
         shap_base_value = 0.5  # Default neutral probability
         try:
@@ -141,10 +285,10 @@ class XAIExplanationPopulator:
             shap_base_value = self.xai_explanations.get("shap_base_value", 0.5)
         except (KeyError, TypeError):
             pass  # Use default value
-        
+
         # Get class names in proper order for SHAP bias interpretation
         class_names = self.xai_explanations.get("class_names", [self.opposite_class_name, self.predicted_class_name])
-        
+
         # Determine which class the SHAP initial bias favors
         # If base_value > 0.5, it favors the positive class (class 1)
         # If base_value <= 0.5, it favors the negative class (class 0)
@@ -163,6 +307,21 @@ class XAIExplanationPopulator:
             "shap_base_value": round(shap_base_value, 3),
             "shap_initial_bias": shap_initial_bias
         })
+
+        # Pass over all xai_explanations and clean HTML tags in explanations
+        for key, value in self.xai_explanations.items():
+            if isinstance(value, dict):
+                # Only process if the key exists in substitution_dict and is a dict
+                if key in substitution_dict and isinstance(substitution_dict[key], dict):
+                    for sub_key, sub_value in value.items():
+                        if isinstance(sub_value, str) and sub_key in substitution_dict[key]:
+                            cleaned_value = self.clean_html_tags(sub_value)
+                            substitution_dict[key][sub_key] = cleaned_value
+            elif isinstance(value, str):
+                # Only update if the key exists in substitution_dict
+                if key in substitution_dict:
+                    cleaned_value = self.clean_html_tags(value)
+                    substitution_dict[key] = cleaned_value
 
         return substitution_dict
 
@@ -197,14 +356,14 @@ class XAIExplanationPopulator:
                 # Add ID field if it doesn't exist
                 if "id" not in node:
                     node["id"] = node["explanation_name"].replace(" ", "").lower()
-            
+
             # Build predefined plan: exclude ScaffoldingStrategy explanations
             result["predefined_plan"] = []
             for node in result.get("xai_explanations", []):
                 # Skip scaffolding strategies when generating the predefined plan
                 if node["explanation_name"] == "ScaffoldingStrategy":
                     continue
-                    
+
                 # take the first two children (Concept and next step)
                 first_two = node["children"][:2]
                 node_id = node.get("id", node["explanation_name"].replace(" ", "").lower())
@@ -227,14 +386,14 @@ class XAIExplanationPopulator:
             # Add ID field if it doesn't exist
             if "id" not in node:
                 node["id"] = node["explanation_name"].replace(" ", "").lower()
-        
+
         # Build predefined plan for JSON output: exclude ScaffoldingStrategy explanations
         data["predefined_plan"] = []
         for node in data.get("xai_explanations", []):
             # Skip scaffolding strategies when generating the predefined plan
             if node["explanation_name"] == "ScaffoldingStrategy":
                 continue
-                
+
             first_two = node["children"][:2]
             # Generate ID from explanation_name if 'id' field doesn't exist
             node_id = node.get("id", node["explanation_name"].replace(" ", "").lower())
@@ -243,7 +402,7 @@ class XAIExplanationPopulator:
                 "title": node["explanation_name"],
                 "children": first_two
             })
-        
+
         if as_dict:
             return data
         else:

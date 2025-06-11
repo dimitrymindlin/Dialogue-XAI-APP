@@ -31,6 +31,8 @@ class BaseAgent(ABC):
             self,
             experiment_id: str,
             feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
             **kwargs
@@ -40,8 +42,10 @@ class BaseAgent(ABC):
         self.log_file = generate_log_file_name(experiment_id)
         initialize_csv(self.log_file)
 
+        # Feature context - consolidate all feature-related information
+        self._initialize_feature_context(feature_names, feature_units, feature_tooltips)
+        
         # Common context
-        self.feature_names = feature_names
         self.domain_description = domain_description
         self.user_ml_knowledge = user_ml_knowledge
         self.predicted_class_name = None
@@ -62,6 +66,42 @@ class BaseAgent(ABC):
         self.explanation_plan = []
         self.last_shown_explanations = []
         self.visual_explanations_dict = None
+
+    def _initialize_feature_context(self, feature_names: str, feature_units: str, feature_tooltips: str) -> None:
+        """
+        Initialize feature context information in a centralized way.
+        
+        Args:
+            feature_names: Comma-separated feature names
+            feature_units: Comma-separated feature units
+            feature_tooltips: Comma-separated feature tooltips
+        """
+        self.feature_names = feature_names
+        self.feature_units = feature_units
+        self.feature_tooltips = feature_tooltips
+        self.feature_context = self._create_feature_context()
+    
+    def _create_feature_context(self) -> Dict[str, Any]:
+        """
+        Create a context dictionary with feature-related information.
+        
+        Returns:
+            A dictionary containing feature names, units, and tooltips
+        """
+        return {
+            "feature_names": self.feature_names,
+            "feature_units": self.feature_units,
+            "feature_tooltips": self.feature_tooltips
+        }
+
+    def get_feature_context(self) -> Dict[str, Any]:
+        """
+        Get the feature context dictionary.
+        
+        Returns:
+            The feature context dictionary
+        """
+        return self.feature_context
 
     def log_prompt(self, component: str, prompt_str: str) -> None:
         """
@@ -184,12 +224,97 @@ class BaseAgent(ABC):
         return {
             "domain_description": self.domain_description,
             "feature_names": self.feature_names,
+            "feature_units": self.feature_units,
+            "feature_tooltips": self.feature_tooltips,
             "instance": self.instance,
             "predicted_class_name": self.predicted_class_name,
             "chat_history": self.chat_history,
             "user_model_state": self.user_model.get_state_summary(as_dict=False),
             "last_shown_explanations": self.last_shown_explanations,
         }
+
+    def get_formatted_feature_context(self) -> str:
+        """
+        Get an XML-formatted string representation of the feature context for prompts.
+        
+        Returns:
+            An XML structure with individual feature tags including names, units, and descriptions
+        """
+        if not self.feature_names:
+            return "<features />"
+        
+        # Handle different input formats for feature_names
+        if isinstance(self.feature_names, list):
+            # Check if it's a list of dictionaries (complex format)
+            if self.feature_names and isinstance(self.feature_names[0], dict):
+                names = [item['feature_name'] for item in self.feature_names]
+            else:
+                # Simple list of strings
+                names = [name.strip() for name in self.feature_names if name.strip()]
+        else:
+            # Comma-separated string
+            names = [name.strip() for name in self.feature_names.split(',') if name.strip()]
+        
+        # Handle different input formats for feature_units
+        units_dict = {}
+        if isinstance(self.feature_units, dict):
+            units_dict = self.feature_units
+        elif isinstance(self.feature_units, list):
+            # If it's a list, try to pair with names
+            for i, unit in enumerate(self.feature_units):
+                if i < len(names):
+                    units_dict[names[i]] = unit.strip() if unit else ""
+        elif self.feature_units:
+            # Comma-separated string
+            unit_list = [unit.strip() for unit in self.feature_units.split(',')]
+            for i, unit in enumerate(unit_list):
+                if i < len(names):
+                    units_dict[names[i]] = unit
+        
+        # Handle different input formats for feature_tooltips
+        tooltips_dict = {}
+        if isinstance(self.feature_tooltips, dict):
+            tooltips_dict = self.feature_tooltips
+        elif isinstance(self.feature_tooltips, list):
+            # If it's a list, try to pair with names
+            for i, tooltip in enumerate(self.feature_tooltips):
+                if i < len(names):
+                    tooltips_dict[names[i]] = tooltip.strip() if tooltip else ""
+        elif self.feature_tooltips:
+            # Comma-separated string
+            tooltip_list = [tooltip.strip() for tooltip in self.feature_tooltips.split(',')]
+            for i, tooltip in enumerate(tooltip_list):
+                if i < len(names):
+                    tooltips_dict[names[i]] = tooltip
+        
+        # Format as XML-like structure with individual feature tags
+        formatted_features = []
+        for name in names:
+            # Create a safe tag name by replacing spaces and special characters
+            tag_name = name.replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "").replace("/", "_")
+            
+            # Start the feature tag
+            feature_xml = f"    <feature name=\"{name}\""
+            
+            # Add unit as attribute if available
+            unit = units_dict.get(name, "")
+            if unit:
+                feature_xml += f" unit=\"{unit}\""
+            
+            # Close opening tag and add description if available
+            tooltip = tooltips_dict.get(name, "")
+            if tooltip:
+                feature_xml += f">\n        <description>{tooltip}</description>\n    </feature>"
+            else:
+                feature_xml += " />"
+                
+            formatted_features.append(feature_xml)
+        
+        # Wrap all features in a features container
+        if formatted_features:
+            return "<features>\n" + "\n".join(formatted_features) + "\n</features>"
+        else:
+            return "<features />"
 
     @timed
     @abstractmethod

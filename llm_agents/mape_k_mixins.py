@@ -72,7 +72,7 @@ class MonitorMixin(LoggingHelperMixin, UserModelHelperMixin):
         template = monitor_pm.get_prompts()["default"].get_template()
         prompt_str = template.format(
             domain_description=self.domain_description,
-            feature_names=self.feature_names,
+            feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             chat_history=self.chat_history,
@@ -113,7 +113,7 @@ class AnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
         template = analyze_pm.get_prompts()["default"].get_template()
         prompt_str = template.format(
             domain_description=self.domain_description,
-            feature_names=self.feature_names,
+            feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             chat_history=self.chat_history,
@@ -161,7 +161,7 @@ class MonitorAnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
         template = ma_pm.get_prompts()["default"].get_template()
         prompt_str = template.format(
             domain_description=self.domain_description,
-            feature_names=self.feature_names,
+            feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             understanding_displays=self.understanding_displays.as_text(),
@@ -205,7 +205,7 @@ class PlanMixin(LoggingHelperMixin, UserModelHelperMixin):
         template = plan_pm.get_prompts()["default"].get_template()
         prompt_str = template.format(
             domain_description=self.domain_description,
-            feature_names=self.feature_names,
+            feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             chat_history=self.chat_history,
@@ -260,7 +260,7 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
         template = execute_pm.get_prompts()["default"].get_template()
         prompt_str = template.format(
             domain_description=self.domain_description,
-            feature_names=self.feature_names,
+            feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             chat_history=self.chat_history,
@@ -315,7 +315,7 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
         template = pe_pm.get_prompts()["default"].get_template()
         prompt_str = template.format(
             domain_description=self.domain_description,
-            feature_names=self.feature_names,
+            feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             user_model=self.user_model.get_state_summary(as_dict=False),
@@ -375,7 +375,7 @@ class UnifiedMixin(UnifiedHelperMixin):
         template = sp_pm.get_prompts()["default"].get_template()
         prompt_str = template.format(
             domain_description=self.domain_description,
-            feature_names=self.feature_names,
+            feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             understanding_displays=self.understanding_displays.as_text(),
@@ -425,6 +425,8 @@ class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin,
             llm: LLM = None,
             experiment_id: str = "",
             feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
             structured_output: bool = True,
@@ -436,8 +438,11 @@ class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin,
             self,
             experiment_id=experiment_id,
             feature_names=feature_names,
+            feature_units=feature_units,
+            feature_tooltips=feature_tooltips,
             domain_description=domain_description,
-            user_ml_knowledge=user_ml_knowledge
+            user_ml_knowledge=user_ml_knowledge,
+            **kwargs
         )
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
@@ -463,6 +468,8 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
             llm: LLM = None,
             experiment_id: str = "",
             feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
             structured_output: bool = True,
@@ -474,8 +481,11 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
             self,
             experiment_id=experiment_id,
             feature_names=feature_names,
+            feature_units=feature_units,
+            feature_tooltips=feature_tooltips,
             domain_description=domain_description,
-            user_ml_knowledge=user_ml_knowledge
+            user_ml_knowledge=user_ml_knowledge,
+            **kwargs
         )
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.structured_output = structured_output
@@ -498,6 +508,8 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
             llm: LLM = None,
             experiment_id: str = "",
             feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
             structured_output: bool = True,
@@ -509,8 +521,11 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
             self,
             experiment_id=experiment_id,
             feature_names=feature_names,
+            feature_units=feature_units,
+            feature_tooltips=feature_tooltips,
             domain_description=domain_description,
-            user_ml_knowledge=user_ml_knowledge
+            user_ml_knowledge=user_ml_knowledge,
+            **kwargs
         )
         self.llm = llm or OpenAI(model=OPENAI_REASONING_MODEL_NAME, reasoning_effort="low")
         self.structured_output = structured_output
@@ -536,7 +551,7 @@ class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHe
         template = plan_approval_pm.get_prompts()["default"].get_template()
         prompt_str = template.format(
             domain_description=self.domain_description,
-            feature_names=self.feature_names,
+            feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             chat_history=self.chat_history,
@@ -590,7 +605,7 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
         template = plan_approval_execute_pm.get_prompts()["default"].get_template()
         prompt_str = template.format(
             domain_description=self.domain_description,
-            feature_names=self.feature_names,
+            feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
             chat_history=self.chat_history,
@@ -668,6 +683,8 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
             llm: LLM = None,
             experiment_id: str = "",
             feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
             structured_output: bool = True,
@@ -679,8 +696,11 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
             self,
             experiment_id=experiment_id,
             feature_names=feature_names,
+            feature_units=feature_units,
+            feature_tooltips=feature_tooltips,
             domain_description=domain_description,
-            user_ml_knowledge=user_ml_knowledge
+            user_ml_knowledge=user_ml_knowledge,
+            **kwargs
         )
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.structured_output = structured_output
@@ -719,6 +739,8 @@ class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, Analy
             llm: LLM = None,
             experiment_id: str = "",
             feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
             structured_output: bool = True,
@@ -730,8 +752,11 @@ class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, Analy
             self,
             experiment_id=experiment_id,
             feature_names=feature_names,
+            feature_units=feature_units,
+            feature_tooltips=feature_tooltips,
             domain_description=domain_description,
-            user_ml_knowledge=user_ml_knowledge
+            user_ml_knowledge=user_ml_knowledge,
+            **kwargs
         )
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)

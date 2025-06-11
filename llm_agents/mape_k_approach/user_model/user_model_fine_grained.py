@@ -233,13 +233,13 @@ class UserModelFineGrained:
         """
         Return the user model including the cognitive state, ml knowledge, as well
         as a collection of explanation states and which explanations and steps are in there, either as a dictionary
-        or a string representation suitable for LLM prompts.
+        or an XML-formatted string representation suitable for LLM prompts.
 
         Args:
-            as_dict (bool): If True, return the summary as a dictionary. Otherwise, return a string.
+            as_dict (bool): If True, return the summary as a dictionary. Otherwise, return an XML-formatted string.
 
         Returns:
-            Union[Dict[str, Dict[str, List[str]]], str]: The state summary in the desired format.
+            Union[Dict[str, Dict[str, List[str]]], str]: The state summary as dictionary or XML string.
         """
         excluded_explanations = {"ScaffoldingStrategy"}
         summary = defaultdict(lambda: defaultdict(list))
@@ -281,13 +281,95 @@ class UserModelFineGrained:
         # Prepend the cognitive state and ml knowledge to the prompt
         prompt_lines = f"{self.get_user_info()}\n The user's understanding about the explanations is detailed here with the keys what the user UNDERSTOOD, NOT_UNDERSTOOD, or NOT_YET_EXPLAINED" + prompt_lines
 
-        return prompt_lines
+        return self._convert_state_summary_to_xml(summary)
 
-    def get_complete_explanation_collection(self, as_dict: bool = False, include_exp_content=True) -> Union[
-        Dict[str, Dict], str]:
+    def _convert_state_summary_to_xml(self, summary: Dict) -> str:
         """
-        Return the explanation plan for all explanations as a JSON structure.
-        If as_dict is True, returns a dictionary. Otherwise, returns a JSON-formatted string.
+        Convert the state summary to XML format with better naming conventions.
+        
+        Args:
+            summary: Dictionary containing explanation states and their associated explanations
+            
+        Returns:
+            XML formatted string representing the user model state
+        """
+        # Map state names to more descriptive XML tag names
+        state_name_mapping = {
+            "UNDERSTOOD": "understood_explanations",
+            "NOT_UNDERSTOOD": "confused_explanations",
+            "NOT_YET_EXPLAINED": "not_yet_explained_explanations",
+        }
+
+        xml_parts = ["<user_model_state>"]
+
+        # Add user information section
+        user_info = self.get_user_info(as_dict=True)
+        xml_parts.append("    <user_profile>")
+
+        if user_info.get("Cognitive State"):
+            xml_parts.append(
+                f'        <cognitive_state>The users cognitive state is {user_info["Cognitive State"]}</cognitive_state>')
+
+        if user_info.get("ML Knowledge"):
+            xml_parts.append(
+                f'        <ml_knowledge_level>The users machine learning knowlwsge is {user_info["ML Knowledge"]}</ml_knowledge_level>')
+
+        if user_info.get("Explicit Understanding Signals"):
+            signals = user_info["Explicit Understanding Signals"]
+            if signals:
+                xml_parts.append("        <recent_understanding_signals>")
+                for signal in signals:
+                    xml_parts.append(f"            <signal>{signal}</signal>")
+                xml_parts.append("        </recent_understanding_signals>")
+
+        xml_parts.append("    </user_profile>")
+
+        # Add explanation states section
+        xml_parts.append("    <explanation_states>")
+
+        for state, explanations_dict in summary.items():
+            # Use mapped name or fallback to original state name
+            xml_tag = state_name_mapping.get(state, state.lower().replace('_', '_'))
+
+            if explanations_dict:  # Only add section if there are explanations
+                xml_parts.append(f"        <{xml_tag}>")
+
+                for exp_name, steps in explanations_dict.items():
+                    xml_parts.append(f'            <explanation name="{exp_name}">')
+                    xml_parts.append("                <steps>")
+                    for step in steps:
+                        xml_parts.append(f"                    <step>{step}</step>")
+                    xml_parts.append("                </steps>")
+                    xml_parts.append("            </explanation>")
+
+                xml_parts.append(f"        </{xml_tag}>")
+
+        # Add sections for states with no explanations but to give context of all states
+        for original_state, xml_tag in state_name_mapping.items():
+            if original_state not in summary:
+                # Add empty tag for states that have no explanations
+                xml_parts.append(f"        <{xml_tag} />")
+            elif not summary[original_state]:
+                # Add empty tag for states that exist but have no explanations
+                xml_parts.append(f"        <{xml_tag} />")
+
+        xml_parts.append("    </explanation_states>")
+        xml_parts.append("</user_model_state>")
+
+        return "\n".join(xml_parts)
+
+    def get_complete_explanation_collection(self, as_dict: bool = False, include_exp_content=True,
+                                            output_format: str = "xml") -> Union[Dict[str, Dict], str]:
+        """
+        Return the explanation plan for all explanations in the specified format.
+        
+        Args:
+            as_dict: If True and output_format is "json", returns a dictionary instead of JSON string
+            include_exp_content: Whether to include step descriptions
+            output_format: Format of the output - "json" or "xml"
+        
+        Returns:
+            Dictionary if as_dict=True and output_format="json", otherwise formatted string
         """
         excluded_explanations = {"ScaffoldingStrategy"}
 
@@ -306,10 +388,49 @@ class UserModelFineGrained:
             if exp_name not in excluded_explanations
         }
 
-        if as_dict:
+        if output_format.lower() == "xml":
+            return self._convert_to_xml(explanation_plan)
+        elif as_dict:
             return explanation_plan
         else:
             return json.dumps(explanation_plan, indent=2)
+
+    def _convert_to_xml(self, explanation_plan: Dict[str, Dict]) -> str:
+        """
+        Convert explanation plan dictionary to XML format.
+        
+        Args:
+            explanation_plan: Dictionary containing explanation data
+            
+        Returns:
+            XML formatted string
+        """
+        # Create root element
+        root = ET.Element("explanations")
+
+        for exp_name, exp_data in explanation_plan.items():
+            # Create explanation element
+            explanation_elem = ET.SubElement(root, "explanation")
+            explanation_elem.set("name", exp_name)
+
+            # Add description
+            description_elem = ET.SubElement(explanation_elem, "description")
+            description_elem.text = exp_data.get("description", "")
+
+            # Add steps
+            steps_elem = ET.SubElement(explanation_elem, "steps")
+            for step in exp_data.get("steps", []):
+                step_elem = ET.SubElement(steps_elem, "step")
+                step_elem.set("name", step.get("step_name", ""))
+
+                # Add step description if present
+                if "description" in step:
+                    step_description_elem = ET.SubElement(step_elem, "description")
+                    step_description_elem.text = step["description"]
+
+        # Convert to string with proper formatting
+        ET.indent(root, space="  ", level=0)
+        return ET.tostring(root, encoding="unicode")
 
     def get_string_explanations_from_plan(self, explanation_plan: List[ChosenExplanationModel]) -> str:
         """

@@ -26,6 +26,8 @@ class OpenAIAgent(BaseAgent):
             self,
             experiment_id: str,
             feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
             **kwargs
@@ -33,6 +35,8 @@ class OpenAIAgent(BaseAgent):
         super().__init__(
             experiment_id=experiment_id,
             feature_names=feature_names,
+            feature_units=feature_units,
+            feature_tooltips=feature_tooltips,
             domain_description=domain_description,
             user_ml_knowledge=user_ml_knowledge,
             **kwargs

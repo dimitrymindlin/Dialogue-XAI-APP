@@ -31,13 +31,13 @@ os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
 LLM_MODEL = os.getenv('OPENAI_MODEL_NAME')
 
 
-def create_monitor_system_prompt(domain_description, feature_names, instance, predicted_class_name,
+def create_monitor_system_prompt(domain_description, feature_context, instance, predicted_class_name,
                                  understanding_displays, modes_of_engagement):
     monitor_pm = MonitorAgentSystemPrompt()
     template = monitor_pm.get_prompts()["default"].get_template()
     prompt_str = template.format(
         domain_description=domain_description,
-        feature_names=feature_names,
+        feature_context=feature_context,
         instance=instance,
         predicted_class_name=predicted_class_name,
         understanding_displays=understanding_displays.as_text(),
@@ -58,13 +58,13 @@ def create_monitor_user_prompt(chat_history, user_message):
     return history_str + user_message_str
 
 
-def create_analyze_system_prompt(domain_description, feature_names, instance, predicted_class_name,
+def create_analyze_system_prompt(domain_description, feature_context, instance, predicted_class_name,
                                  explanation_collection):
     analyze_pm = AnalyzeAgentSystemPrompt()
     template = analyze_pm.get_prompts()["default"].get_template()
     prompt_str = template.format(
         domain_description=domain_description,
-        feature_names=feature_names,
+        feature_context=feature_context,
         instance=instance,
         predicted_class_name=predicted_class_name,
         explanation_collection=explanation_collection,
@@ -89,13 +89,13 @@ def create_analyze_user_prompt(chat_history, user_message, last_shown_explanatio
     return history_str + last_shown_str + user_model_str + user_message_str
 
 
-def create_plan_system_prompt(domain_description, feature_names, instance, predicted_class_name,
+def create_plan_system_prompt(domain_description, feature_context, instance, predicted_class_name,
                               explanation_collection):
     plan_pm = PlanAgentSystemPrompt()
     template = plan_pm.get_prompts()["default"].get_template()
     prompt_str = template.format(
         domain_description=domain_description,
-        feature_names=feature_names,
+        feature_context=feature_context,
         instance=instance,
         predicted_class_name=predicted_class_name,
         explanation_collection=explanation_collection,
@@ -124,12 +124,12 @@ def create_plan_user_prompt(chat_history, user_message, explanation_plan, user_m
     return history_str + user_message_str + user_model_str + plan_str + last_shown_str
 
 
-def create_execute_system_prompt(domain_description, feature_names, instance, predicted_class_name):
+def create_execute_system_prompt(domain_description, feature_context, instance, predicted_class_name):
     execute_pm = ExecuteAgentSystemPrompt()
     template = execute_pm.get_prompts()["default"].get_template()
     prompt_str = template.format(
         domain_description=domain_description,
-        feature_names=feature_names,
+        feature_context=feature_context,
         instance=instance,
         predicted_class_name=predicted_class_name,
     )
@@ -213,10 +213,19 @@ class MapeK4OpenAIAgent(OpenAIAgent):
             self,
             experiment_id: str,
             feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
     ):
-        super().__init__(experiment_id, feature_names, domain_description, user_ml_knowledge)
+        super().__init__(
+            experiment_id=experiment_id,
+            feature_names=feature_names,
+            feature_units=feature_units,
+            feature_tooltips=feature_tooltips,
+            domain_description=domain_description,
+            user_ml_knowledge=user_ml_knowledge
+        )
         self.monitor_agent = None
         self.analyze_agent = None
         self.plan_agent = None
@@ -316,7 +325,7 @@ class MapeK4OpenAIAgent(OpenAIAgent):
             model=LLM_MODEL,
             instructions=create_monitor_system_prompt(
                 domain_description=self.domain_description,
-                feature_names=self.feature_names,
+                feature_context=self.get_formatted_feature_context(),
                 instance=self.instance,
                 predicted_class_name=self.predicted_class_name,
                 understanding_displays=self.understanding_displays,
@@ -329,7 +338,7 @@ class MapeK4OpenAIAgent(OpenAIAgent):
             model=LLM_MODEL,
             instructions=create_analyze_system_prompt(
                 domain_description=self.domain_description,
-                feature_names=self.feature_names,
+                feature_context=self.get_formatted_feature_context(),
                 instance=self.instance,
                 predicted_class_name=self.predicted_class_name,
                 explanation_collection=xai_explanations,
@@ -341,7 +350,7 @@ class MapeK4OpenAIAgent(OpenAIAgent):
             model=LLM_MODEL,
             instructions=create_plan_system_prompt(
                 domain_description=self.domain_description,
-                feature_names=self.feature_names,
+                feature_context=self.get_formatted_feature_context(),
                 instance=self.instance,
                 predicted_class_name=self.predicted_class_name,
                 explanation_collection=xai_explanations,
@@ -353,7 +362,7 @@ class MapeK4OpenAIAgent(OpenAIAgent):
             model=LLM_MODEL,
             instructions=create_execute_system_prompt(
                 domain_description=self.domain_description,
-                feature_names=self.feature_names,
+                feature_context=self.get_formatted_feature_context(),
                 instance=self.instance,
                 predicted_class_name=self.predicted_class_name,
             ),
@@ -366,10 +375,19 @@ class MapeK2OpenAIAgent(OpenAIAgent):
             self,
             experiment_id: str,
             feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
             domain_description: str = "",
             user_ml_knowledge: str = "",
     ):
-        super().__init__(experiment_id, feature_names, domain_description, user_ml_knowledge)
+        super().__init__(
+            experiment_id=experiment_id,
+            feature_names=feature_names,
+            feature_units=feature_units,
+            feature_tooltips=feature_tooltips,
+            domain_description=domain_description,
+            user_ml_knowledge=user_ml_knowledge
+        )
         self.monitor_analyze_agent = None
         self.plan_execute_agent = None
 
@@ -396,7 +414,7 @@ class MapeK2OpenAIAgent(OpenAIAgent):
             model=LLM_MODEL,
             instructions=MonitorAnalyzeSystemPrompt().get_prompts()["default"].get_template().format(
                 domain_description=self.domain_description,
-                feature_names=self.feature_names,
+                feature_context=self.get_formatted_feature_context(),
                 instance=self.instance,
                 predicted_class_name=self.predicted_class_name,
                 understanding_displays=self.understanding_displays.as_text(),
@@ -414,7 +432,7 @@ class MapeK2OpenAIAgent(OpenAIAgent):
             model=LLM_MODEL,
             instructions=PlanExecuteSystemPrompt().get_prompts()["default"].get_template().format(
                 domain_description=self.domain_description,
-                feature_names=self.feature_names,
+                feature_context=self.get_formatted_feature_context(),
                 instance=self.instance,
                 predicted_class_name=self.predicted_class_name,
                 explanation_collection=xai_explanations,
