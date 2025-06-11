@@ -45,6 +45,15 @@ from llm_agents.explanation_state import ExplanationState
 from llm_agents.models import ChosenExplanationModel
 from llm_agents.utils.postprocess_message import replace_plot_placeholders
 
+# Add streaming support
+import asyncio
+from typing import Optional, Callable, AsyncGenerator, Dict, Any
+import json
+
+
+# Streaming callback type
+StreamCallback = Optional[Callable[[str, bool], None]]
+
 
 class MonitorDoneEvent(Event):
     pass
@@ -56,6 +65,132 @@ class AnalyzeDoneEvent(Event):
 
 class PlanDoneEvent(Event):
     pass
+
+
+class StreamingMixin:
+    """Mixin to add streaming capability to agents."""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stream_callback: StreamCallback = None
+        self.enable_streaming: bool = False
+    
+    def set_stream_callback(self, callback: StreamCallback):
+        """Set a callback function for streaming responses."""
+        self.stream_callback = callback
+        self.enable_streaming = callback is not None
+    
+    async def _stream_predict_with_callback(self, model_class, prompt, method_name="scaffolding"):
+        """Internal method to handle real token-level streaming prediction."""
+        if not self.enable_streaming or not self.stream_callback:
+            # Fallback to normal prediction
+            return await self.llm.astructured_predict(model_class, prompt)
+        
+        try:
+            # Use real token-level streaming with normal completion
+            logger.info(f"Starting real token streaming for {method_name}")
+            
+            # Convert structured prompt to completion prompt
+            completion_prompt = str(prompt) + f"\n\nPlease respond in valid JSON format matching this schema: {model_class.model_json_schema()}"
+            
+            # Use normal streaming completion for real token-by-token streaming
+            stream_response = await self.llm.astream_complete(completion_prompt)
+            
+            accumulated_content = ""
+            last_streamed_response = ""
+            chunk_count = 0
+            
+            # Process real token stream
+            async for token_chunk in stream_response:
+                chunk_count += 1
+                new_token = ""
+                
+                if hasattr(token_chunk, 'delta') and token_chunk.delta:
+                    new_token = token_chunk.delta
+                elif hasattr(token_chunk, 'text') and token_chunk.text:
+                    new_token = token_chunk.text
+                
+                if new_token:
+                    accumulated_content += new_token
+                    
+                    # Try to extract only the "response" field content
+                    try:
+                        import json
+                        import re
+                        
+                        # Look for response field in the accumulated JSON
+                        response_match = re.search(r'"response"\s*:\s*"([^"]*(?:\\.[^"]*)*)"', accumulated_content, re.DOTALL)
+                        if response_match:
+                            current_response_content = response_match.group(1)
+                            # Unescape JSON string
+                            current_response_content = current_response_content.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+                            
+                            # Only stream new content from response field
+                            if current_response_content != last_streamed_response:
+                                new_response_content = current_response_content[len(last_streamed_response):]
+                                if new_response_content and self.stream_callback:
+                                    try:
+                                        self.stream_callback(new_response_content, False)  # False = not final
+                                        last_streamed_response = current_response_content
+                                    except Exception as e:
+                                        logger.warning(f"Stream callback error: {e}")
+                        
+                        # Alternative: try to find incomplete response field
+                        elif '"response"' in accumulated_content:
+                            # Look for partial response content
+                            partial_match = re.search(r'"response"\s*:\s*"([^"]*)', accumulated_content)
+                            if partial_match:
+                                partial_content = partial_match.group(1)
+                                partial_content = partial_content.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+                                
+                                if partial_content != last_streamed_response:
+                                    new_content = partial_content[len(last_streamed_response):]
+                                    if new_content and self.stream_callback:
+                                        try:
+                                            self.stream_callback(new_content, False)
+                                            last_streamed_response = partial_content
+                                        except Exception as e:
+                                            logger.warning(f"Stream callback error: {e}")
+                                            
+                    except Exception as parse_error:
+                        # If JSON parsing fails, continue accumulating
+                        pass
+            
+            # Send final callback
+            if self.stream_callback:
+                try:
+                    self.stream_callback("", True)  # True = final
+                except Exception as e:
+                    logger.warning(f"Final stream callback error: {e}")
+            
+            # Parse the accumulated content into structured format
+            try:
+                # Try to extract JSON from the response
+                import json
+                import re
+                
+                # Find JSON content in the response
+                json_match = re.search(r'\{.*\}', accumulated_content, re.DOTALL)
+                if json_match:
+                    json_content = json_match.group()
+                    parsed_data = json.loads(json_content)
+                    result = model_class(**parsed_data)
+                    logger.info(f"Successfully parsed streaming response for {method_name}")
+                    return result
+                else:
+                    logger.warning(f"No JSON found in streaming response for {method_name}, using fallback")
+                    # Fallback to structured prediction
+                    return await self.llm.astructured_predict(model_class, prompt)
+                    
+            except Exception as parse_error:
+                logger.warning(f"Failed to parse streaming response for {method_name}: {parse_error}, using fallback")
+                # Fallback to structured prediction
+                return await self.llm.astructured_predict(model_class, prompt)
+            
+        except Exception as e:
+            logger.warning(f"Token streaming failed for {method_name}, falling back to normal prediction: {e}")
+            # Fallback to normal prediction on any error
+            return await self.llm.astructured_predict(model_class, prompt)
 
 
 class MonitorMixin(LoggingHelperMixin, UserModelHelperMixin):
@@ -290,7 +425,7 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
         return StopEvent(result=execute_result)
 
 
-class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
+class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin, StreamingMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def scaffolding(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
         user_message = await ctx.get("user_message")
@@ -316,7 +451,10 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
             # Log the scaffolding prompt
             mlflow.log_param("scaffolding_prompt", prompt_str)
             prompt = PromptTemplate(prompt_str)
-            scaff = await self.llm.astructured_predict(PlanExecuteResultModel, prompt)  # Todo: output_stream = await self.llm.astream_structured_predict(PlanExecuteResultModel, prompt) ... output_stream.response -> response to frontend,
+            
+            # IMPLEMENTED: Use streaming prediction with callback support
+            scaff = await self._stream_predict_with_callback(PlanExecuteResultModel, prompt, "scaffolding")
+            
         end = datetime.datetime.now()
         logger.info(f"Time taken for Scaffolding: {end - start}")
 
@@ -347,8 +485,89 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
         await ctx.set("scaffolding_result", scaff)
         return StopEvent(result=scaff)
 
+    # New streaming-enabled method for external use
+    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Stream-enabled version of answer_user_question.
+        
+        Args:
+            user_question: The user's question
+            stream_callback: Optional callback for streaming chunks
+            
+        Yields:
+            Dict with streaming data: {"type": "partial"|"final", "content": str, "is_complete": bool}
+        """
+        if stream_callback:
+            self.set_stream_callback(stream_callback)
+        
+        # Create a queue to capture streaming data
+        stream_queue = asyncio.Queue()
+        final_result = None
+        
+        def capture_stream(content: str, is_final: bool):
+            """Capture streaming data into queue."""
+            nonlocal final_result
+            if is_final:
+                stream_queue.put_nowait({"type": "final", "content": "", "is_complete": True})
+            else:
+                stream_queue.put_nowait({"type": "partial", "content": content, "is_complete": False})
+        
+        # Set up streaming callback
+        self.set_stream_callback(capture_stream)
+        
+        # Start the workflow in background
+        async def run_workflow():
+            nonlocal final_result
+            try:
+                result = await self.run(input=user_question)
+                final_result = result
+                # Signal completion
+                stream_queue.put_nowait({"type": "workflow_complete", "result": result})
+            except Exception as e:
+                stream_queue.put_nowait({"type": "error", "error": str(e)})
+        
+        # Start workflow task
+        workflow_task = asyncio.create_task(run_workflow())
+        
+        try:
+            while True:
+                # Wait for stream data with timeout
+                try:
+                    chunk = await asyncio.wait_for(stream_queue.get(), timeout=0.1)
+                except asyncio.TimeoutError:
+                    # Check if workflow is done
+                    if workflow_task.done():
+                        break
+                    continue
+                
+                if chunk["type"] == "workflow_complete":
+                    # Send final response
+                    result = chunk["result"]
+                    analysis = getattr(result, "reasoning", None) or result.reasoning
+                    response = getattr(result, "response", None) or result.response
+                    yield {
+                        "type": "final", 
+                        "content": response,
+                        "reasoning": analysis,
+                        "is_complete": True
+                    }
+                    break
+                elif chunk["type"] == "error":
+                    yield {"type": "error", "content": chunk["error"], "is_complete": True}
+                    break
+                elif chunk["type"] == "partial":
+                    yield chunk
+                elif chunk["type"] == "final":
+                    continue  # Wait for workflow_complete
+                    
+        finally:
+            # Clean up
+            if not workflow_task.done():
+                workflow_task.cancel()
+            self.set_stream_callback(None)
 
-class UnifiedMixin(UnifiedHelperMixin):
+
+class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def unified_mape_k(self, ctx: Context, ev: StartEvent) -> StopEvent:
         user_message = ev.input
@@ -381,9 +600,12 @@ class UnifiedMixin(UnifiedHelperMixin):
             mlflow.log_param("unified_prompt", prompt_str)
             # Wrap the prompt string in a PromptTemplate for structured prediction
             unified_prompt = PromptTemplate(prompt_str)
-            # Single LLM call
-            result: SinglePromptResultModel = await self.llm.astructured_predict(SinglePromptResultModel,
-                                                                                 unified_prompt)
+            
+            # Use streaming prediction with callback support
+            result: SinglePromptResultModel = await self._stream_predict_with_callback(
+                SinglePromptResultModel, unified_prompt, "unified"
+            )
+            
         end = datetime.datetime.now()
         logger.info(f"Time taken for Unified single-prompt: {end - start}")
 
@@ -440,6 +662,7 @@ class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin,
 class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin):
     """
     2-step MAPE-K agent: combines Monitor+Analyze and Plan+Execute steps.
+    Now with streaming support!
     """
 
     def __init__(
@@ -469,10 +692,23 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
         response = getattr(result, "response", None) or result.response
         return analysis, response
 
+    # NEW: Streaming-enabled method
+    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None):
+        """
+        Stream-enabled version that yields partial responses.
+        
+        Usage:
+            async for chunk in agent.answer_user_question_stream(question):
+                print(chunk['content'], end='', flush=True)
+        """
+        async for chunk in super().answer_user_question_stream(user_question, stream_callback):
+            yield chunk
+
 
 class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
     """
     Unified MAPE-K agent: performs all MAPE-K steps in a single LLM call.
+    Now with streaming support!
     """
 
     def __init__(
@@ -501,6 +737,12 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
         analysis = getattr(result, "reasoning", None) or result.reasoning
         response = getattr(result, "response", None) or result.response
         return analysis, response
+
+    # NEW: Streaming-enabled method  
+    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None):
+        """Stream-enabled version for unified agent."""
+        async for chunk in super().answer_user_question_stream(user_question, stream_callback):
+            yield chunk
 
 
 class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
