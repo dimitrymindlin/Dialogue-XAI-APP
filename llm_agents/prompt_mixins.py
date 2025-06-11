@@ -336,10 +336,17 @@ class UnifiedTaskPrompt(PromptMixin):
         if "default" in prompts_dict:
             self._tpl = prompts_dict["default"]
 
-
+class MinitorAnalyzePersona(SimplePromptMixin):
+    def __init__(self):
+        super().__init__(
+            """
+You are a Cognitive Engagement Analyst & Understanding Tracker: an expert in monitoring how users engage with AI explanations and how their understanding evolves. You interpret subtle communication signals to assess both real-time cognitive engagement and deeper comprehension, distinguishing surface acknowledgment from genuine understanding. Your focus includes classifying engagement modes and tracking knowledge progression over time. Guided by principles of evidence-based assessment, contextual interpretation, and dynamic model updating, you ensure that user models reflect both current engagement and long-term learning trajectories.
+            """
+        )
 class MonitorAnalyzePrompt(CompositePromptMixin):
     def __init__(self, exclude_task: bool = False):
         modules = {
+            "persona": MinitorAnalyzePersona(),
             "monitor": MonitorPrompt(exclude_task=True),
             "analyze": AnalyzePrompt(exclude_task=True),
             "task": MonitorAnalyzeTaskPrompt(),
@@ -408,14 +415,14 @@ class ExecuteTaskPrompt(SimplePromptMixin):
             """
 <task>
   <objective>Execute</objective>
-  <description>Generate a concise response (max 3 sentences) based on the current User Model, conversation history, and explanation plan</description>
+  <description>Generate a concise response (max 3-4 sentences) based on the current user model, conversation history, and explanation plan</description>
   <guidelines>
-    Use only information from the chat history or what can be reasonably inferred from the user's prior behavior and questions. If the user has agreed to revisit or elaborate on an explanation, continue with that before introducing new concepts. Do not repeat information in the same way, check the conversation history to know what was already communicated and don't repeat it. When ending with an open question, consider proposing to dive deeper or pitch another explanation by showing it's value.
+    Use only information from the chat history or what can be reasonably inferred from the user's prior behavior and questions. If the user has agreed to revisit or elaborate on an explanation, continue with that before introducing new concepts. Do not repeat information in the same way. check the conversation history to know what was already communicated and don't repeat it. When ending with an open question, consider proposing to dive deeper or pitch another explanation by showing it's value.
   </guidelines>
   <response_crafting>
-    <content_alignment>Use the explanation plan and chat history. If eliciting knowledge, prompt briefly rather than explaining fully.</content_alignment>
+    <content_alignment>Use the explanation plan and chat history to guide responses. When eliciting knowledge, prompt briefly instead of fully explaining. If a user’s question aligns with an explanation method, introduce the concept briefly and proceed with the explanation—no need to ask for conformation first.</content_alignment>
     <tone_and_language>Match the user's cognitive state and ML expertise. Use plain language for lay users; DO NOT USE technical terms and XAI method names unless the user is ML-proficient as indicated in his profile.</tone_and_language>
-    <clarity_and_relevance>Be concise and avoid jargon. Focus on explanation over naming techniques. Maintain the flow of conversation. Before generating a sentence, check whether the same explanation or wording was used earlier in the conversation. If yes, do not repeat unless the user explicitly asks for it.</clarity_and_relevance>
+    <clarity_and_relevance>Be concise and avoid jargon. Focus on explanation results over naming techniques. Maintain the flow of the conversation. Before generating a sentence, check whether the same explanation or wording was used earlier in the conversation. If yes, do not repeat unless the user explicitly asks for it.</clarity_and_relevance>
     <focus>If the user goes off-topic, respond that you can only discuss the model's prediction and the current instance.</focus>
     <formatting>
       Use HTML tags:
@@ -473,37 +480,6 @@ class PlanExecutePrompt(CompositePromptMixin):
             "task": PlanExecuteTaskPrompt(),
         }
         super().__init__(modules, exclude_task=exclude_task)
-
-
-# --- Plan Approval System Prompts ---
-
-class PlanApprovalSystemPrompt(CompositePromptMixin):
-    def __init__(self):
-        agent_instructions = """
-        You are a plan approval specialist that evaluates predefined explanation plans and determines whether they should be followed or modified based on the user's current needs. The user is curious about an AI model's prediction and has been provided with a predefined explanation plan. Your task is to analyze the user's latest message in the context of the conversation history and decide whether to approve the predefined plan or modify it by selecting a more appropriate explanation.
-        """
-        modules = {
-            "instructions": SimplePromptMixin(agent_instructions),
-            "context": ContextPrompt(),
-            "collection": ExplanationCollectionPrompt(),
-            "task": PlanApprovalTaskPrompt(),
-        }
-        super().__init__(modules, exclude_task=True)
-
-
-class PlanApprovalExecuteSystemPrompt(CompositePromptMixin):
-    def __init__(self):
-        agent_instructions = """
-        You are a planning specialist and communicator that evaluates predefined explanation plans and generates explanations about AI model predictions for users. The user is curious about an AI model's prediction and has been provided with a predefined explanation plan. Your task is to analyze the user's latest message in the context of the conversation history, decide whether to approve the predefined plan or modify it by selecting a more appropriate explanation, and then craft a natural, engaging response based on your decision.
-        """
-        modules = {
-            "instructions": SimplePromptMixin(agent_instructions),
-            "context": ContextPrompt(),
-            "collection": ExplanationCollectionPrompt(),
-            "task": PlanApprovalExecuteTaskPrompt(),
-        }
-        super().__init__(modules, exclude_task=True)
-
 
 # --- SinglePromptPrompt ---
 
@@ -641,7 +617,7 @@ class PlanApprovalExecutePersona(SimplePromptMixin):
     def __init__(self):
         super().__init__(
             """
-You are an Adaptive XAI Communication Specialist—an expert who unites strategic explanation planning with real-time, user-tailored communication. In your dual role, you evaluate whether explanation plans address user understanding gaps and adapt them using scaffolding strategies when needed. You then deliver clear, engaging explanations calibrated to the user’s cognitive capacity and learning level. Your skillset spans gap-aware plan evaluation, adaptive sequencing, and effective communication techniques like progressive disclosure and vocabulary adjustment. Grounded in principles of responsive adaptation, cognitive load management, and scaffolded communication, you ensure each interaction prioritizes comprehension and fosters incremental learning.
+You are an Adaptive XAI Communication Specialist—an expert who unites strategic explanation planning with real-time, user-tailored communication. In your role, you evaluate whether explanation plans address user understanding gaps and adapt them using scaffolding strategies when needed. You then deliver clear, engaging explanations calibrated to the user’s cognitive capacity and learning level. Your skillset spans gap-aware plan evaluation, adaptive sequencing, and effective communication techniques like progressive disclosure and language-level adjustment. Grounded in principles of responsive adaptation, cognitive load management, and scaffolded communication, you ensure each interaction prioritizes comprehension and fosters incremental learning.
 """)
 
 

@@ -81,7 +81,7 @@ class PlanResultModel(BaseModel):
 class ExecuteResult(BaseModel):
     reasoning: str = Field(..., description=f"{reasoning_prefix} on how to craft the response.")
     explanations_count: int = Field(...,
-                                      description="The number of explanations used in the response in the ordered explanation plan. Used to track how many explanations were actually used from the explanation plan.")
+                                      description="The number of explanations from the plan to include in the response. Used to track how many explanations were actually used from the explanation plan.")
     response: str = Field(...,
                           description="The response to the user's question about the shown instance and prediction only using information from the chat history and explanation plan styled with appropriate html elements such as <b> for bold text or bullet points.")
 
