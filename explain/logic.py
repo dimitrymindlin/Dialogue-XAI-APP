@@ -248,7 +248,9 @@ class ExplainBot:
             else:
                 raise ValueError(f"Unknown agent type: {self.use_llm_agent}")
             self.agent = Agent(
-                feature_names=self.feature_ordering,
+                feature_names=self.get_feature_names(),
+                feature_units=self.get_feature_units(),
+                feature_tooltips=self.get_feature_tooltips(),
                 domain_description=self.conversation.describe.get_dataset_description(),
                 user_ml_knowledge=self.ml_knowledge,
                 experiment_id=self.experiment_id
