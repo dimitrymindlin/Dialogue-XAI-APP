@@ -54,13 +54,18 @@ class UserModelHelperMixin:
         for change in analyze_result.model_changes:
             if isinstance(change, dict):
                 exp = change.get("explanation_name")
-                step = change.get("step")
+                step = change.get("step") or change.get("step_name")  # Handle both possible field names
                 state = change.get("state")
                 # If any of the required fields is missing, skip this change
                 if not all([exp, step, state]):
                     continue
+            elif hasattr(change, 'explanation_name'):
+                # Handle ModelChange objects
+                exp = change.explanation_name
+                step = change.step_name
+                state = change.state
             else:
-                # Assuming structure as (explanation_name, state, step)
+                # Assuming structure as (explanation_name, state, step) - legacy format
                 try:
                     exp, state, step = change
                 except (ValueError, TypeError):
