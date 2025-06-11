@@ -12,7 +12,7 @@ from llm_agents.explanation_state import ExplanationState
 from llm_agents.models import MonitorResultModel, AnalyzeResult, PlanResultModel, ExecuteResult, \
     PlanApprovalExecuteResultModel
 from llm_agents.models import ChosenExplanationModel, SinglePromptResultModel, PlanApprovalModel
-from llm_agents.utils.postprocess_message import replace_plot_placeholders
+from llm_agents.utils.postprocess_message import replace_plot_placeholders, remove_html_plots_and_restore_placeholders
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -452,8 +452,65 @@ class ConversationHelperMixin:
             user_message: The user's message
             agent_response: The agent's response
         """
+        # Remove HTML plots and restore placeholders before storing in conversation history
+        if hasattr(self, 'visual_explanations_dict') and self.visual_explanations_dict:
+            cleaned_response = remove_html_plots_and_restore_placeholders(
+                agent_response, self.visual_explanations_dict
+            )
+        else:
+            cleaned_response = agent_response
+            
         self.append_to_history("user", user_message)
-        self.append_to_history("agent", agent_response)
+        self.append_to_history("agent", cleaned_response)
+
+    def get_chat_history_as_xml(self) -> str:
+        """
+        Convert the chat history to XML format.
+        
+        Returns:
+            str: The chat history formatted as XML
+        """
+        import re
+        
+        if not hasattr(self, 'chat_history') or not self.chat_history:
+            return "<chat_history></chat_history>"
+        
+        # Handle the case where chat_history is the initial placeholder
+        if self.chat_history.startswith("No history available"):
+            return "<chat_history></chat_history>"
+        
+        xml_lines = ["<chat_history>"]
+        
+        # Split the chat history into lines and parse each message
+        lines = self.chat_history.strip().split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Parse user messages
+            user_match = re.match(r'^User:\s*(.*)', line)
+            if user_match:
+                message_content = user_match.group(1)
+                # Only escape characters that could break XML: & and "
+                escaped_content = message_content.replace('&', '&amp;').replace('"', '&quot;')
+                xml_lines.append(f"  <message role=\"user\">{escaped_content}</message>")
+                continue
+            
+            # Parse agent messages
+            agent_match = re.match(r'^Agent:\s*(.*)', line)
+            if agent_match:
+                message_content = agent_match.group(1)
+                # Only escape characters that could break XML: & and "
+                # Preserve HTML tags and placeholder patterns
+                escaped_content = message_content.replace('&', '&amp;').replace('"', '&quot;')
+                xml_lines.append(f"  <message role=\"agent\">{escaped_content}</message>")
+                continue
+        
+        xml_lines.append("</chat_history>")
+        
+        return '\n'.join(xml_lines)
 
 
 class UnifiedHelperMixin(UserModelHelperMixin, LoggingHelperMixin, ConversationHelperMixin):

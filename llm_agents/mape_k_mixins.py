@@ -75,7 +75,7 @@ class MonitorMixin(LoggingHelperMixin, UserModelHelperMixin):
             feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
-            chat_history=self.chat_history,
+            chat_history=self.get_chat_history_as_xml(),
             user_message=user_message,
             understanding_displays=self.understanding_displays.as_text(),
             modes_of_engagement=self.modes_of_engagement.as_text(),
@@ -116,7 +116,7 @@ class AnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
             feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
-            chat_history=self.chat_history,
+            chat_history=self.get_chat_history_as_xml(),
             understanding_displays=self.understanding_displays.as_text(),
             user_model=self.user_model.get_state_summary(as_dict=False),
             last_shown_explanations=self.last_shown_explanations,
@@ -168,7 +168,7 @@ class MonitorAnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
             modes_of_engagement=self.modes_of_engagement.as_text(),
             explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
             explanation_plan=self.user_model.get_complete_explanation_collection(as_dict=False),
-            chat_history=self.chat_history,
+            chat_history=self.get_chat_history_as_xml(),
             user_model=self.user_model.get_state_summary(as_dict=False),
             last_shown_explanations=self.last_shown_explanations,
             user_message=user_message,
@@ -208,7 +208,7 @@ class PlanMixin(LoggingHelperMixin, UserModelHelperMixin):
             feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
-            chat_history=self.chat_history,
+            chat_history=self.get_chat_history_as_xml(),
             user_model=self.user_model.get_state_summary(as_dict=False),
             user_message=user_message,
             explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
@@ -256,6 +256,8 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
         # Get XAI explanations from target explanations for execution
         xai_list = self.user_model.get_string_explanations_from_plan(target_explanations)
 
+        logger.info(f"Executing with XAI list: {xai_list}")
+
         execute_pm = ExecutePrompt()
         template = execute_pm.get_prompts()["default"].get_template()
         prompt_str = template.format(
@@ -263,7 +265,7 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
             feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
-            chat_history=self.chat_history,
+            chat_history=self.get_chat_history_as_xml(),
             user_model=self.user_model.get_state_summary(as_dict=False),
             user_message=user_message,
             plan_result=xai_list,
@@ -277,7 +279,7 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
             mlflow.log_param("execute_prompt", prompt_str)
             execute_prompt = PromptTemplate(prompt_str)
             execute_result = await astructured_predict_with_fallback(
-                self.mini_llm, ExecuteResult, execute_prompt, use_structured_output=self.structured_output
+                self.llm, ExecuteResult, execute_prompt, use_structured_output=self.structured_output
             )
         end_time = datetime.datetime.now()
         logger.info(f"Time taken for Execute: {end_time - start_time}")
@@ -320,7 +322,7 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
             predicted_class_name=self.predicted_class_name,
             user_model=self.user_model.get_state_summary(as_dict=False),
             explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
-            chat_history=self.chat_history,
+            chat_history=self.get_chat_history_as_xml(),
             user_message=user_message,
             explanation_plan=self.explanation_plan or "",
             last_shown_explanations=last_exp,
@@ -380,7 +382,7 @@ class UnifiedMixin(UnifiedHelperMixin):
             predicted_class_name=self.predicted_class_name,
             understanding_displays=self.understanding_displays.as_text(),
             modes_of_engagement=self.modes_of_engagement.as_text(),
-            chat_history=self.chat_history,
+            chat_history=self.get_chat_history_as_xml(),
             user_message=user_message,
             user_model=self.user_model.get_state_summary(as_dict=False),
             explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
@@ -554,7 +556,7 @@ class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHe
             feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
-            chat_history=self.chat_history,
+            chat_history=self.get_chat_history_as_xml(),
             user_model=self.user_model.get_state_summary(as_dict=False),
             user_message=user_message,
             explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
@@ -608,7 +610,7 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
             feature_context=self.get_formatted_feature_context(),
             instance=self.instance,
             predicted_class_name=self.predicted_class_name,
-            chat_history=self.chat_history,
+            chat_history=self.get_chat_history_as_xml(),
             user_model=self.user_model.get_state_summary(as_dict=False),
             user_message=user_message,
             explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
