@@ -124,5 +124,14 @@
     "train_score_auc_roc": 0.9113706046735842,
     "test_score_auc_roc": 0.8986396905180907
   },
-  "sklearn_version": "1.5.2"
+  "sklearn_version": "1.5.2",
+  "feature_importances": {
+    "Marital Status": 0.03756995190287327,
+    "Investment Outcome": 0.03345038316807763,
+    "Hours Per Week": 0.026335013627386942,
+    "Education Level": 0.00621930214158981,
+    "Age": 0.003596727752582167,
+    "Work Life Balance": 0.0024967154118542964,
+    "Occupation": 4.798776699853634e-08
+  }
 }
