@@ -284,19 +284,19 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
 
         # Update user model with execute results
         self.update_user_model_from_execute(execute_result, target_explanations)
-        
+
         # Mark explanations as shown in the user model
         self.mark_explanations_as_shown(target_explanations)
-        
+
         # Update conversation history
         self.update_conversation_history(user_message, execute_result.response)
-        
+
         # Process any visual explanations in the response
         execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
-        
+
         # Update the last shown explanations
         self.update_last_shown_explanations(target_explanations)
-        
+
         # Update log with execute results and finalize
         self.update_log("execute", execute_result)
         self.finalize_log_row()
@@ -633,6 +633,17 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
         logger.info(f"Time taken for Plan Approval Execute: {end_time - start_time}")
         logger.info(f"Plan Approval Execute result: {result}.\n")
 
+        # Check if result is None and handle gracefully
+        if result is None:
+            logger.error("Plan Approval Execute returned None - creating fallback result")
+            result = PlanApprovalExecuteResultModel(
+                reasoning="Error occurred during processing - using fallback",
+                approved=True,  # Default to approved to continue with existing plan
+                next_response=None,
+                explanations_count=1,
+                response="I apologize, but I encountered a technical issue"
+            )
+
         # Determine which explanations to use based on approval decision
         target_explanations = self.get_target_explanations_from_approval(result)
 
@@ -645,7 +656,7 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
         if target_explanations:
             # Get the first explanation to mark as shown (for single explanation case)
             target_explanation = target_explanations[0]
-            
+
             # Update user model to mark explanation as shown
             self.user_model.update_explanation_step_state(
                 target_explanation.explanation_name,
@@ -702,7 +713,7 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
             user_ml_knowledge=user_ml_knowledge,
             **kwargs
         )
-        self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
+        self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME, temperature=0.3)
         self.structured_output = structured_output
 
     @timed
@@ -721,7 +732,7 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
 
         # Extract reasoning and response from the result
         analysis = getattr(result, "reasoning", None) or "No reasoning available"
-        response = getattr(result, "response", None) or "No response available"
+        response = getattr(result, "response", None) or "Sorry, please try again"
 
         return analysis, response
 
@@ -778,6 +789,6 @@ class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, Analy
 
         # Extract reasoning and response from the result
         analysis = getattr(result, "reasoning", None) or "No reasoning available"
-        response = getattr(result, "response", None) or "No response available"
+        response = getattr(result, "response", None) or "Sorry, please try again."
 
         return analysis, response
