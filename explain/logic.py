@@ -245,6 +245,8 @@ class ExplainBot:
                 from llm_agents.openai_mapek_agent import MapeK4OpenAIAgent as Agent
             elif self.use_llm_agent == "mape_k_openai_2":
                 from llm_agents.openai_mapek_agent import MapeK2OpenAIAgent as Agent
+            elif self.use_llm_agent == "mape_k_openai_unified":
+                from llm_agents.openai_mapek_agent import MapeKUnifiedOpenAIAgent as Agent
             else:
                 raise ValueError(f"Unknown agent type: {self.use_llm_agent}")
             self.agent = Agent(
