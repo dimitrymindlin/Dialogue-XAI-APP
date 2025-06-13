@@ -34,7 +34,7 @@ class SHAPExplainer(BaseExplainer):
         # Use the SHAP kernel explainer in all cases. We can consider supporting
         # domain specific methods in the future.
         if method == 'tree':
-            self.explainer = shap.TreeExplainer(model.named_steps["model"], model_output="raw")
+            self.explainer = shap.TreeExplainer(model.named_steps["model"], model_output="raw", feature_perturbation="interventional")
         else:
             self.explainer = shap.KernelExplainer(self.model, self.data, link=link)
 
