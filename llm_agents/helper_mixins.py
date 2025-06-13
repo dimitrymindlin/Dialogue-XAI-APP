@@ -568,6 +568,6 @@ class UnifiedHelperMixin(UserModelHelperMixin, LoggingHelperMixin, ConversationH
         # Return modified result
         return ExecuteResult(
             reasoning=result.reasoning,
+            explanations_count=result.explanations_count,
             response=response_with_plots,
-            summary_sentence=result.summary_sentence,
         )

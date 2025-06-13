@@ -411,6 +411,7 @@ class UnifiedMixin(UnifiedHelperMixin):
         final = ExecuteResult(
             reasoning=result.reasoning,
             response=replace_plot_placeholders(result.response, self.visual_explanations_dict),
+            explanations_count=getattr(result, 'explanations_count', 1),  # Default to 1 if not present
         )
         return StopEvent(result=final)
 
