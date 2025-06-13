@@ -77,7 +77,13 @@ def update_user_df(user_df, user_id, score_intro, score_final, confidence_intro,
     user_df.loc[conditions, "learning_score"] = score_learning
 
 
-def create_predictions_df(user_df, user_events, exclude_incomplete=False, user_id=None):
+def create_predictions_df(user_df,
+                          user_events,
+                          exclude_incomplete=False,
+                          user_id=None,
+                          teaching_cycles=10,
+                          final_test_cycles=10):
+
     exclude = False
     # Filter predictions by source and action
     predictions = (user_events["action"] == "user_prediction")
@@ -98,8 +104,7 @@ def create_predictions_df(user_df, user_events, exclude_incomplete=False, user_i
                                                               ["datapoint_count", "accuracy"])
 
     if exclude_incomplete:
-        if len(predictions_final_test) != 10 or len(predictions_intro_test) != 10 or len(
-                predictions_learning_test) < 10:
+        if len(predictions_final_test) != final_test_cycles or len(predictions_learning_test) < teaching_cycles:
             def fix_predictions_order(df, required_length):
                 # Sort by the timestamp
                 df = df.sort_values("created_at")
@@ -117,15 +122,13 @@ def create_predictions_df(user_df, user_events, exclude_incomplete=False, user_i
                         break
                 return pd.DataFrame(cleaned_rows) if len(cleaned_rows) >= required_length else None
 
-            fixed_final = fix_predictions_order(predictions_final_test, 10)
-            fixed_intro = fix_predictions_order(predictions_intro_test, 10)
-            fixed_learning = fix_predictions_order(predictions_learning_test, 10)
+            fixed_final = fix_predictions_order(predictions_final_test, final_test_cycles)
+            fixed_learning = fix_predictions_order(predictions_learning_test, teaching_cycles)
 
-            if fixed_final is None or fixed_intro is None or fixed_learning is None:
+            if fixed_final is None or fixed_learning is None:
                 return None, None, None, True
 
             predictions_final_test = fixed_final
-            predictions_intro_test = fixed_intro
             predictions_learning_test = fixed_learning
 
     # Calculate scores and confidence
