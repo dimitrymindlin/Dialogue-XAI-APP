@@ -14,6 +14,7 @@ ExplainBot.dataset_index_column = 0
 ExplainBot.instance_type_naming = "Person"
 ExplainBot.target_variable_name = "Income"
 ExplainBot.categorical_features = ['MaritalStatus', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
+TestInstances.categorical_features = ['MaritalStatus', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
 ExplainBot.ordinary_features = ['InvestmentOutcome','EducationLevel', 'WorkLifeBalance']
 ExplainBot.numerical_features = ['Age', 'WeeklyWorkingHours']
 ExplainBot.remove_underscores = True
@@ -51,7 +52,6 @@ TestInstances.max_features_to_vary = 2
 TestInstances.instance_amount = 10
 TestInstances.min_feature_differences = 2
 TestInstances.max_feature_differences = 3
-TestInstances.categorical_features = ['MaritalStatus', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/adult-ceteris-paribus.pkl"
