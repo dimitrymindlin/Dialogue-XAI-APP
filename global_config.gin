@@ -3,6 +3,7 @@
 #######################
 
 # Model + dataset configuration specific file
+# This can be overridden by setting the XAI_CONFIG_PATH environment variable in your .env file
 GlobalArgs.config = "./configs/adult-config.gin"
 
 # Set the base url to host the demo, if needed

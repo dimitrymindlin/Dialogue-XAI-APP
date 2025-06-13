@@ -56,6 +56,12 @@ def _configure_gin():
     """Parse and configure gin configuration files."""
     gin.parse_config_file("global_config.gin")
     args = GlobalArgs()
+    
+    # Override config path from environment variable if available
+    env_config_path = os.getenv('XAI_CONFIG_PATH')
+    if env_config_path:
+        args.config = env_config_path
+        
     gin.parse_config_file(args.config)
     return args
 
