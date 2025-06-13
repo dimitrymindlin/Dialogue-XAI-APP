@@ -1,6 +1,21 @@
 import pandas as pd
 import json
 
+# Will hold IDs of users to exclude
+exclude_users = []
+
+# Helper to deduplicate questionnaire entries
+def _dedupe(lst):
+    """Skip the first empty dict and drop consecutive duplicate questionnaire entries."""
+    seen = set()
+    uniq = []
+    for item in lst[1:]:  # skip initial {}
+        key = item if isinstance(item, str) else json.dumps(item, sort_keys=True)
+        if key not in seen:
+            seen.add(key)
+            uniq.append(item)
+    return uniq
+
 from collections import defaultdict
 
 interactive_question_ids = [23, 27, 24, 7, 11, 25, 13]
@@ -84,15 +99,38 @@ def get_static_ranking(user_df):
 
 
 def extract_questionnaires(user_df):
-    # Get questionnaires
-    questionnaires = user_df[['id', 'questionnaires']]
-    # Normalize the questionnaires column
-    questionnaires = pd.concat([questionnaires.drop(['questionnaires'], axis=1),
-                                questionnaires['questionnaires'].apply(pd.Series)], axis=1)
-    # drop empty columns
-    questionnaires.drop([0], axis=1, inplace=True)
-    # Change column names
-    questionnaires.columns = ['id', 'ranking_q', 'self_assessment_q', 'exit_q']
-    # Apply to user_df and drop id column
-    user_df = user_df.merge(questionnaires, on='id', how='left')
-    return user_df
+    # 1. Parse JSON strings into lists of dicts if necessary
+    parsed = user_df['questionnaires'].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
+
+    # 2. Remove duplicates and skip the initial empty dict, then flatten into a single dict per row
+    flat_dicts = parsed.apply(lambda lst: {
+        k: v
+        for d in _dedupe(lst)
+        for k, v in (json.loads(d) if isinstance(d, str) else d).items()
+    })
+
+    # 3. Build a tidy DataFrame directly from the flat dicts
+    questionnaires = pd.DataFrame({
+        'id': user_df['id'],
+        'self_assessment_q': flat_dicts.map(lambda d: d.get('self_assessment')),
+        'understanding_q':          flat_dicts.map(lambda d: d.get('understanding')),
+        'exit_q':             flat_dicts.map(lambda d: d.get('exit')),
+    })
+
+    # 4. Merge back into user_df
+    merged = user_df.merge(questionnaires, on='id', how='left')
+    # 5. Unpack 'understanding_q' dict into separate question and answer columns
+    merged['understanding_q_questions'] = merged['understanding_q'].map(lambda d: d.get('questions', []) if isinstance(d, dict) else [])
+    merged['understanding_q_answers']   = merged['understanding_q'].map(lambda d: d.get('answers',   []) if isinstance(d, dict) else [])
+
+    # Identify users whose first 'understanding' answer is 'workLifeBalance'
+    exclude_users = merged.loc[
+        merged['understanding_q_answers'].apply(lambda lst: bool(lst and lst[0] in ['workLifeBalance', 'yearOfCareerStart', 'gender'])),
+        'id'
+    ].tolist()
+
+    # Print the IDs of users to exclude
+    print(f"Users to exclude: {exclude_users}")
+    print(f"Total users to exclude: {len(exclude_users)}")
+
+    return merged, exclude_users
