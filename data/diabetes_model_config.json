@@ -1,7 +1,7 @@
 {
   "target_col": "Y",
   "columns_to_encode": [
-    "BloodGroup"
+    "HasAllergies"
   ],
   "ordinal_mapping": {
     "Y": {
@@ -15,19 +15,22 @@
       100
     ],
     "max_depth": [
-      2,
-      3,
-      4
-    ],
-    "min_samples_split": [
-      10,
-      20,
-      30
+      5
     ],
     "min_samples_leaf": [
+      5,
       6,
       8,
       10
+    ],
+    "min_samples_split": [
+      20
+    ],
+    "max_features": [
+      "sqrt"
+    ],
+    "min_impurity_decrease": [
+      0.01
     ]
   },
   "column_details": [
@@ -61,7 +64,7 @@
         "Blood Pressure",
         "mm Hg",
         "Diastolic blood pressure: the pressure when the heart is resting. It helps show how healthy the blood flow is. Values around 80 mm Hg are considered normal; much higher or lower can signal health risks."
-  ]
+      ]
     ],
     [
       "Insulin",
@@ -88,11 +91,11 @@
       ]
     ],
     [
-      "BloodGroup",
+      "HasAllergies",
       [
-        "Blood Group",
+        "Has Allergies",
         "",
-        "The person's blood group (A, B, AB, or O)."
+        "Indicates whether the person has any allergies (Yes or No)."
       ]
     ]
   ],
