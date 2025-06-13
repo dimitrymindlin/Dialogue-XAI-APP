@@ -192,12 +192,17 @@ class ExperimentHelper:
 
     def _prepare_train_instance(self, instance):
         # Simplified example of preparing a data instance
+        instance_values = instance['values'].copy()
+        
+        # Round instance values before creating InstanceDatapoint
+        self._round_instance_features(instance_values)
+        
         model_prediction = \
-            self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance['values'], index=[0]))[0]
+            self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance_values, index=[0]))[0]
         # true_label = self._fetch_true_label(instance['id'])
         # Turn to InstanceDatapoint
         instance = InstanceDatapoint(instance_id=instance['id'],
-                                     instance_as_dict=instance['values'],
+                                     instance_as_dict=instance_values,
                                      class_probabilities=model_prediction,
                                      model_predicted_label_string=self.conversation.class_names[
                                          np.argmax(model_prediction)],
@@ -212,6 +217,10 @@ class ExperimentHelper:
         for instance_naming, instance_dict in instance_dicts.items():
             if "label" in instance_dict:
                 del instance_dict["label"]
+            
+            # Round instance_dict values before creating InstanceDatapoint
+            self._round_instance_features(instance_dict)
+            
             class_probabilities = self.conversation.get_var("model_prob_predict").contents(
                 pd.DataFrame(instance_dict, index=[0]))
             predicted_label_index = np.argmax(class_probabilities)
@@ -261,8 +270,19 @@ class ExperimentHelper:
 
     def _round_instance_features(self, features):
         for feature, value in features.items():
-            if isinstance(value, float):
-                features[feature] = round(value, self.conversation.rounding_precision)
+            # Handle various numeric types including numpy types
+            if isinstance(value, (float, np.floating)):
+                features[feature] = round(float(value), self.conversation.rounding_precision)
+            elif isinstance(value, (np.integer)):
+                # Convert numpy integers to regular integers
+                features[feature] = int(value)
+            elif isinstance(value, dict):
+                # Handle nested dictionaries (for 'current' and 'old' values)
+                for inner_key, inner_value in value.items():
+                    if isinstance(inner_value, (float, np.floating)):
+                        value[inner_key] = round(float(inner_value), self.conversation.rounding_precision)
+                    elif isinstance(inner_value, (np.integer)):
+                        value[inner_key] = int(inner_value)
 
     def _fetch_true_label(self, instance_id):
         true_label = self.conversation.get_var("dataset").contents['y'].loc[instance_id]
