@@ -41,6 +41,9 @@ class BaseAgent(ABC):
         self.experiment_id = experiment_id
         self.log_file = generate_log_file_name(experiment_id)
         initialize_csv(self.log_file)
+        
+        # Initialize prompt log file (for detailed prompt logging)
+        self.prompt_log_file = self.log_file.replace('.csv', '_prompts.log')
 
         # Feature context - consolidate all feature-related information
         self._initialize_feature_context(feature_names, feature_units, feature_tooltips)
