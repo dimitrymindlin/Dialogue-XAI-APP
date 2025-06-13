@@ -250,11 +250,16 @@ def explain_feature_importances_as_plot(conversation,
         
         # Calculate how much stronger positive factors need to be
         strength_ratio = int(round(base_value / (1 - base_value)))
+
+        if base_value > 0.5:
+            baseline_class = positive_class
+        else:
+            baseline_class = negative_class
         
         html_string = (
             f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">'
             f"This chart shows how different attributes <i>influence</i> the model’s prediction — either pushing it toward <b>{positive_class}</b> or <b>{negative_class}</b>.<br><br>"
-            f'The model initially assumes a <b>{base_likelihood_percent}% chance</b> of being <b>{negative_class}</b>, based on general patterns.<br><br>'
+            f'The model initially assumes a <b>{base_likelihood_percent}% chance</b> of being <b>{baseline_class}</b>, based on general patterns.<br><br>'
             f'To flip the prediction, red bars must outweigh blue ones by about <b>{strength_ratio} to 1</b>.<br><br>'
             f'<b>Blue</b> means leaning toward <b>{negative_class}</b>,<br>'
             f'<b>Red</b> means leaning toward <b>{positive_class}</b>.'
