@@ -13,7 +13,8 @@ ExplainBot.seed = 0
 ExplainBot.dataset_index_column = 0
 ExplainBot.instance_type_naming = "Patient"
 ExplainBot.target_variable_name = "Y"
-ExplainBot.categorical_features = ['BloodGroup']
+ExplainBot.categorical_features = ['HasAllergies']
+TestInstances.categorical_features = ['HasAllergies']
 ExplainBot.ordinary_features = None
 ExplainBot.numerical_features = ['Age', 'Pregnancies', 'Glucose', 'Bloodpressure', 'Insulin', 'Bmi', 'Diabetespedigreefunction']
 ExplainBot.remove_underscores = True
@@ -25,7 +26,7 @@ ExplainBot.use_two_prompts = False
 ExplainBot.submodular_pick = True
 
 # Experiment Helper
-ExperimentHelper.actionable_features = ['Glucose', 'Bloodpressure', 'Insulin', 'Bmi', 'Diabetespedigreefunction']
+ExperimentHelper.actionable_features = ['Age', 'Glucose', 'Bloodpressure', 'Insulin', 'Bmi', 'Diabetespedigreefunction']
 
 # Explanation Params
 Explanation.max_cache_size = 1_000_000
@@ -51,8 +52,6 @@ TestInstances.max_features_to_vary = 2
 TestInstances.instance_amount = 10
 TestInstances.min_feature_differences = 2
 TestInstances.max_feature_differences = 3
-TestInstances.categorical_features = ['BloodGroup']
-
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/diabetes-ceteris-paribus.pkl"
@@ -69,6 +68,6 @@ Conversation.question_bank_path =  "./data/question_bank.csv"
 DatasetDescription.dataset_name = "diabetes"
 DatasetDescription.dataset_objective = "Predict whether an individual is likely to have diabetes based on medical indicators."
 ## Dataset description for context for llm agent
-DatasetDescription.dataset_description = "Diabetes prediction dataset containing medical and demographic features used for binary classification to determine diabetes likelihood. The dataset includes features like glucose levels, blood pressure, BMI, and family history indicators to predict whether a patient has diabetes."
+DatasetDescription.dataset_description = "Diabetes prediction dataset containing medical and demographic features used for binary classification to determine diabetes likelihood. The dataset includes features like glucose levels, blood pressure, BMI, family history indicators, and allergy status to predict whether a patient has diabetes."
 DatasetDescription.model_description = "random forest model"
 DatasetDescription.user_study_objective = "guess the model's prediction for the shown individual"

@@ -46,11 +46,11 @@ def map_ordinal_columns(data, config, exclude_columns):
 
 
 def add_control_variable(data, variable_name):
-    # Define the categories and their corresponding probabilities
-    categories = ["O", "A", "B", "AB"]
-    probabilities = [0.45, 0.40, 0.11, 0.04]
+    # Define the binary categories and their corresponding probabilities for the skewed distribution
+    categories = ["Yes", "No"]
+    probabilities = [0.25, 0.75]  # Skewed distribution - 25% have allergies, 75% don't
 
-    # Generate random blood group assignments based on the defined probabilities
+    # Generate random allergy status assignments based on the defined probabilities
     data[variable_name] = np.random.choice(categories, size=len(data), p=probabilities)
 
 
@@ -60,10 +60,10 @@ def preprocess_data_specific(data, config):
 
     standardize_column_names(data)
     target_col = config["target_col"]
-    control_variable_name = "BloodGroup"
-    # Add BloodGroup as a categorical variable (not ordinal)
+    control_variable_name = "HasAllergies"
+    # Add HasAllergies as a categorical variable (not ordinal)
     add_control_variable(data, control_variable_name)
-    # Note: BloodGroup should be in columns_to_encode, not ordinal_mapping
+    # Note: HasAllergies should be in columns_to_encode, not ordinal_mapping
 
     # Following functions assume capitalized col names
     columns_with_nan = data.columns[data.isna().any()].tolist()
@@ -165,8 +165,8 @@ def main():
         config["columns_to_encode"] = []
         for col in original_columns_to_encode:
             # Map original names to standardized names
-            if col == "BloodGroup" and "BloodGroup" in X_train.columns:
-                config["columns_to_encode"].append("BloodGroup")
+            if col == "HasAllergies" and "HasAllergies" in X_train.columns:
+                config["columns_to_encode"].append("HasAllergies")
 
     # Set up feature display names and update config
     feature_display_names, config = setup_feature_display_names(X_train, config, target_col)
@@ -233,7 +233,7 @@ def main():
     # Create feature mapping for generate_feature_names_output (different format than categorical_mapping.json)
     # Use original column names (not display names) for the mapping
     feature_mapping_for_names = {}
-    original_columns_to_encode = ["BloodGroup"]  # Use original column names
+    original_columns_to_encode = ["HasAllergies"]  # Use original column names
     for feature in original_columns_to_encode:
         if feature in encoded_classes:
             feature_mapping_for_names[feature] = {str(v): k for k, v in encoded_classes[feature].items()}
