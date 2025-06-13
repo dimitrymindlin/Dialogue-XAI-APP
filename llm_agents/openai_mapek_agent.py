@@ -9,10 +9,10 @@ from dotenv import load_dotenv
 import os
 
 from llm_agents.prompt_mixins import (
-    MonitorAgentSystemPrompt, AnalyzeAgentSystemPrompt, PlanAgentSystemPrompt, ExecuteAgentSystemPrompt,
+    MonitorAgentSystemPrompt, AnalyzeAgentSystemPrompt,
     MonitorAnalyzeSystemPrompt, PlanExecuteSystemPrompt,
-    HistoryPrompt, UserMessagePrompt, LastShownExpPrompt, NextExplanationPrompt,
-    PreviousPlanPrompt, LastExplanationPrompt
+    HistoryPrompt, UserMessagePrompt, LastShownExpPrompt,
+    PreviousPlanPrompt
 )
 
 from llm_agents.models import (
@@ -29,6 +29,7 @@ load_dotenv()
 
 os.environ["OPENAI_API_KEY"] = os.getenv('OPENAI_API_KEY')
 LLM_MODEL = os.getenv('OPENAI_MODEL_NAME')
+LLM_REASONING_MODEL = os.getenv('OPENAI_REASONING_MODEL_NAME', LLM_MODEL)
 
 
 def create_monitor_system_prompt(domain_description, feature_context, instance, predicted_class_name,
@@ -117,7 +118,7 @@ def create_plan_user_prompt(chat_history, user_message, explanation_plan, user_m
     plan_str = plan_prompt.format(
         explanation_plan=explanation_plan
     )
-    last_shown_prompt = LastExplanationPrompt().get_prompts()["default"].get_template()
+    last_shown_prompt = LastShownExpPrompt().get_prompts()["default"].get_template()
     last_shown_str = last_shown_prompt.format(
         last_shown_explanations=last_shown_explanations
     )
@@ -145,11 +146,49 @@ def create_execute_user_prompt(chat_history, user_message, next_exp_content):
     user_message_str = user_message_prompt.format(
         user_message=user_message
     )
-    next_exp_prompt = NextExplanationPrompt().get_prompts()["default"].get_template()
-    next_exp_str = next_exp_prompt.format(
-        next_exp_content=next_exp_content
-    )
+    next_exp_str = f"\n<next_explanation_content>{next_exp_content}</next_explanation_content>\n"
     return history_str + user_message_str + next_exp_str
+
+
+def create_unified_system_prompt(domain_description, feature_context, instance, predicted_class_name,
+                                understanding_displays, modes_of_engagement, explanation_collection):
+    from llm_agents.prompt_mixins import UnifiedSystemPrompt
+    unified_pm = UnifiedSystemPrompt()
+    template = unified_pm.get_prompts()["default"].get_template()
+    prompt_str = template.format(
+        domain_description=domain_description,
+        feature_context=feature_context,
+        instance=instance,
+        predicted_class_name=predicted_class_name,
+        understanding_displays=understanding_displays.as_text(),
+        modes_of_engagement=modes_of_engagement.as_text(),
+        explanation_collection=explanation_collection,
+    )
+    return prompt_str
+
+
+def create_unified_user_prompt(chat_history, user_message, user_model, explanation_plan, last_shown_explanations):
+    history_prompt = HistoryPrompt().get_prompts()["default"].get_template()
+    history_str = history_prompt.format(
+        chat_history=chat_history
+    )
+    user_message_prompt = UserMessagePrompt().get_prompts()["default"].get_template()
+    user_message_str = user_message_prompt.format(
+        user_message=user_message
+    )
+    user_model_str = user_model.get_state_summary(as_dict=False)
+    
+    from llm_agents.prompt_mixins import PreviousPlanPrompt, LastShownExpPrompt
+    plan_prompt = PreviousPlanPrompt().get_prompts()["default"].get_template()
+    plan_str = plan_prompt.format(
+        explanation_plan=explanation_plan or ""
+    )
+    last_shown_prompt = LastShownExpPrompt().get_prompts()["default"].get_template()
+    last_shown_str = last_shown_prompt.format(
+        last_shown_explanations=last_shown_explanations
+    )
+    
+    return history_str + user_message_str + f"\n<user_model>{user_model_str}</user_model>\n" + plan_str + last_shown_str
 
 
 # 3) Combined Monitor+Analyze
@@ -501,3 +540,240 @@ class MapeK2OpenAIAgent(OpenAIAgent):
             update_last_log_row(row, self.log_file)
 
             return getattr(pe_res.final_output, "reasoning", None), getattr(pe_res.final_output, "response", None)
+
+
+class MapeKUnifiedOpenAIAgent(OpenAIAgent):
+    def __init__(
+            self,
+            experiment_id: str,
+            feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
+            domain_description: str = "",
+            user_ml_knowledge: str = "",
+    ):
+        super().__init__(
+            experiment_id=experiment_id,
+            feature_names=feature_names,
+            feature_units=feature_units,
+            feature_tooltips=feature_tooltips,
+            domain_description=domain_description,
+            user_ml_knowledge=user_ml_knowledge
+        )
+        self.unified_agent = None
+
+    def initialize_new_datapoint(
+            self,
+            instance: InstanceDatapoint,
+            xai_explanations,
+            xai_visual_explanations,
+            predicted_class_name: str,
+            opposite_class_name: str,
+            datapoint_count: int
+    ):
+        super().initialize_new_datapoint(
+            instance,
+            xai_explanations,
+            xai_visual_explanations,
+            predicted_class_name,
+            opposite_class_name,
+            datapoint_count
+        )
+        # Initialize the unified agent
+        self.unified_agent = Agent(
+            name="unified_agent",
+            model=LLM_REASONING_MODEL,
+            instructions=create_unified_system_prompt(
+                domain_description=self.domain_description,
+                feature_context=self.get_formatted_feature_context(),
+                instance=self.instance,
+                predicted_class_name=self.predicted_class_name,
+                understanding_displays=self.understanding_displays,
+                modes_of_engagement=self.modes_of_engagement,
+                explanation_collection=xai_explanations,
+            ),
+            output_type=SinglePromptResultModel,
+        )
+
+    @timed
+    async def answer_user_question(self, user_question: str):
+        with trace("Unified single-prompt MAPE-K flow"):
+            # Single unified call
+            unified_input = create_unified_user_prompt(
+                chat_history=self.chat_history,
+                user_message=user_question,
+                user_model=self.user_model,
+                explanation_plan=self.explanation_plan or "",
+                last_shown_explanations=self.last_shown_explanations,
+            )
+            unified_res = await Runner.run(self.unified_agent, unified_input)
+            self.log_prompt("unified", unified_input)
+
+            # Update user model from unified result
+            if unified_res.final_output.mode_of_engagement:
+                self.user_model.cognitive_state = self.modes_of_engagement.get_differentiating_description(
+                    unified_res.final_output.mode_of_engagement)
+            if unified_res.final_output.explicit_understanding_displays:
+                self.user_model.explicit_understanding_signals = unified_res.final_output.explicit_understanding_displays
+            
+            # Process model changes
+            for change in getattr(unified_res.final_output, "model_changes", []):
+                if isinstance(change, dict):
+                    exp, step, state = change["explanation_name"], change["step_name"], change["state"]
+                else:
+                    exp, step, state = change.explanation_name, change.step_name, change.state
+                self.user_model.update_explanation_step_state(exp, step, state)
+
+            # Update explanation plan and shown explanations
+            if unified_res.final_output.explanation_plan:
+                self.explanation_plan = unified_res.final_output.explanation_plan
+            if hasattr(unified_res.final_output, "new_explanations") and unified_res.final_output.new_explanations:
+                self.last_shown_explanations.extend(unified_res.final_output.new_explanations)
+
+            # Log to CSV
+            row = {
+                "timestamp": datetime.now().strftime("%d.%m.%Y_%H:%M"),
+                "experiment_id": self.experiment_id,
+                "datapoint_count": self.datapoint_count,
+                "user_message": user_question,
+                "monitor": {"mode_of_engagement": unified_res.final_output.mode_of_engagement,
+                          "explicit_understanding_displays": unified_res.final_output.explicit_understanding_displays},
+                "analyze": getattr(unified_res.final_output, "model_changes", []),
+                "plan": {"new_explanations": getattr(unified_res.final_output, "new_explanations", []),
+                        "explanation_plan": unified_res.final_output.explanation_plan},
+                "execute": {"reasoning": unified_res.final_output.reasoning,
+                          "response": unified_res.final_output.response},
+                "user_model": self.user_model.get_state_summary(as_dict=False),
+            }
+            append_new_log_row(row, self.log_file)
+            update_last_log_row(row, self.log_file)
+
+            return unified_res.final_output.reasoning, unified_res.final_output.response
+
+
+class SimpleOpenAIAgent(OpenAIAgent):
+    """
+    A simple OpenAI agent that directly answers user questions using context and explanations
+    without MAPE-K workflow, monitoring, scaffolding, or structured output models.
+    Uses native OpenAI Agents SDK chat history management.
+    """
+    
+    def __init__(
+            self,
+            experiment_id: str,
+            feature_names: str = "",
+            feature_units: str = "",
+            feature_tooltips: str = "",
+            domain_description: str = "",
+            user_ml_knowledge: str = "",
+    ):
+        super().__init__(
+            experiment_id=experiment_id,
+            feature_names=feature_names,
+            feature_units=feature_units,
+            feature_tooltips=feature_tooltips,
+            domain_description=domain_description,
+            user_ml_knowledge=user_ml_knowledge
+        )
+        self.simple_agent = None
+        self.xai_explanations = None
+        self.conversation_history = []  # Store native message history
+
+    def create_simple_system_prompt(self):
+        """Create a simple system prompt for direct question answering."""
+        return f"""You are an AI explanation assistant. Your role is to help users understand machine learning predictions by answering their questions directly and clearly.
+
+**Context:**
+- Domain: {self.domain_description}
+- Current instance: {self.instance}
+- Predicted class: {self.predicted_class_name}
+- Features: {self.get_formatted_feature_context()}
+
+**Available Explanations:**
+{self.xai_explanations}
+
+**Instructions:**
+1. Answer user questions directly and conversationally
+2. Use the available explanations to provide accurate information
+3. Explain complex concepts in simple terms appropriate for the user's knowledge level
+4. Be helpful, accurate, and engaging
+5. If you don't have specific information, say so clearly
+6. Focus on helping the user understand the prediction and the reasoning behind it
+
+**User Machine Learning Knowledge Level:** {self.user_ml_knowledge}
+
+Respond naturally and helpfully to user questions about the AI prediction and explanations."""
+
+    def initialize_new_datapoint(
+            self,
+            instance: InstanceDatapoint,
+            xai_explanations,
+            xai_visual_explanations,
+            predicted_class_name: str,
+            opposite_class_name: str,
+            datapoint_count: int
+    ):
+        super().initialize_new_datapoint(
+            instance,
+            xai_explanations,
+            xai_visual_explanations,
+            predicted_class_name,
+            opposite_class_name,
+            datapoint_count
+        )
+        
+        # Store explanations for use in system prompt
+        self.xai_explanations = xai_explanations
+        
+        # Reset conversation history for new datapoint
+        self.conversation_history = []
+        
+        # Initialize the simple agent
+        self.simple_agent = Agent(
+            name="simple_agent",
+            model=LLM_MODEL,
+            instructions=self.create_simple_system_prompt(),
+        )
+
+    @timed
+    async def answer_user_question(self, user_question: str):
+        """Answer user question directly without MAPE-K workflow using native chat history."""
+        with trace("Simple direct question answering"):
+            # Prepare input: either first message or continuation of conversation
+            if not self.conversation_history:
+                # First turn - just the user question
+                agent_input = user_question
+            else:
+                # Subsequent turns - use native history + new question
+                agent_input = self.conversation_history + [{"role": "user", "content": user_question}]
+            
+            # Get response from agent (no structured output)
+            result = await Runner.run(self.simple_agent, agent_input)
+            
+            # Update native conversation history using OpenAI Agents SDK method
+            self.conversation_history = result.to_input_list()
+            
+            # Log the interaction for debugging/analysis
+            self.log_prompt("simple_qa", f"User: {user_question}")
+            
+            # Update our own chat history for compatibility with base class
+            self.append_to_history("user", user_question)
+            self.append_to_history("agent", result.final_output)
+            
+            # Simple logging to CSV (no complex MAPE-K structure)
+            row = {
+                "timestamp": datetime.now().strftime("%d.%m.%Y_%H:%M"),
+                "experiment_id": self.experiment_id,
+                "datapoint_count": self.datapoint_count,
+                "user_message": user_question,
+                "monitor": "N/A - Simple Agent",
+                "analyze": "N/A - Simple Agent", 
+                "plan": "N/A - Simple Agent",
+                "execute": result.final_output,
+                "user_model": "N/A - Simple Agent",
+            }
+            append_new_log_row(row, self.log_file)
+            update_last_log_row(row, self.log_file)
+
+            # Return simple format: no reasoning separation, just the response
+            return "", result.final_output
