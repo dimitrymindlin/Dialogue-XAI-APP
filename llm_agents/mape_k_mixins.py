@@ -98,6 +98,7 @@ class StreamingMixin:
             accumulated_content = ""
             last_streamed_response = ""
             chunk_count = 0
+            response_field_started = False
             
             # Process real token stream
             async for token_chunk in stream_response:
@@ -117,42 +118,51 @@ class StreamingMixin:
                         import json
                         import re
                         
-                        # Look for response field in the accumulated JSON
-                        response_match = re.search(r'"response"\s*:\s*"([^"]*(?:\\.[^"]*)*)"', accumulated_content, re.DOTALL)
-                        if response_match:
-                            current_response_content = response_match.group(1)
-                            # Unescape JSON string
-                            current_response_content = current_response_content.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
-                            
-                            # Only stream new content from response field
-                            if current_response_content != last_streamed_response:
-                                new_response_content = current_response_content[len(last_streamed_response):]
-                                if new_response_content and self.stream_callback:
-                                    try:
-                                        self.stream_callback(new_response_content, False)  # False = not final
-                                        last_streamed_response = current_response_content
-                                    except Exception as e:
-                                        logger.warning(f"Stream callback error: {e}")
+                        # Check if we've started the response field
+                        if not response_field_started and '"response"' in accumulated_content:
+                            response_field_started = True
+                            logger.info(f"Response field detected in {method_name} streaming")
                         
-                        # Alternative: try to find incomplete response field
-                        elif '"response"' in accumulated_content:
-                            # Look for partial response content
-                            partial_match = re.search(r'"response"\s*:\s*"([^"]*)', accumulated_content)
-                            if partial_match:
-                                partial_content = partial_match.group(1)
-                                partial_content = partial_content.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+                        if response_field_started:
+                            # Try to extract current response content (including partial)
+                            # Look for response field in the accumulated JSON
+                            response_match = re.search(r'"response"\s*:\s*"([^"]*(?:\\.[^"]*)*)"', accumulated_content, re.DOTALL)
+                            if response_match:
+                                current_response_content = response_match.group(1)
+                                # Unescape JSON string
+                                current_response_content = current_response_content.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
                                 
-                                if partial_content != last_streamed_response:
-                                    new_content = partial_content[len(last_streamed_response):]
-                                    if new_content and self.stream_callback:
+                                # Only stream new content from response field
+                                if current_response_content != last_streamed_response:
+                                    new_response_content = current_response_content[len(last_streamed_response):]
+                                    if new_response_content and self.stream_callback:
                                         try:
-                                            self.stream_callback(new_content, False)
-                                            last_streamed_response = partial_content
+                                            # IMMEDIATE PUSH: Send token without waiting
+                                            self.stream_callback(new_response_content, False)  # False = not final
+                                            last_streamed_response = current_response_content
                                         except Exception as e:
                                             logger.warning(f"Stream callback error: {e}")
-                                            
+                            
+                            # Alternative: try to find incomplete response field for real-time streaming
+                            elif '"response"' in accumulated_content:
+                                # Look for partial response content (even if incomplete)
+                                partial_match = re.search(r'"response"\s*:\s*"([^"]*)', accumulated_content)
+                                if partial_match:
+                                    partial_content = partial_match.group(1)
+                                    partial_content = partial_content.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+                                    
+                                    if partial_content != last_streamed_response:
+                                        new_content = partial_content[len(last_streamed_response):]
+                                        if new_content and self.stream_callback:
+                                            try:
+                                                # IMMEDIATE PUSH: Send partial token without waiting
+                                                self.stream_callback(new_content, False)
+                                                last_streamed_response = partial_content
+                                            except Exception as e:
+                                                logger.warning(f"Stream callback error: {e}")
+                                                
                     except Exception as parse_error:
-                        # If JSON parsing fails, continue accumulating
+                        # If JSON parsing fails, continue accumulating - don't break streaming
                         pass
             
             # Send final callback
@@ -162,7 +172,7 @@ class StreamingMixin:
                 except Exception as e:
                     logger.warning(f"Final stream callback error: {e}")
             
-            # Parse the accumulated content into structured format
+            # Parse the accumulated content into structured format for MAPE-K
             try:
                 # Try to extract JSON from the response
                 import json
@@ -174,21 +184,21 @@ class StreamingMixin:
                     json_content = json_match.group()
                     parsed_data = json.loads(json_content)
                     result = model_class(**parsed_data)
-                    logger.info(f"Successfully parsed streaming response for {method_name}")
+                    logger.info(f"Successfully parsed streaming response for {method_name} - MAPE-K structure preserved")
                     return result
                 else:
-                    logger.warning(f"No JSON found in streaming response for {method_name}, using fallback")
-                    # Fallback to structured prediction
+                    logger.warning(f"No JSON found in streaming response for {method_name}, using fallback to preserve MAPE-K")
+                    # Fallback to structured prediction to maintain MAPE-K workflow
                     return await self.llm.astructured_predict(model_class, prompt)
                     
             except Exception as parse_error:
-                logger.warning(f"Failed to parse streaming response for {method_name}: {parse_error}, using fallback")
-                # Fallback to structured prediction
+                logger.warning(f"Failed to parse streaming response for {method_name}: {parse_error}, using fallback to preserve MAPE-K")
+                # Fallback to structured prediction to maintain MAPE-K workflow
                 return await self.llm.astructured_predict(model_class, prompt)
             
         except Exception as e:
-            logger.warning(f"Token streaming failed for {method_name}, falling back to normal prediction: {e}")
-            # Fallback to normal prediction on any error
+            logger.warning(f"Token streaming failed for {method_name}, falling back to normal prediction to preserve MAPE-K: {e}")
+            # Fallback to normal prediction on any error - MAPE-K workflow preserved
             return await self.llm.astructured_predict(model_class, prompt)
 
 
@@ -632,7 +642,7 @@ class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
 
 # Composed agent classes
 
-class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin, ExecuteMixin):
+class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin, ExecuteMixin, StreamingMixin):
     """
     Full 4-step MAPE-K agent: separate Monitor, Analyze, Plan, Execute steps.
     """
@@ -656,6 +666,7 @@ class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin,
             domain_description=domain_description,
             user_ml_knowledge=user_ml_knowledge
         )
+        StreamingMixin.__init__(self)  # Initialize streaming mixin
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
         self.structured_output = structured_output
@@ -670,7 +681,7 @@ class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin,
         return analysis, response
 
 
-class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin):
+class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin, StreamingMixin):
     """
     2-step MAPE-K agent: combines Monitor+Analyze and Plan+Execute steps.
     Now with streaming support!
@@ -695,6 +706,7 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
             domain_description=domain_description,
             user_ml_knowledge=user_ml_knowledge
         )
+        StreamingMixin.__init__(self)  # Initialize streaming mixin
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.structured_output = structured_output
 
@@ -718,7 +730,7 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
             yield chunk
 
 
-class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
+class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin, StreamingMixin):
     """
     Unified MAPE-K agent: performs all MAPE-K steps in a single LLM call.
     Now with streaming support!
@@ -743,6 +755,7 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin):
             domain_description=domain_description,
             user_ml_knowledge=user_ml_knowledge
         )
+        StreamingMixin.__init__(self)  # Initialize streaming mixin
         self.llm = llm or OpenAI(model=OPENAI_REASONING_MODEL_NAME, reasoning_effort="low")
         self.structured_output = structured_output
 
@@ -893,7 +906,7 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
         return StopEvent(result=result)
 
 
-class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanApprovalExecuteMixin):
+class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanApprovalExecuteMixin, StreamingMixin):
     """
     2-step MAPE-K agent with approval mechanism: combines Monitor+Analyze and PlanApproval+Execute steps.
     This agent evaluates predefined explanation plans and either approves them or modifies them
@@ -919,6 +932,7 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
             domain_description=domain_description,
             user_ml_knowledge=user_ml_knowledge
         )
+        StreamingMixin.__init__(self)  # Initialize streaming mixin
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.structured_output = structured_output
 
@@ -944,7 +958,7 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
 
 
 class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanApprovalMixin,
-                              ExecuteMixin):
+                              ExecuteMixin, StreamingMixin):
     """
     4-step MAPE-K agent with approval mechanism: separate Monitor, Analyze, PlanApproval, Execute steps.
     This agent evaluates predefined explanation plans in a separate step and either approves them 
@@ -970,6 +984,7 @@ class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, Analy
             domain_description=domain_description,
             user_ml_knowledge=user_ml_knowledge
         )
+        StreamingMixin.__init__(self)  # Initialize streaming mixin
         self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
         self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
         self.structured_output = structured_output
