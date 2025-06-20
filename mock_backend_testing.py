@@ -172,7 +172,7 @@ class BackendMocker:
         
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self.base_url}/chat/stream",  # Streaming endpoint
+                f"{self.base_url}/get_response_nl_stream",  # Correct streaming endpoint
                 params={"user_id": self.user_id},
                 json={"message": question, "soundwave": False},
                 headers={"Accept": "text/event-stream"}
@@ -200,12 +200,12 @@ class BackendMocker:
                             chunk_data = json.loads(data_str)
                             chunk_count += 1
                             
-                            if chunk_data.get('type') == 'partial_response':
+                            if chunk_data.get('type') == 'partial':
                                 content = chunk_data.get('content', '')
                                 print(content, end='', flush=True)
                                 full_response += content
                                 
-                            elif chunk_data.get('type') == 'final_response':
+                            elif chunk_data.get('type') == 'final':
                                 final_content = chunk_data.get('content', '')
                                 print(f"{final_content}")
                                 final_data = chunk_data

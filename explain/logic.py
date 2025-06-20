@@ -719,6 +719,65 @@ class ExplainBot:
         # 2. Update the state
         return self.update_state_new(question_id, feature_id)
 
+    async def update_state_from_nl_stream(self, user_input):
+        """
+        Streaming version of update_state_from_nl.
+        
+        Args:
+            user_input: User's natural language input
+            
+        Yields:
+            Streaming chunks from the agent if streaming is supported, 
+            otherwise yields the final result.
+        """
+        feature_name = None
+        feature_id = None
+        
+        if self.use_llm_agent:
+            # Check if agent supports streaming
+            if hasattr(self.agent, 'answer_user_question_stream'):
+                # Use streaming
+                async for chunk in self.agent.answer_user_question_stream(user_input):
+                    yield chunk
+            else:
+                # Fallback to normal response
+                reasoning, response = await self.agent.answer_user_question(user_input)
+                yield {
+                    "type": "final",
+                    "content": response,
+                    "reasoning": reasoning,
+                    "is_complete": True
+                }
+        elif self.use_intent_recognition:
+            # Intent recognition doesn't support streaming, use normal flow
+            question_id, feature_name, reasoning = self.dialogue_manager.update_state(user_input)
+            if feature_name != "" and feature_name is not None:
+                feature_list = [col.lower() for col in self.conversation.stored_vars['dataset'].contents['X'].columns]
+                # remove whitespace between words
+                feature_name = feature_name.replace(" ", "")
+                try:
+                    feature_id = feature_list.index(feature_name.lower())
+                except ValueError:
+                    # Get closest match
+                    closest_matches = difflib.get_close_matches(feature_name, feature_list, n=1, cutoff=0.5)
+                    if closest_matches:
+                        feature_id = feature_list.index(closest_matches[0])
+                    else:
+                        feature_id = None
+                        # Optionally handle the case where no close match is found
+                        print(f"No close match found for feature name: {feature_name}")
+
+            # Update the state and yield final result
+            response, question_id, feature_id, reasoning = self.update_state_new(question_id, feature_id)
+            yield {
+                "type": "final",
+                "content": response,
+                "reasoning": reasoning,
+                "question_id": question_id,
+                "feature_id": feature_id,
+                "is_complete": True
+            }
+
     def get_feature_importances_for_current_instance(self):
         mega_explainer = self.conversation.get_var('mega_explainer').contents
         data = pd.DataFrame(self.current_instance.instance_as_dict, index=[self.current_instance.instance_id])
