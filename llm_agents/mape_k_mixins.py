@@ -81,125 +81,129 @@ class StreamingMixin:
         self.enable_streaming = callback is not None
     
     async def _stream_predict_with_callback(self, model_class, prompt, method_name="scaffolding"):
-        """Internal method to handle real token-level streaming prediction."""
+        """Real token-level streaming with improved JSON parsing."""
         if not self.enable_streaming or not self.stream_callback:
-            # Fallback to normal prediction
             return await self.llm.astructured_predict(model_class, prompt)
         
         try:
-            # Use real token-level streaming with normal completion
             logger.info(f"Starting real token streaming for {method_name}")
             
             # Convert structured prompt to completion prompt
-            completion_prompt = str(prompt) + f"\n\nPlease respond in valid JSON format matching this schema: {model_class.model_json_schema()}"
+            schema_prompt = self._build_schema_prompt(model_class, prompt)
             
             # Use normal streaming completion for real token-by-token streaming
-            stream_response = await self.llm.astream_complete(completion_prompt)
+            stream_response = await self.llm.astream_complete(schema_prompt)
             
-            accumulated_content = ""
-            last_streamed_response = ""
-            chunk_count = 0
-            response_field_started = False
+            return await self._process_token_stream(stream_response, model_class, method_name, prompt)
             
-            # Process real token stream
-            async for token_chunk in stream_response:
+        except Exception as e:
+            logger.warning(f"Token streaming failed for {method_name}: {e}, using fallback")
+            return await self.llm.astructured_predict(model_class, prompt)
+
+    def _build_schema_prompt(self, model_class, prompt):
+        """Build completion prompt with better schema instructions."""
+        schema = model_class.model_json_schema()
+        return f"""{prompt}
+
+Please respond in valid JSON format matching this exact schema:
+{json.dumps(schema, indent=2)}
+
+Ensure your response is properly structured JSON."""
+
+    async def _process_token_stream(self, stream_response, model_class, method_name, prompt):
+        """Process token stream with improved JSON extraction."""
+        accumulated_content = ""
+        last_streamed_response = ""
+        response_field_started = False
+        
+        async for token_chunk in stream_response:
                 chunk_count += 1
-                new_token = ""
+            new_token = self._extract_token(token_chunk)
+            if not new_token:
+                continue
+            
+            accumulated_content += new_token
+            
+            # Improved response field extraction
+            if self._should_stream_token(accumulated_content, response_field_started):
+                new_content = self._extract_streamable_content(
+                    accumulated_content, last_streamed_response
+                )
                 
-                if hasattr(token_chunk, 'delta') and token_chunk.delta:
-                    new_token = token_chunk.delta
-                elif hasattr(token_chunk, 'text') and token_chunk.text:
-                    new_token = token_chunk.text
-                
-                if new_token:
-                    accumulated_content += new_token
-                    
-                    # Try to extract only the "response" field content
-                    try:
-                        import json
-                        import re
-                        
-                        # Check if we've started the response field
-                        if not response_field_started and '"response"' in accumulated_content:
-                            response_field_started = True
-                            logger.info(f"Response field detected in {method_name} streaming")
-                        
-                        if response_field_started:
-                            # Try to extract current response content (including partial)
-                            # Look for response field in the accumulated JSON
-                            response_match = re.search(r'"response"\s*:\s*"([^"]*(?:\\.[^"]*)*)"', accumulated_content, re.DOTALL)
-                            if response_match:
-                                current_response_content = response_match.group(1)
-                                # Unescape JSON string
-                                current_response_content = current_response_content.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
-                                
+                if new_content:
+                    # Real token-by-token streaming
+                    self.stream_callback(new_content, False)
+                    last_streamed_response += new_content
+                    response_field_started = True
+        
+        # Final callback
+        if self.stream_callback:
+            self.stream_callback("", True)
+        
+        # Parse final result with better error handling
+        return await self._parse_final_result(accumulated_content, model_class, method_name, prompt)
+
+    def _extract_token(self, token_chunk):
+        if hasattr(token_chunk, 'delta') and token_chunk.delta:
+            return token_chunk.delta
+        elif hasattr(token_chunk, 'text') and token_chunk.text:
+            return token_chunk.text
+        return ""
+
+    def _should_stream_token(self, content, started):
+        """Determine if we should stream this token."""
+        return started or '"response"' in content
+
+    def _extract_streamable_content(self, accumulated_content, last_streamed):
+        """Extract new streamable content with improved parsing logic."""
+        import re
+        
+        # Try complete response field first
+        response_match = re.search(
+            r'"response"\s*:\s*"([^"]*(?:\\.[^"]*)*)"', 
+            accumulated_content, 
+            re.DOTALL
+        )
+        
+        if response_match:
+            current_content = response_match.group(1)
+            current_content = self._unescape_json(current_content)
+            return current_content[len(last_streamed):] if current_content != last_streamed else ""
+        
                                 # Only stream new content from response field
-                                if current_response_content != last_streamed_response:
-                                    new_response_content = current_response_content[len(last_streamed_response):]
-                                    if new_response_content and self.stream_callback:
-                                        try:
-                                            # IMMEDIATE PUSH: Send token without waiting
-                                            self.stream_callback(new_response_content, False)  # False = not final
-                                            last_streamed_response = current_response_content
-                                        except Exception as e:
-                                            logger.warning(f"Stream callback error: {e}")
-                            
-                            # Alternative: try to find incomplete response field for real-time streaming
-                            elif '"response"' in accumulated_content:
-                                # Look for partial response content (even if incomplete)
-                                partial_match = re.search(r'"response"\s*:\s*"([^"]*)', accumulated_content)
-                                if partial_match:
-                                    partial_content = partial_match.group(1)
-                                    partial_content = partial_content.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
-                                    
-                                    if partial_content != last_streamed_response:
-                                        new_content = partial_content[len(last_streamed_response):]
-                                        if new_content and self.stream_callback:
-                                            try:
-                                                # IMMEDIATE PUSH: Send partial token without waiting
-                                                self.stream_callback(new_content, False)
-                                                last_streamed_response = partial_content
-                                            except Exception as e:
-                                                logger.warning(f"Stream callback error: {e}")
-                                                
-                    except Exception as parse_error:
-                        # If JSON parsing fails, continue accumulating - don't break streaming
-                        pass
-            
-            # Send final callback
-            if self.stream_callback:
-                try:
-                    self.stream_callback("", True)  # True = final
-                except Exception as e:
-                    logger.warning(f"Final stream callback error: {e}")
-            
-            # Parse the accumulated content into structured format for MAPE-K
-            try:
-                # Try to extract JSON from the response
-                import json
-                import re
-                
-                # Find JSON content in the response
-                json_match = re.search(r'\{.*\}', accumulated_content, re.DOTALL)
-                if json_match:
-                    json_content = json_match.group()
-                    parsed_data = json.loads(json_content)
-                    result = model_class(**parsed_data)
-                    logger.info(f"Successfully parsed streaming response for {method_name} - MAPE-K structure preserved")
-                    return result
-                else:
-                    logger.warning(f"No JSON found in streaming response for {method_name}, using fallback to preserve MAPE-K")
-                    # Fallback to structured prediction to maintain MAPE-K workflow
-                    return await self.llm.astructured_predict(model_class, prompt)
-                    
-            except Exception as parse_error:
-                logger.warning(f"Failed to parse streaming response for {method_name}: {parse_error}, using fallback to preserve MAPE-K")
-                # Fallback to structured prediction to maintain MAPE-K workflow
+        partial_match = re.search(r'"response"\s*:\s*"([^"]*)', accumulated_content)
+        if partial_match:
+            partial_content = partial_match.group(1)
+            partial_content = self._unescape_json(partial_content)
+            return partial_content[len(last_streamed):] if partial_content != last_streamed else ""
+        
+        return ""
+
+    def _unescape_json(self, content):
+        """Unescape JSON string."""
+        return content.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+
+    async def _parse_final_result(self, accumulated_content, model_class, method_name, prompt):
+        """Parse final result with better error handling."""
+        import json
+        import re
+        
+        try:
+            # Find JSON content
+            json_match = re.search(r'\{.*\}', accumulated_content, re.DOTALL)
+            if json_match:
+                json_content = json_match.group()
+                parsed_data = json.loads(json_content)
+                result = model_class(**parsed_data)
+                logger.info(f"Successfully parsed streaming response for {method_name}")
+                return result
+            else:
+                logger.warning(f"No JSON found in response for {method_name}")
+                # Fallback to structured prediction
                 return await self.llm.astructured_predict(model_class, prompt)
             
         except Exception as e:
-            logger.warning(f"Token streaming failed for {method_name}, falling back to normal prediction to preserve MAPE-K: {e}")
-            # Fallback to normal prediction on any error - MAPE-K workflow preserved
+            logger.warning(f"Failed to parse response for {method_name}: {e}")
             return await self.llm.astructured_predict(model_class, prompt)
 
 
