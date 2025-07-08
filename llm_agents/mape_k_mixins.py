@@ -116,7 +116,7 @@ Ensure your response is properly structured JSON."""
         response_field_started = False
         
         async for token_chunk in stream_response:
-            chunk_count += 1
+            
             new_token = self._extract_token(token_chunk)
             if not new_token:
                 continue
