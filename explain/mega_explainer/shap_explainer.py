@@ -4,6 +4,8 @@ import numpy as np
 import shap
 from scipy.special import expit
 from explain.mega_explainer.base_explainer import BaseExplainer
+from lime.lime_tabular import explanation
+from lime.submodular_pick import SubmodularPick
 
 
 class SHAPExplainer(BaseExplainer):
@@ -130,3 +132,62 @@ class SHAPExplainer(BaseExplainer):
         base_log_odds = self.explainer.expected_value[label]
         base_probability = expit(base_log_odds)
         return final_shap_values, base_probability
+
+    def explain_instance(self, data_row, predict_fn, num_features, top_labels=None, **kwargs):
+        """
+        Make SHAPExplainer compatible with LIME's SubmodularPick by returning
+        a LIME-style Explanation object built from SHAP values.
+        """
+        # Compute SHAP values and base probability for a dummy label 0
+        shap_vals, base_prob = self.get_explanation(data_row.reshape(1, -1), label=0)
+
+        # Create a LIME Explanation wrapper
+        exp = explanation.Explanation(domain_mapper=None, mode='classification')
+        # Ensure class_names is set so as_pyplot_figure can index correctly
+        try:
+            # If model is a sklearn Pipeline, extract the final estimator's classes_
+            classes = self.model.named_steps["model"].classes_
+        except Exception:
+            # Otherwise, try model.classes_
+            classes = getattr(self.model, "classes_", None)
+        exp.class_names = [str(c) for c in classes] if classes is not None else ["0"]
+        # Set the predicted probabilities
+        exp.local_pred = predict_fn(data_row.reshape(1, -1))[0]
+        # Use base probability as intercept (optional)
+        exp.intercept = float(base_prob)
+        exp.top_labels = [np.argmax(exp.local_pred)]
+
+        # available_labels just returns our dummy label
+        exp.available_labels = lambda: [0]
+        # as_list returns pairs of (feature_name, shap_value)
+        exp.as_list = lambda label=0: [
+            (str(i), float(shap_vals[i])) for i in range(len(shap_vals))
+        ]
+        return exp
+
+    def get_diverse_instance_ids(self,
+                                 data_x: np.ndarray,
+                                 label: int,
+                                 num_instances: int = 5) -> list[int]:
+        """
+        Get instance indices by performing Submodular Pick over SHAP explanations.
+        """
+        # Use LIME's SubmodularPick with this SHAPExplainer as the explainer
+        print(f"Running SHAP SP Lime for {num_instances} instances.")
+        sp = SubmodularPick(
+            explainer=self,
+            data=data_x,
+            predict_fn=self.model.predict_proba,
+            method='full',
+            num_exps_desired=num_instances,
+            num_features=data_x.shape[1]
+        )
+
+        import matplotlib
+        matplotlib.use('Agg')
+
+        # Generate and display each explanation figure
+        for i, exp in enumerate(sp.sp_explanations):
+            fig = exp.as_pyplot_figure(label=exp.top_labels[0])
+            fig.savefig(f'diverse_explanation_{i}.png')
+        return sp.V
