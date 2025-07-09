@@ -6,6 +6,7 @@ the functions to get the responses to user inputs.
 """
 import difflib
 import json
+import os
 import pickle
 from random import seed as py_random_seed
 from typing import List, Tuple, Optional, Dict, Any
@@ -35,6 +36,7 @@ from explain.explanations.diverse_instances import DiverseInstances
 from explain.explanations.feature_statistics_explainer import FeatureStatisticsExplainer
 from explain.explanations.model_profile import PdpExplanation
 from explain.utils import read_and_format_data
+from explain.xai_cache_manager import XAICacheManager
 
 from parsing.llm_intent_recognition.llm_pipeline_setup.openai_pipeline.openai_pipeline import \
     LLMSinglePromptWithMemoryAndSystemMessage
@@ -150,7 +152,20 @@ class ExplainBot:
         self.use_selection = use_selection
         self.use_intent_recognition = use_intent_recognition
         self.use_active_dialogue_manager = use_active_dialogue_manager
-        self.use_llm_agent = use_llm_agent
+
+        # Check environment variable first, fallback to gin parameter
+        env_llm_agent = os.getenv('XAI_USE_LLM_AGENT')
+        if env_llm_agent is not None:
+            # Convert string "False" to boolean False
+            if env_llm_agent.lower() == 'false':
+                self.use_llm_agent = False
+            else:
+                self.use_llm_agent = env_llm_agent
+            print(f"Using LLM agent from environment variable: {self.use_llm_agent}")
+        else:
+            self.use_llm_agent = use_llm_agent
+            print(f"Using LLM agent from gin configuration: {self.use_llm_agent}")
+
         self.use_static_followup = use_static_followup
         self.use_two_prompts = use_two_prompts
         if self.use_static_followup:
@@ -267,6 +282,9 @@ class ExplainBot:
                                                 template_manager=template_manager,
                                                 active=self.use_active_dialogue_manager)
 
+        # Initialize XAI Cache Manager
+        self.xai_cache_manager = XAICacheManager()
+
     def get_feature_display_name_dict(self):
         template_manager = self.conversation.get_var('template_manager').contents
         return template_manager.feature_display_names.feature_name_to_display_name
@@ -313,10 +331,32 @@ class ExplainBot:
             return_probability=return_probability)
         # Update agent with new instance
         if self.use_llm_agent and instance_type == "train":
-            xai_report = self.get_explanation_report(as_text=True)
-            # Get visual explanations
-            visual_exp_dict = {}
-            visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeaturesPlot")[0]
+            # Try to get precomputed XAI data from cache first
+            cached_data = self.xai_cache_manager.get_cached_xai_report(self.current_instance.instance_id)
+
+            if cached_data and cached_data.get("is_valid", False):
+                # Use cached data for instant response
+                print(f"Using cached XAI data for instance {self.current_instance.instance_id}")
+                xai_report = cached_data["xai_report"]
+                visual_exp_dict = cached_data.get("visual_explanations", {})
+                if "FeatureInfluencesPlot" not in visual_exp_dict:
+                    visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeaturesPlot")[
+                        0]
+            else:
+                # Fallback to synchronous computation with loading indication
+                print(f"Cache miss for instance {self.current_instance.instance_id}, computing synchronously...")
+                xai_report = self.get_explanation_report(as_text=True)
+                # Get visual explanations
+                visual_exp_dict = {}
+                visual_exp_dict["FeatureInfluencesPlot"] = self.update_state_new(question_id="shapAllFeaturesPlot")[0]
+
+                # Cache the computed results for future use
+                self.xai_cache_manager.compute_and_cache_xai_report(
+                    self.conversation,
+                    self.current_instance.instance_id,
+                    self.get_feature_display_name_dict()
+                )
+
             opposite_class_name = self.conversation.class_names[1 - self.get_current_prediction(as_int=True)]
             self.agent.initialize_new_datapoint(self.current_instance, xai_report, visual_exp_dict,
                                                 self.get_current_prediction(),

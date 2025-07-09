@@ -4,6 +4,9 @@ import logging
 import os
 import traceback
 import base64
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from functools import wraps
 
 from flask import Flask
 from flask import request, Blueprint
@@ -24,6 +27,13 @@ from dotenv import load_dotenv
 bp = Blueprint('host', __name__, template_folder='templates')
 # Allow CORS for our React frontend
 CORS(bp)
+
+# Global thread pool for background tasks (limit concurrent threads)
+background_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="mlflow-init")
+# Lock to prevent race conditions in MLflow experiment creation
+mlflow_init_lock = threading.Lock()
+# Track ongoing MLflow initializations to prevent duplicates
+ongoing_mlflow_inits = set()
 
 
 @gin.configurable
@@ -230,10 +240,15 @@ def get_train_datapoint():
         user_id = "TEST"
     datapoint_count = request.args.get("datapoint_count")
 
-    # Update MLflow experiment for the current chat round
-    if datapoint_count:
-        update_mlflow_experiment_for_round(user_id, int(datapoint_count))
-
+    # Update MLflow experiment for the current chat round in background
+    if datapoint_count and bot_dict[user_id].use_llm_agent:
+        # Submit to thread pool to avoid blocking and prevent resource exhaustion
+        background_executor.submit(
+            safe_background_mlflow_init,
+            user_id,
+            int(datapoint_count)
+        )
+    
     user_study_group = bot_dict[user_id].get_study_group()
     result_dict = get_datapoint(user_id, "train", datapoint_count)
     if bot_dict[user_id].use_active_dialogue_manager:
@@ -637,7 +652,71 @@ def update_mlflow_experiment_for_round(user_id, datapoint_count):
     return initialize_mlflow_experiment(user_id, datapoint_count)
 
 
+@bp.route('/trigger_background_computation', methods=['POST'])
+def trigger_background_computation():
+    """
+    Trigger background computation of XAI reports for upcoming train instances.
+    Call this when user completes test phase and is about to start train phase.
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get("user_id")
+        phase_from = data.get("phase_from", "test")  # Default to test phase
+        
+        if not user_id:
+            user_id = "TEST"
+        
+        if user_id in bot_dict:
+            bot_dict[user_id].trigger_background_xai_computation(phase_from)
+            return jsonify({
+                "status": "success",
+                "message": f"Background XAI computation triggered for user {user_id}"
+            })
+        else:
+            return jsonify({
+                "status": "error", 
+                "message": f"User {user_id} not found"
+            }), 404
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to trigger background computation: {str(e)}"
+        }), 500
+
+
 app = create_app()
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', use_reloader=False)
+
+def safe_background_mlflow_init(user_id, datapoint_count):
+    """Thread-safe background MLflow initialization with error handling."""
+    experiment_key = f"{user_id}_{datapoint_count}"
+    
+    # Check if this initialization is already in progress
+    with mlflow_init_lock:
+        if experiment_key in ongoing_mlflow_inits:
+            app.logger.info(f"MLflow init for {experiment_key} already in progress, skipping")
+            return
+        ongoing_mlflow_inits.add(experiment_key)
+    
+    try:
+        # Perform the actual initialization
+        success = initialize_mlflow_experiment(user_id, datapoint_count)
+        if success:
+            app.logger.info(f"Background MLflow init completed for {experiment_key}")
+        else:
+            app.logger.warning(f"Background MLflow init failed for {experiment_key}")
+    except Exception as e:
+        app.logger.error(f"Background MLflow init error for {experiment_key}: {e}")
+    finally:
+        # Always remove from ongoing set
+        with mlflow_init_lock:
+            ongoing_mlflow_inits.discard(experiment_key)
+
+def cleanup_background_tasks():
+    """Clean shutdown of background thread pool."""
+    app.logger.info("Shutting down background task executor...")
+    background_executor.shutdown(wait=True, timeout=30)
+    app.logger.info("Background task executor shutdown complete")
