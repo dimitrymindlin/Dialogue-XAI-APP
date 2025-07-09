@@ -98,7 +98,7 @@ def get_static_ranking(user_df):
     return overall_ranking
 
 
-def extract_questionnaires(user_df):
+def extract_questionnaires(user_df, dataset_name):
     # 1. Parse JSON strings into lists of dicts if necessary
     parsed = user_df['questionnaires'].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
 
@@ -123,11 +123,18 @@ def extract_questionnaires(user_df):
     merged['understanding_q_questions'] = merged['understanding_q'].map(lambda d: d.get('questions', []) if isinstance(d, dict) else [])
     merged['understanding_q_answers']   = merged['understanding_q'].map(lambda d: d.get('answers',   []) if isinstance(d, dict) else [])
 
-    # Identify users whose first 'understanding' answer is 'workLifeBalance'
-    exclude_users = merged.loc[
-        merged['understanding_q_answers'].apply(lambda lst: bool(lst and lst[0] in ['workLifeBalance', 'yearOfCareerStart', 'gender'])),
-        'id'
-    ].tolist()
+    # Check attantion checks
+    if dataset_name == "adult":
+        exclude_users = merged.loc[
+            merged['understanding_q_answers'].apply(lambda lst: bool(lst and lst[0] in ['workLifeBalance', 'yearOfCareerStart', 'gender'])),
+            'id'
+        ].tolist()
+    elif dataset_name == "diabetes":
+        exclude_users = merged.loc[
+            merged['understanding_q_answers'].apply(
+                lambda lst: bool(lst and lst[0] in ['gender', 'height', 'bloodgGroup'])),
+            'id'
+        ].tolist()
 
     # Print the IDs of users to exclude
     print(f"Users to exclude: {exclude_users}")

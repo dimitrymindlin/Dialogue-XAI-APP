@@ -355,7 +355,7 @@ def compute_explanation_report(conversation,
         mega_explainer = conversation.get_var('mega_explainer').contents
         if 'shap' in mega_explainer.mega_explainer.explanation_methods:
             shap_explainer = mega_explainer.mega_explainer.explanation_methods['shap']
-            shap_base_value = shap_explainer.explainer.expected_value[0]
+            shap_base_value = shap_explainer.feature_explainer.expected_value[0]
     except (AttributeError, KeyError, IndexError):
         pass  # Use default value
 
