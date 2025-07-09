@@ -167,7 +167,6 @@ class SHAPExplainer(BaseExplainer):
 
     def get_diverse_instance_ids(self,
                                  data_x: np.ndarray,
-                                 label: int,
                                  num_instances: int = 5) -> list[int]:
         """
         Get instance indices by performing Submodular Pick over SHAP explanations.
