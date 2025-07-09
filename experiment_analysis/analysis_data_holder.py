@@ -1,9 +1,4 @@
-import json
-
 import pandas as pd
-
-from experiment_analysis.plot_overviews import plot_time_boxplots
-
 
 class AnalysisDataHolder:
     def __init__(self, user_df, event_df, user_completed_df):
@@ -105,42 +100,16 @@ class AnalysisDataHolder:
         time_df["prolific_end_time"] = pd.to_datetime(time_df["prolific_end_time"])
 
         # Calculate total_time in minutes
+        # Time spent in the learning phase (from first event to last event)
         time_df["total_learning_time"] = (time_df["event_end_time"] - time_df[
             "event_start_time"]).dt.total_seconds() / 60
 
-        # Total time spent in the experiment instruction (prolific start - first event)
+        # Time spent in experiment instructions (prolific start - first event)
         time_df["exp_instruction_time"] = (time_df["event_start_time"] - time_df[
             "prolific_start_time"]).dt.total_seconds() / 60
 
-        time_df["total_exp_time"] = (time_df["event_end_time"] - time_df[
-            "event_start_time"]).dt.total_seconds() / 60
+        # Total experiment time (from prolific start to prolific end)
+        time_df["total_exp_time"] = (time_df["prolific_end_time"] - time_df[
+            "prolific_start_time"]).dt.total_seconds() / 60
 
         self.user_df = self.user_df.merge(time_df, left_on="id", right_on="user_id", how="left")
-
-    def add_self_assessment_value_column(self):
-        # The self_assessment is in "questionnaires" column in user_df
-        remove_users = []
-        self.user_df["self_assessment_understanding"] = self.user_df["questionnaires"].apply(
-            lambda x: json.loads(x[1]) if isinstance(x, list) and len(x) > 2 else None)
-
-        # Calculate the self-assessment value by aggregating the "answers" list
-        """
-        'I understand the important attributes for a decision.',
-        'I cannot distinguish between the possible prediction.',
-        'I understand how the Machine Learning model works.',
-        'Select "Strongly Disagree" for this selection.',
-        'I did not understand how the Machine Learning model makes decisions."""
-
-        for user_id, row in self.user_df.iterrows():
-            if row["self_assessment_understanding"] is not None:
-                try:
-                    answers = self.user_df.loc[user_id, "self_assessment_understanding"]['self_assessment']['answers']
-                    # TODO: How to handle people who didn't pass attention check here?
-                    understanding_value = answers[0] + -1 * answers[1] + answers[2] + -1 * answers[4]  # Range: -8 to 8
-                    self.user_df.loc[user_id, "subjective_understanding"] = understanding_value
-                except KeyError:
-                    # How come some users don't have self-assessment answers?
-                    remove_users.append(row["id"])
-        if len(remove_users) > 0:
-            print(f"Removing users since they don't have self-assessment: {len(remove_users)}")
-            self.update_dfs(remove_users)

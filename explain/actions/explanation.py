@@ -238,7 +238,7 @@ def explain_feature_importances_as_plot(conversation,
         try:
             if 'shap' in mega_explainer.mega_explainer.explanation_methods:
                 shap_explainer = mega_explainer.mega_explainer.explanation_methods['shap']
-                base_value = shap_explainer.explainer.expected_value[0]
+                base_value = shap_explainer.feature_explainer.expected_value[0]
             else:
                 # Fallback: use a default base value if SHAP is not available
                 base_value = 0.5  # neutral probability
@@ -249,18 +249,22 @@ def explain_feature_importances_as_plot(conversation,
         base_likelihood_percent = round(base_value * 100)
         
         # Calculate how much stronger positive factors need to be
-        strength_ratio = int(round(base_value / (1 - base_value)))
+        strength_ratio = round(base_value / (1 - base_value), 1)
 
         if base_value > 0.5:
             baseline_class = positive_class
+            bigger_bars = 'blue'
+            smaller_bars = 'red'
         else:
             baseline_class = negative_class
+            bigger_bars = 'red'
+            smaller_bars = 'blue'
         
         html_string = (
             f'<img src="data:image/png;base64,{image_base64}" alt="Your Plot">'
             f"This chart shows how different attributes <i>influence</i> the model’s prediction — either pushing it toward <b>{positive_class}</b> or <b>{negative_class}</b>.<br><br>"
             f'The model initially assumes a <b>{base_likelihood_percent}% chance</b> of being <b>{baseline_class}</b>, based on general patterns.<br><br>'
-            f'To flip the prediction, red bars must outweigh blue ones by about <b>{strength_ratio} to 1</b>.<br><br>'
+            f'To flip the prediction, {bigger_bars} bars must outweigh {smaller_bars} ones by about <b>{strength_ratio} to 1</b>.<br><br>'
             f'<b>Blue</b> means leaning toward <b>{negative_class}</b>,<br>'
             f'<b>Red</b> means leaning toward <b>{positive_class}</b>.'
         )

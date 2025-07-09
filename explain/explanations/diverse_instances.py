@@ -36,14 +36,14 @@ class DiverseInstances:
                  cache_location: str = "./cache/diverse-instances.pkl",
                  dataset_name: str = "german",
                  instance_amount: int = 5,
-                 lime_explainer=None,
+                 feature_explainer=None,
                  categorical_features: List[str] = None,
                  actionable_features: List[str] = None,
                  n_clusters=None):
         cached_data = load_cache(cache_location)
         self.diverse_instances = _convert_legacy_cache(cached_data)
         self.cache_location = cache_location
-        self.lime_explainer = lime_explainer
+        self.feature_explainer = feature_explainer
         self.instance_amount = instance_amount
         self.dataset_name = dataset_name
         self.categorical_features = categorical_features or []
@@ -123,7 +123,7 @@ class DiverseInstances:
         if submodular_pick:
             if not self.n_clusters:
                 raise ValueError("DiverseInstances.n_clusters must be specified in config for submodular pick.")
-            diverse_instances = self.lime_explainer.get_diverse_instance_ids(data.values, self.n_clusters)
+            diverse_instances = self.feature_explainer.get_diverse_instance_ids(data.values, self.n_clusters)
             # Convert all indices to Python integers to avoid numpy.int64 issues
             diverse_instances = [int(data.index[i]) for i in diverse_instances]
             print(f"Found {len(diverse_instances)} diverse instances using submodular pick.")

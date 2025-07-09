@@ -45,6 +45,8 @@ def normalize_details(df):
         df['accuracy'] = df.apply(lambda row: 'Correct' if row['prediction'] == row['true_label'] else 'Wrong', axis=1)
     except ValueError:
         pass
+    except KeyError:
+        pass
     return df
 
 
@@ -102,6 +104,13 @@ def create_predictions_df(user_df,
     predictions_intro_test = process_and_remove_duplicates(predictions_intro_test, key_columns.copy())
     predictions_learning_test = process_and_remove_duplicates(predictions_learning_test,
                                                               ["datapoint_count", "accuracy"])
+
+    # Check if any DataFrame is None or empty
+    if (predictions_final_test is None or predictions_intro_test is None or predictions_learning_test is None or
+        getattr(predictions_final_test, 'empty', True) or 
+        getattr(predictions_intro_test, 'empty', True) or 
+        getattr(predictions_learning_test, 'empty', True)):
+        return None, None, None, True
 
     if exclude_incomplete:
         if len(predictions_final_test) != final_test_cycles or len(predictions_learning_test) < teaching_cycles:
