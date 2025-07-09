@@ -142,7 +142,7 @@ class PdpExplanation:
 
             "Insulin": "<p>On average, people with <strong>insulin levels above 150</strong> have a slightly higher chance of having diabetes.</p> <p>Beyond that level, the chance stays about the same, showing only a weak effect.</p>",
 
-            "BloodGroup": "<p>On average, a person's <strong>blood group</strong> does not seem to affect the chance of having diabetes.</p> <p>The risk stays about the same across all blood group types.</p>"
+            "HasAllergies": "<p>On average, a person's <strong>allergies</strong> do not seem to affect the chance of having diabetes.</p> <p>The risk stays about the same.</p>"
         }
 
         # Select the appropriate feature mapping based on dataset name
