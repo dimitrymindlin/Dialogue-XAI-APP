@@ -23,7 +23,7 @@ ExplainBot.remove_underscores = True
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
-ExplainBot.use_llm_agent = "mape_k_openai" # one of False, "simple", "mape_k", "o1", "mape_k_openai"
+ExplainBot.use_llm_agent = "mape_k_openai" # DEPRECATED: Use environment variable XAI_USE_LLM_AGENT instead
 
 # Experiment Helper - update to use original feature names
 ExperimentHelper.actionable_features = ['Age', 'Sex', 'Embarked', 'Fare', 'Title', 'SibSp', 'Parch', 'Pclass']
@@ -47,8 +47,8 @@ DiverseInstances.instance_amount = 15
 
 # Test Instances
 TestInstances.cache_location = "./cache/titanic-test-instances.pkl"
-TestInstances.max_features_to_vary = 2
-TestInstances.instance_amount = 10
+TestInstances.min_feature_differences = 2
+TestInstances.max_feature_differences = 3
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/titanic-ceteris-paribus.pkl"

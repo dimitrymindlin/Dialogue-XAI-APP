@@ -44,7 +44,8 @@ DiverseInstances.dataset_name = "german"
 
 # Test Instances
 TestInstances.cache_location = "./cache/german-test-instances.pkl"
-TestInstances.max_features_to_vary = 2
+TestInstances.min_feature_differences = 2
+TestInstances.max_feature_differences = 3
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/german-ceteris-paribus.pkl"

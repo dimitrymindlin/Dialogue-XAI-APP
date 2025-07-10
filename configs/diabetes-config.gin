@@ -21,7 +21,7 @@ ExplainBot.remove_underscores = True
 ExplainBot.use_intent_recognition = "openAI"
 ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
-ExplainBot.use_llm_agent = "mape_k_approval_2" # one of False, "make_k", "mape_k_2"
+ExplainBot.use_llm_agent = "mape_k_approval_2" # DEPRECATED: Use environment variable XAI_USE_LLM_AGENT instead
 ExplainBot.use_two_prompts = False
 ExplainBot.submodular_pick = True
 
@@ -46,16 +46,20 @@ DiverseInstances.cache_location = "./cache/diabetes-diverse-instances.pkl"
 DiverseInstances.instance_amount = 15
 DiverseInstances.n_clusters = 3
 
-# Test Instances - using TestInstances with DiverseKNNInstanceSelector
+# Test Instances
 TestInstances.cache_location = "./cache/diabetes-test-instances.pkl"
-TestInstances.max_features_to_vary = 2
-TestInstances.instance_amount = 10
 TestInstances.min_feature_differences = 2
 TestInstances.max_feature_differences = 3
 
 # Ceteris Paribus
 CeterisParibus.cache_location = "./cache/diabetes-ceteris-paribus.pkl"
 PdpExplanation.cache_location = "./cache/diabetes-pdp.pkl"
+
+# XAI Cache Manager
+XAICacheManager.dataset_name = "diabetes"
+XAICacheManager.cache_location = "./cache/{dataset}-xai-reports.pkl"
+XAICacheManager.max_background_workers = 2
+XAICacheManager.precompute_ahead = 3
 
 # Tabular Anchor Params
 TabularAnchor.cache_location = "./cache/diabetes-anchor-tabular.pkl"

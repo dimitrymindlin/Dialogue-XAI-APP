@@ -21,7 +21,7 @@ ExplainBot.remove_underscores = True
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
-ExplainBot.use_llm_agent = "mape_k_approval_2" # one of False, "make_k", "mape_k_2"
+# ExplainBot.use_llm_agent = "mape_k_openai_unified" # MOVED TO ENVIRONMENT VARIABLE: XAI_USE_LLM_AGENT
 ExplainBot.use_two_prompts = False
 ExplainBot.submodular_pick = True
 
@@ -43,13 +43,11 @@ TabularDice.max_features_to_change = 3
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/adult-diverse-instances.pkl"
-DiverseInstances.instance_amount = 15
-DiverseInstances.n_clusters = 2
+DiverseInstances.instance_amount = 10
+DiverseInstances.n_clusters = 4
 
 # Test Instances - using TestInstances with DiverseKNNInstanceSelector
 TestInstances.cache_location = "./cache/adult-test-instances.pkl"
-TestInstances.max_features_to_vary = 2
-TestInstances.instance_amount = 10
 TestInstances.min_feature_differences = 2
 TestInstances.max_feature_differences = 3
 
