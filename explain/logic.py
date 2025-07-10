@@ -859,7 +859,12 @@ class ExplainBot:
         feature_importance_dict = {self.get_feature_display_name_dict().get(k, k): v for k, v in
                                    feature_importance_dict.items()}
         # Extract the feature importances for the current instance from outer dict with current class as key
-        feature_importance_dict = feature_importance_dict[self.current_instance.model_predicted_label_string]
+        try:
+            feature_importance_dict = feature_importance_dict[self.current_instance.model_predicted_label_string]
+        except KeyError:
+            # Get by int label
+            feature_importance_dict = feature_importance_dict[self.current_instance.model_predicted_label]
+
         return feature_importance_dict
 
     def reset_dialogue_manager(self):
@@ -1190,3 +1195,55 @@ class ExplainBot:
         result_df.to_csv(output_path, index=False, sep=";")
         print(f"All questions and answers saved to {output_path}")
         return result_df
+
+    def trigger_background_xai_computation(self, phase_transition_from: str = "test"):
+        """
+        Trigger background computation of XAI reports for upcoming train instances.
+        Call this when transitioning from test to train phase.
+        
+        Args:
+            phase_transition_from: The phase we're transitioning from ("test", "intro-test", etc.)
+        """
+        if not self.use_llm_agent:
+            return
+
+        try:
+            print(f"Triggering background XAI computation after {phase_transition_from} phase...")
+            experiment_helper = self.conversation.get_var('experiment_helper').contents
+            train_instances = experiment_helper.instances.get("train", [])
+
+            if train_instances:
+                # Get instance IDs for the first few train instances to precompute
+                instance_ids_to_precompute = []
+                max_precompute = min(5, len(train_instances))  # Precompute first 5 instances
+
+                for i in range(max_precompute):
+                    if i < len(train_instances):
+                        instance_ids_to_precompute.append(train_instances[i].instance_id)
+
+                # Submit for background computation
+                self.xai_cache_manager.precompute_instances_background(
+                    self.conversation,
+                    instance_ids_to_precompute,
+                    self.get_feature_display_name_dict()
+                )
+                print(f"Submitted {len(instance_ids_to_precompute)} instances for background computation")
+            else:
+                print("No train instances found for background computation")
+
+        except Exception as e:
+            print(f"Warning: Failed to trigger background XAI computation: {e}")
+
+    def get_xai_cache_stats(self) -> Dict[str, Any]:
+        """Get statistics about the XAI cache."""
+        if hasattr(self, 'xai_cache_manager'):
+            return self.xai_cache_manager.get_cache_stats()
+        return {"error": "XAI cache manager not initialized"}
+
+    def clear_xai_cache(self):
+        """Clear the XAI cache."""
+        if hasattr(self, 'xai_cache_manager'):
+            self.xai_cache_manager.clear_cache()
+            print("XAI cache cleared")
+        else:
+            print("XAI cache manager not initialized")
