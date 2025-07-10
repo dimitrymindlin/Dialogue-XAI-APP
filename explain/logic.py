@@ -243,7 +243,7 @@ class ExplainBot:
         if self.use_intent_recognition == "openAI":
             self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
 
-        if use_llm_agent:
+        if self.use_llm_agent:
             if self.use_llm_agent == "o1":
                 from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant as Agent
             elif self.use_llm_agent in ("mape_k", "mape_k_4"):
@@ -413,13 +413,13 @@ class ExplainBot:
             mega_explainer = self.conversation.get_var('mega_explainer').contents
             if 'shap' in mega_explainer.mega_explainer.explanation_methods:
                 shap_explainer = mega_explainer.mega_explainer.explanation_methods['shap']
-                base_value = shap_explainer.explainer.expected_value[0]
+                base_value = shap_explainer.feature_explainer.expected_value[0]
             elif hasattr(mega_explainer.mega_explainer,
                          'explanation_methods') and mega_explainer.mega_explainer.explanation_methods:
                 # Try to get base value from any available SHAP explainer
                 for method_name, explainer in mega_explainer.mega_explainer.explanation_methods.items():
-                    if hasattr(explainer, 'explainer') and hasattr(explainer.explainer, 'expected_value'):
-                        base_value = explainer.explainer.expected_value[0]
+                    if hasattr(explainer, 'explainer') and hasattr(explainer.feature_explainer, 'expected_value'):
+                        base_value = explainer.feature_explainer.expected_value[0]
                         break
         except (AttributeError, KeyError, IndexError):
             base_value = None
@@ -562,24 +562,19 @@ class ExplainBot:
         app.logger.info("...loading DiverseInstances...")
 
         if self.submodular_pick:
-            lime_for_submodular = mega_explainer.mega_explainer.explanation_methods['lime_0.75']
+            feature_explainer_for_sp = mega_explainer.mega_explainer.explanation_methods['shap']
         else:
-            lime_for_submodular = None
+            feature_explainer_for_sp = None
         diverse_instances_explainer = DiverseInstances(
             dataset_name=self.conversation.describe.dataset_name,
-            lime_explainer=lime_for_submodular)
+            feature_explainer=feature_explainer_for_sp)
         diverse_instance_ids = diverse_instances_explainer.get_instance_ids_to_show(data=test_data,
                                                                                     model=model,
                                                                                     y_values=test_data_y,
                                                                                     submodular_pick=self.submodular_pick)
         # Make new list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
-        if isinstance(diverse_instance_ids, list) and all(isinstance(i, int) for i in diverse_instance_ids):
-            # List[int] format (with zip logic already applied)
-            diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
-        else:
-            # Legacy format: List[Dict] with id keys
-            diverse_instances = diverse_instance_ids.copy()
-            diverse_instance_ids = [instance['id'] for instance in diverse_instances]
+        diverse_instances = [{"id": i, "values": test_data.loc[i].to_dict()} for i in diverse_instance_ids]
+        diverse_instance_ids = [d['id'] for d in diverse_instances]
         app.logger.info(f"...loaded {len(diverse_instance_ids)} diverse instance ids from cache!")
 
         # Compute explanations for diverse instances
@@ -597,7 +592,9 @@ class ExplainBot:
                                       data=test_data)
 
         # Remove ids without cfes from diverse_instance_ids
-        diverse_instance_ids = [id for id in diverse_instance_ids if id not in tabular_dice.ids_without_cfes]
+        if tabular_dice.ids_without_cfes:
+            diverse_instances = [d for d in diverse_instances if d['id'] not in tabular_dice.ids_without_cfes]
+            diverse_instance_ids = [d['id'] for d in diverse_instances]
 
         message = f"...loaded {len(tabular_dice.cache)} dice tabular explanations from cache!"
         app.logger.info(message)
