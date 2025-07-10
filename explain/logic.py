@@ -662,7 +662,7 @@ class ExplainBot:
         self.conversation.add_var('ceteris_paribus', ceteris_paribus_explainer, 'explanation')
         # list of dicts {id: instance_dict} where instance_dict is a dict with column names as key and values as values.
         # Load test instances
-        test_instance_explainer = TestInstances(test_data, model, mega_explainer,
+        test_instance_explainer = TestInstances(test_data, model,
                                                 self.conversation.get_var("experiment_helper").contents,
                                                 diverse_instance_ids=diverse_instance_ids,
                                                 actionable_features=self.conversation.get_var(
