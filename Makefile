@@ -23,15 +23,18 @@ remove:
 # Run locally
 run: remove
 	docker run -d --name dialogue-xai-app \
-		-p 4555:4555 \
+		-p 4000:4000 \
 		--cpus=2 \
 		--memory=2g \
 		dialogue-xai-app
 
 # Build and push multi-arch image
 build-push:
+	mv .dockerignore .dockerignore.bak 2>/dev/null || true
+	mv .dockerignore.push .dockerignore
 	docker buildx build \
-		--platform linux/arm64,linux/amd64 \
 		--no-cache \
+		--platform linux/arm64,linux/amd64 \
 		-t dimidockmin/dialogue-xai-app \
 		--push .
+	mv .dockerignore.bak .dockerignore 2>/dev/null || true
