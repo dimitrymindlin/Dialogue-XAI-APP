@@ -29,7 +29,7 @@ bp = Blueprint('host', __name__, template_folder='templates')
 CORS(bp)
 
 # Global thread pool for background tasks (limit concurrent threads)
-background_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="mlflow-init")
+background_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="mlflow-init")
 # Lock to prevent race conditions in MLflow experiment creation
 mlflow_init_lock = threading.Lock()
 # Track ongoing MLflow initializations to prevent duplicates
