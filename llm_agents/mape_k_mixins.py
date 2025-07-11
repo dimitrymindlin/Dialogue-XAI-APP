@@ -53,6 +53,104 @@ from typing import Optional, Callable, AsyncGenerator, Dict, Any
 import json
 
 
+class BaseAgentInitMixin:
+    """
+    DRY mixin for common agent initialization and shared methods.
+    Eliminates duplicate __init__ code and common methods across all agent classes.
+    """
+    
+    def _init_agent_components(
+        self,
+        llm: LLM = None,
+        structured_output: bool = True,
+        timeout: float = 100.0,
+        default_model: str = OPENAI_MODEL_NAME,
+        use_mini_llm: bool = False,
+        special_model: str = None,
+        **workflow_kwargs
+    ):
+        """
+        Common initialization for LLM and other agent components.
+        
+        Args:
+            llm: Language model instance
+            structured_output: Whether to use structured output
+            timeout: Workflow timeout
+            default_model: Default OpenAI model to use
+            use_mini_llm: Whether this agent needs a mini_llm
+            special_model: Special model (e.g., reasoning model for unified agent)
+            **workflow_kwargs: Additional workflow arguments (agent-specific args filtered out)
+        """
+        # Filter out agent-specific kwargs - only pass known workflow arguments
+        # Workflow.__init__ typically only accepts: timeout, retry_policy, verbose
+        # We'll be conservative and only pass through known safe arguments
+        known_workflow_args = ['retry_policy', 'verbose']
+        workflow_specific_kwargs = {k: v for k, v in workflow_kwargs.items() 
+                                   if k in known_workflow_args}
+        
+        # Initialize Workflow with timeout and only safe workflow kwargs
+        Workflow.__init__(self, timeout=timeout, **workflow_specific_kwargs)
+        
+        # Initialize StreamingMixin
+        StreamingMixin.__init__(self)
+        
+        # Set up LLM
+        if special_model:
+            self.llm = llm or OpenAI(model=special_model, reasoning_effort="low")
+        else:
+            self.llm = llm or OpenAI(model=default_model)
+            
+        if use_mini_llm:
+            self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
+        
+        self.structured_output = structured_output
+
+    @timed
+    async def answer_user_question(self, user_question):
+        """
+        DRY implementation of answer_user_question that all agents inherit.
+        Runs the workflow and extracts reasoning and response consistently.
+        """
+        result = await self.run(input=user_question)
+        
+        # Extract reasoning and response with fallbacks
+        analysis = getattr(result, "reasoning", None) or "No reasoning available"
+        response = getattr(result, "response", None) or "Sorry, please try again"
+        
+        return analysis, response
+
+    async def _predict_with_timing_and_logging(self, model_class, prompt, prompt_name, llm=None, nested=False):
+        """
+        DRY helper for MLflow logging, timing, and prediction that all mixins can use.
+        
+        Args:
+            model_class: Pydantic model class for structured prediction
+            prompt: PromptTemplate object
+            prompt_name: Name for logging the prompt parameter
+            llm: LLM instance to use (defaults to self.llm or self.mini_llm)
+            nested: Whether to use nested MLflow run
+            
+        Returns:
+            Structured prediction result
+        """
+        start_time = datetime.datetime.now()
+        
+        # Default LLM selection
+        if llm is None:
+            llm = getattr(self, 'mini_llm', self.llm)
+        
+        with mlflow.start_run(nested=nested):
+            mlflow.log_param(prompt_name, prompt.get_template_str() if hasattr(prompt, 'get_template_str') else str(prompt))
+            result = await astructured_predict_with_fallback(
+                llm, model_class, prompt, use_structured_output=self.structured_output
+            )
+        
+        end_time = datetime.datetime.now()
+        logger.info(f"Time taken for {prompt_name.replace('_', ' ').title()}: {end_time - start_time}")
+        logger.info(f"{prompt_name.replace('_', ' ').title()} result: {result}.\n")
+        
+        return result
+
 # Streaming callback type
 StreamCallback = Optional[Callable[[str, bool], None]]
 
@@ -81,6 +179,113 @@ class StreamingMixin:
         """Set a callback function for streaming responses."""
         self.stream_callback = callback
         self.enable_streaming = callback is not None
+
+    async def _run_workflow_with_streaming(self, user_question: str) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Core DRY streaming workflow implementation that all agents can use.
+        This replaces all the duplicated streaming logic across different agent classes.
+        
+        Args:
+            user_question: The user's question
+            
+        Yields:
+            Dict with streaming data: {"type": "partial"|"final"|"error", "content": str, "is_complete": bool}
+        """
+        # Create a queue to capture streaming data
+        stream_queue = asyncio.Queue()
+        final_result = None
+
+        def capture_stream(content: str, is_final: bool):
+            """Capture streaming data into queue."""
+            nonlocal final_result
+            if is_final:
+                stream_queue.put_nowait({"type": "final", "content": "", "is_complete": True})
+            else:
+                stream_queue.put_nowait({"type": "partial", "content": content, "is_complete": False})
+
+        # Set up streaming callback
+        self.set_stream_callback(capture_stream)
+
+        # Start the workflow in background
+        async def run_workflow():
+            nonlocal final_result
+            try:
+                result = await self.run(input=user_question)
+                final_result = result
+                # Signal completion
+                stream_queue.put_nowait({"type": "workflow_complete", "result": result})
+            except Exception as e:
+                stream_queue.put_nowait({"type": "error", "error": str(e)})
+
+        # Start workflow task
+        workflow_task = asyncio.create_task(run_workflow())
+
+        try:
+            while True:
+                # Wait for stream data with timeout
+                try:
+                    chunk = await asyncio.wait_for(stream_queue.get(), timeout=0.1)
+                except asyncio.TimeoutError:
+                    # Check if workflow is done
+                    if workflow_task.done():
+                        break
+                    continue
+
+                if chunk["type"] == "workflow_complete":
+                    # Send final response
+                    result = chunk["result"]
+                    analysis = getattr(result, "reasoning", "") if hasattr(result, "reasoning") else ""
+                    response = getattr(result, "response", "") if hasattr(result, "response") else ""
+                    yield {
+                        "type": "final",
+                        "content": response,
+                        "reasoning": analysis,
+                        "is_complete": True
+                    }
+                    break
+                elif chunk["type"] == "error":
+                    yield {"type": "error", "content": chunk["error"], "is_complete": True}
+                    break
+                elif chunk["type"] == "partial":
+                    yield chunk
+                elif chunk["type"] == "final":
+                    continue  # Wait for workflow_complete
+
+        finally:
+            # Clean up
+            if not workflow_task.done():
+                workflow_task.cancel()
+                try:
+                    await workflow_task
+                except asyncio.CancelledError:
+                    pass  # Expected when cancelling
+                except Exception as e:
+                    logger.warning(f"Error during workflow cleanup: {e}")
+            else:
+                # Ensure completed task exceptions are retrieved
+                try:
+                    workflow_task.result()
+                except Exception:
+                    pass  # Ignore exceptions from completed tasks
+            self.set_stream_callback(None)
+
+    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        DRY streaming implementation that all agents inherit.
+        This method provides consistent streaming behavior across all agent types.
+
+        Args:
+            user_question: The user's question
+            stream_callback: Optional callback for streaming chunks
+
+        Yields:
+            Dict with streaming data: {"type": "partial"|"final", "content": str, "is_complete": bool}
+        """
+        if stream_callback:
+            self.set_stream_callback(stream_callback)
+
+        async for chunk in self._run_workflow_with_streaming(user_question):
+            yield chunk
 
     async def _stream_predict_with_callback(self, model_class, prompt, method_name):
         """Real token-level streaming with improved JSON parsing."""
@@ -172,7 +377,7 @@ Ensure your response is properly structured JSON."""
             current_content = self._unescape_json(current_content)
             return current_content[len(last_streamed):] if current_content != last_streamed else ""
 
-                                # Only stream new content from response field
+        # Handle partial response field
         partial_match = re.search(r'"response"\s*:\s*"([^"]*)', accumulated_content)
         if partial_match:
             partial_content = partial_match.group(1)
@@ -230,16 +435,11 @@ class MonitorMixin(LoggingHelperMixin, UserModelHelperMixin):
             understanding_displays=self.understanding_displays.as_text(),
             modes_of_engagement=self.modes_of_engagement.as_text(),
         )
-        start_time = datetime.datetime.now()
-        with mlflow.start_run():
-            monitor_prompt = PromptTemplate(prompt_str)
-            monitor_result = await astructured_predict_with_fallback(
-                self.mini_llm, MonitorResultModel, monitor_prompt, use_structured_output=self.structured_output
-            )
-            mlflow.log_param("monitor_prompt", prompt_str)
-        end_time = datetime.datetime.now()
-        logger.info(f"Time taken for Monitor: {end_time - start_time}")
-        logger.info(f"Monitor result: {monitor_result}.\n")
+        
+        monitor_prompt = PromptTemplate(prompt_str)
+        monitor_result = await self._predict_with_timing_and_logging(
+            MonitorResultModel, monitor_prompt, "monitor_prompt", llm=self.mini_llm
+        )
 
         # Update user model from monitor result
         self.update_user_model_from_monitor(monitor_result)
@@ -274,17 +474,10 @@ class AnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
             explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
         )
 
-        start_time = datetime.datetime.now()
-        with mlflow.start_run():
-            # Log the full analyze prompt
-            mlflow.log_param("analyze_prompt", prompt_str)
-            analyze_prompt = PromptTemplate(prompt_str)
-            analyze_result = await astructured_predict_with_fallback(
-                self.mini_llm, AnalyzeResult, analyze_prompt, use_structured_output=self.structured_output
-            )
-        end_time = datetime.datetime.now()
-        logger.info(f"Time taken for Analyze: {end_time - start_time}")
-        logger.info(f"Analyze result: {analyze_result}.\n")
+        analyze_prompt = PromptTemplate(prompt_str)
+        analyze_result = await self._predict_with_timing_and_logging(
+            AnalyzeResult, analyze_prompt, "analyze_prompt", llm=self.mini_llm
+        )
 
         # Update user model from analyze result
         self.update_user_model_from_analyze(analyze_result)
@@ -323,16 +516,10 @@ class MonitorAnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
             last_shown_explanations=self.last_shown_explanations,
             user_message=user_message,
         )
-        start = datetime.datetime.now()
-        # Log the combined monitor-analyze prompt
-        with mlflow.start_run(nested=True):
-            prompt = PromptTemplate(prompt_str)
-            result = await astructured_predict_with_fallback(
-                self.llm, MonitorAnalyzeResultModel, prompt, use_structured_output=self.structured_output
-            )
-            mlflow.log_param("monitor_analyze_prompt", prompt_str)
-        end = datetime.datetime.now()
-        logger.info(f"Time taken for MonitorAnalyze: {end - start}")
+        prompt = PromptTemplate(prompt_str)
+        result = await self._predict_with_timing_and_logging(
+            MonitorAnalyzeResultModel, prompt, "monitor_analyze_prompt", nested=True
+        )
 
         # Update user model from combined result using helper methods
         self.update_user_model_from_monitor(result)
@@ -366,17 +553,10 @@ class PlanMixin(LoggingHelperMixin, UserModelHelperMixin):
             last_shown_explanations=last_exp
         )
 
-        start_time = datetime.datetime.now()
-        with mlflow.start_run():
-            # Log the plan prompt
-            mlflow.log_param("plan_prompt", prompt_str)
-            plan_prompt = PromptTemplate(prompt_str)
-            plan_result = await astructured_predict_with_fallback(
-                self.llm, PlanResultModel, plan_prompt, use_structured_output=self.structured_output
-            )
-        end_time = datetime.datetime.now()
-        logger.info(f"Time taken for Plan: {end_time - start_time}")
-        logger.info(f"Plan result: {plan_result}.\n")
+        plan_prompt = PromptTemplate(prompt_str)
+        plan_result = await self._predict_with_timing_and_logging(
+            PlanResultModel, plan_prompt, "plan_prompt"
+        )
 
         # Update user model with plan result using helper method
         self.update_explanation_plan(plan_result)
@@ -423,16 +603,10 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
             explanation_plan=target_explanations,
         )
 
-        start_time = datetime.datetime.now()
-        with mlflow.start_run():
-            # Log the execute prompt
-            mlflow.log_param("execute_prompt", prompt_str)
-            execute_prompt = PromptTemplate(prompt_str)
-            execute_result = await astructured_predict_with_fallback(
-                self.llm, ExecuteResult, execute_prompt, use_structured_output=self.structured_output
-            )
-        end_time = datetime.datetime.now()
-        logger.info(f"Time taken for Execute: {end_time - start_time}")
+        execute_prompt = PromptTemplate(prompt_str)
+        execute_result = await self._predict_with_timing_and_logging(
+            ExecuteResult, execute_prompt, "execute_prompt"
+        )
 
         # Update user model with execute results
         self.update_user_model_from_execute(execute_result, target_explanations)
@@ -477,17 +651,10 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
             explanation_plan=self.explanation_plan or "",
             last_shown_explanations=last_exp,
         )
-        start = datetime.datetime.now()
-        with mlflow.start_run():
-            # Log the scaffolding prompt
-            mlflow.log_param("scaffolding_prompt", prompt_str)
-            prompt = PromptTemplate(prompt_str)
+        prompt = PromptTemplate(prompt_str)
 
-            # IMPLEMENTED: Use streaming prediction with callback support
-            scaff = await self._stream_predict_with_callback(PlanExecuteResultModel, prompt, "scaffolding")
-
-        end = datetime.datetime.now()
-        logger.info(f"Time taken for Scaffolding: {end - start}")
+        # Use streaming prediction with callback support
+        scaff = await self._stream_predict_with_callback(PlanExecuteResultModel, prompt, "scaffolding")
 
         # Handle target explanations
         target = scaff.explanation_plan[0] if scaff.explanation_plan else None
@@ -512,87 +679,6 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
 
         await ctx.set("scaffolding_result", scaff)
         return StopEvent(result=scaff)
-
-    # New streaming-enabled method for external use
-    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Stream-enabled version of answer_user_question.
-
-        Args:
-            user_question: The user's question
-            stream_callback: Optional callback for streaming chunks
-
-        Yields:
-            Dict with streaming data: {"type": "partial"|"final", "content": str, "is_complete": bool}
-        """
-        if stream_callback:
-            self.set_stream_callback(stream_callback)
-
-        # Create a queue to capture streaming data
-        stream_queue = asyncio.Queue()
-        final_result = None
-
-        def capture_stream(content: str, is_final: bool):
-            """Capture streaming data into queue."""
-            nonlocal final_result
-            if is_final:
-                stream_queue.put_nowait({"type": "final", "content": "", "is_complete": True})
-            else:
-                stream_queue.put_nowait({"type": "partial", "content": content, "is_complete": False})
-
-        # Set up streaming callback
-        self.set_stream_callback(capture_stream)
-
-        # Start the workflow in background
-        async def run_workflow():
-            nonlocal final_result
-            try:
-                result = await self.run(input=user_question)
-                final_result = result
-                # Signal completion
-                stream_queue.put_nowait({"type": "workflow_complete", "result": result})
-            except Exception as e:
-                stream_queue.put_nowait({"type": "error", "error": str(e)})
-
-        # Start workflow task
-        workflow_task = asyncio.create_task(run_workflow())
-
-        try:
-            while True:
-                # Wait for stream data with timeout
-                try:
-                    chunk = await asyncio.wait_for(stream_queue.get(), timeout=0.1)
-                except asyncio.TimeoutError:
-                    # Check if workflow is done
-                    if workflow_task.done():
-                        break
-                    continue
-
-                if chunk["type"] == "workflow_complete":
-                    # Send final response
-                    result = chunk["result"]
-                    analysis = getattr(result, "reasoning", None) or result.reasoning
-                    response = getattr(result, "response", None) or result.response
-                    yield {
-                        "type": "final",
-                        "content": response,
-                        "reasoning": analysis,
-                        "is_complete": True
-                    }
-                    break
-                elif chunk["type"] == "error":
-                    yield {"type": "error", "content": chunk["error"], "is_complete": True}
-                    break
-                elif chunk["type"] == "partial":
-                    yield chunk
-                elif chunk["type"] == "final":
-                    continue  # Wait for workflow_complete
-
-        finally:
-            # Clean up
-            if not workflow_task.done():
-                workflow_task.cancel()
-            self.set_stream_callback(None)
 
 
 class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
@@ -622,20 +708,13 @@ class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
             last_shown_explanations=self.last_shown_explanations,
         )
 
-        start = datetime.datetime.now()
-        # Log the unified single-prompt in a nested MLflow run to avoid param collisions
-        with mlflow.start_run(nested=True):
-            mlflow.log_param("unified_prompt", prompt_str)
-            # Wrap the prompt string in a PromptTemplate for structured prediction
-            unified_prompt = PromptTemplate(prompt_str)
+        # Wrap the prompt string in a PromptTemplate for structured prediction
+        unified_prompt = PromptTemplate(prompt_str)
 
-            # Use streaming prediction with callback support
-            result: SinglePromptResultModel = await self._stream_predict_with_callback(
-                SinglePromptResultModel, unified_prompt, "unified"
-            )
-
-        end = datetime.datetime.now()
-        logger.info(f"Time taken for Unified single-prompt: {end - start}")
+        # Use streaming prediction with callback support
+        result: SinglePromptResultModel = await self._stream_predict_with_callback(
+            SinglePromptResultModel, unified_prompt, "unified"
+        )
 
         # Process the unified result using helper method
         # This handles all MAPE-K phases in one go
@@ -652,147 +731,60 @@ class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
 
 # Composed agent classes
 
-class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin, ExecuteMixin, StreamingMixin):
+class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin, ExecuteMixin, StreamingMixin, BaseAgentInitMixin):
     """
     Full 4-step MAPE-K agent: separate Monitor, Analyze, Plan, Execute steps.
     """
 
-    def __init__(
-            self,
-            llm: LLM = None,
-            experiment_id: str = "",
-            feature_names: str = "",
-            feature_units: str = "",
-            feature_tooltips: str = "",
-            domain_description: str = "",
-            user_ml_knowledge: str = "",
-            structured_output: bool = True,
-            timeout: float = 100.0,
-            **kwargs
-    ):
-        Workflow.__init__(self, timeout=timeout, **kwargs)
-        LlamaIndexBaseAgent.__init__(
-            self,
-            experiment_id=experiment_id,
-            feature_names=feature_names,
-            feature_units=feature_units,
-            feature_tooltips=feature_tooltips,
-            domain_description=domain_description,
-            user_ml_knowledge=user_ml_knowledge,
+    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+        # Initialize LlamaIndexBaseAgent with all the base parameters
+        LlamaIndexBaseAgent.__init__(self, **kwargs)
+        
+        # Initialize agent-specific components
+        self._init_agent_components(
+            llm=llm,
+            structured_output=structured_output,
+            timeout=timeout,
+            use_mini_llm=True,  # This agent needs mini_llm
             **kwargs
         )
-        StreamingMixin.__init__(self)
-        self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
-        self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
-        self.structured_output = structured_output
-
-    @timed
-    async def answer_user_question(self, user_question):
-        # Kick off the 4-step workflow
-        result = await self.run(input=user_question)
-        # result is your StopEvent.result, i.e. an ExecuteResult
-        analysis = getattr(result, "reasoning", None) or result.reasoning
-        response = getattr(result, "response", None) or result.response
-        return analysis, response
 
 
-class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin, StreamingMixin):
+class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin, StreamingMixin, BaseAgentInitMixin):
     """
     2-step MAPE-K agent: combines Monitor+Analyze and Plan+Execute steps with streaming.
     """
 
-    def __init__(
-            self,
-            llm: LLM = None,
-            experiment_id: str = "",
-            feature_names: str = "",
-            feature_units: str = "",
-            feature_tooltips: str = "",
-            domain_description: str = "",
-            user_ml_knowledge: str = "",
-            structured_output: bool = True,
-            timeout: float = 100.0,
-            **kwargs
-    ):
-        Workflow.__init__(self, timeout=timeout, **kwargs)
-        LlamaIndexBaseAgent.__init__(
-            self,
-            experiment_id=experiment_id,
-            feature_names=feature_names,
-            feature_units=feature_units,
-            feature_tooltips=feature_tooltips,
-            domain_description=domain_description,
-            user_ml_knowledge=user_ml_knowledge,
+    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+        # Initialize LlamaIndexBaseAgent with all the base parameters
+        LlamaIndexBaseAgent.__init__(self, **kwargs)
+        
+        # Initialize agent-specific components
+        self._init_agent_components(
+            llm=llm,
+            structured_output=structured_output,
+            timeout=timeout,
             **kwargs
         )
-        StreamingMixin.__init__(self)
-        self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
-        self.structured_output = structured_output
-
-    @timed
-    async def answer_user_question(self, user_question):
-        result = await self.run(input=user_question)
-        analysis = getattr(result, "reasoning", None) or result.reasoning
-        response = getattr(result, "response", None) or result.response
-        return analysis, response
-
-    # NEW: Streaming-enabled method
-    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None):
-        """
-        Stream-enabled version that yields partial responses.
-
-        Usage:
-            async for chunk in agent.answer_user_question_stream(question):
-                print(chunk['content'], end='', flush=True)
-        """
-        async for chunk in super().answer_user_question_stream(user_question, stream_callback):
-            yield chunk
 
 
-class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin, StreamingMixin):
+class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin, StreamingMixin, BaseAgentInitMixin):
     """
     Unified MAPE-K agent: performs all MAPE-K steps in a single LLM call with streaming support.
     """
 
-    def __init__(
-            self,
-            llm: LLM = None,
-            experiment_id: str = "",
-            feature_names: str = "",
-            feature_units: str = "",
-            feature_tooltips: str = "",
-            domain_description: str = "",
-            user_ml_knowledge: str = "",
-            structured_output: bool = True,
-            timeout: float = 100.0,
-            **kwargs
-    ):
-        Workflow.__init__(self, timeout=timeout, **kwargs)
-        LlamaIndexBaseAgent.__init__(
-            self,
-            experiment_id=experiment_id,
-            feature_names=feature_names,
-            feature_units=feature_units,
-            feature_tooltips=feature_tooltips,
-            domain_description=domain_description,
-            user_ml_knowledge=user_ml_knowledge,
+    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+        # Initialize LlamaIndexBaseAgent with all the base parameters
+        LlamaIndexBaseAgent.__init__(self, **kwargs)
+        
+        # Initialize with special reasoning model
+        self._init_agent_components(
+            llm=llm,
+            structured_output=structured_output,
+            timeout=timeout,
+            special_model=OPENAI_REASONING_MODEL_NAME,
             **kwargs
         )
-        StreamingMixin.__init__(self)
-        self.llm = llm or OpenAI(model=OPENAI_REASONING_MODEL_NAME, reasoning_effort="low")
-        self.structured_output = structured_output
-
-    @timed
-    async def answer_user_question(self, user_question):
-        result = await self.run(input=user_question)
-        analysis = getattr(result, "reasoning", None) or result.reasoning
-        response = getattr(result, "response", None) or result.response
-        return analysis, response
-
-    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None):
-        """Stream-enabled version for unified agent."""
-        async for chunk in super().answer_user_question_stream(user_question, stream_callback):
-            yield chunk
 
 
 class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
@@ -821,17 +813,10 @@ class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHe
             modes_of_engagement=self.modes_of_engagement.as_text(),
         )
 
-        start_time = datetime.datetime.now()
-        with mlflow.start_run():
-            # Log the plan approval prompt
-            mlflow.log_param("plan_approval_prompt", prompt_str)
-            plan_approval_prompt = PromptTemplate(prompt_str)
-            approval_result = await astructured_predict_with_fallback(
-                self.llm, PlanApprovalModel, plan_approval_prompt, use_structured_output=self.structured_output
-            )
-        end_time = datetime.datetime.now()
-        logger.info(f"Time taken for Plan Approval: {end_time - start_time}")
-        logger.info(f"Plan Approval result: {approval_result}.\n")
+        plan_approval_prompt = PromptTemplate(prompt_str)
+        approval_result = await self._predict_with_timing_and_logging(
+            PlanApprovalModel, plan_approval_prompt, "plan_approval_prompt"
+        )
 
         # Update the explanation plan based on the approval result
         # This creates the updated plan that will be passed to execute
@@ -875,20 +860,10 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
             modes_of_engagement=self.modes_of_engagement.as_text(),
         )
 
-        start_time = datetime.datetime.now()
-        with mlflow.start_run():
-            # Log the plan approval execute prompt
-            mlflow.log_param("plan_approval_execute_prompt", prompt_str)
-            plan_approval_execute_prompt = PromptTemplate(prompt_str)
-            result = await astructured_predict_with_fallback(
-                self.llm,
-                PlanApprovalExecuteResultModel,
-                plan_approval_execute_prompt,
-                use_structured_output=self.structured_output
-            )
-        end_time = datetime.datetime.now()
-        logger.info(f"Time taken for Plan Approval Execute: {end_time - start_time}")
-        logger.info(f"Plan Approval Execute result: {result}.\n")
+        plan_approval_execute_prompt = PromptTemplate(prompt_str)
+        result = await self._predict_with_timing_and_logging(
+            PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute_prompt"
+        )
 
         # Check if result is None and handle gracefully
         if result is None:
@@ -939,115 +914,43 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
         return StopEvent(result=result)
 
 
-class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanApprovalExecuteMixin, StreamingMixin):
+class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanApprovalExecuteMixin, StreamingMixin, BaseAgentInitMixin):
     """
     2-step MAPE-K agent with approval mechanism: combines Monitor+Analyze and PlanApproval+Execute steps.
     This agent evaluates predefined explanation plans and either approves them or modifies them
     based on the user's current needs and understanding state.
     """
 
-    def __init__(
-            self,
-            llm: LLM = None,
-            experiment_id: str = "",
-            feature_names: str = "",
-            feature_units: str = "",
-            feature_tooltips: str = "",
-            domain_description: str = "",
-            user_ml_knowledge: str = "",
-            structured_output: bool = True,
-            timeout: float = 100.0,
-            **kwargs
-    ):
-        Workflow.__init__(self, timeout=timeout, **kwargs)
-        LlamaIndexBaseAgent.__init__(
-            self,
-            experiment_id=experiment_id,
-            feature_names=feature_names,
-            feature_units=feature_units,
-            feature_tooltips=feature_tooltips,
-            domain_description=domain_description,
-            user_ml_knowledge=user_ml_knowledge,
+    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+        # Initialize LlamaIndexBaseAgent with all the base parameters
+        LlamaIndexBaseAgent.__init__(self, **kwargs)
+        
+        # Initialize with specific temperature
+        self._init_agent_components(
+            llm=llm or OpenAI(model=OPENAI_MODEL_NAME, temperature=0.3),
+            structured_output=structured_output,
+            timeout=timeout,
             **kwargs
         )
-        StreamingMixin.__init__(self)  # Initialize streaming mixin
-        self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME, temperature=0.3)
-        self.structured_output = structured_output
-
-    @timed
-    async def answer_user_question(self, user_question):
-        """
-        Process user question using the approval-based MAPE-K workflow.
-        
-        Args:
-            user_question: The user's question/input
-            
-        Returns:
-            Tuple of (analysis, response) where analysis contains reasoning
-            and response contains the final answer to the user
-        """
-        result = await self.run(input=user_question)
-
-        # Extract reasoning and response from the result
-        analysis = getattr(result, "reasoning", None) or "No reasoning available"
-        response = getattr(result, "response", None) or "Sorry, please try again"
-
-        return analysis, response
 
 
 class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanApprovalMixin,
-                              ExecuteMixin, StreamingMixin):
+                              ExecuteMixin, StreamingMixin, BaseAgentInitMixin):
     """
     4-step MAPE-K agent with approval mechanism: separate Monitor, Analyze, PlanApproval, Execute steps.
     This agent evaluates predefined explanation plans in a separate step and either approves them 
     or modifies them before executing.
     """
 
-    def __init__(
-            self,
-            llm: LLM = None,
-            experiment_id: str = "",
-            feature_names: str = "",
-            feature_units: str = "",
-            feature_tooltips: str = "",
-            domain_description: str = "",
-            user_ml_knowledge: str = "",
-            structured_output: bool = True,
-            timeout: float = 100.0,
-            **kwargs
-    ):
-        Workflow.__init__(self, timeout=timeout, **kwargs)
-        LlamaIndexBaseAgent.__init__(
-            self,
-            experiment_id=experiment_id,
-            feature_names=feature_names,
-            feature_units=feature_units,
-            feature_tooltips=feature_tooltips,
-            domain_description=domain_description,
-            user_ml_knowledge=user_ml_knowledge,
+    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+        # Initialize LlamaIndexBaseAgent with all the base parameters
+        LlamaIndexBaseAgent.__init__(self, **kwargs)
+        
+        # Initialize agent-specific components
+        self._init_agent_components(
+            llm=llm,
+            structured_output=structured_output,
+            timeout=timeout,
+            use_mini_llm=True,  # This agent needs mini_llm
             **kwargs
         )
-        StreamingMixin.__init__(self)  # Initialize streaming mixin
-        self.llm = llm or OpenAI(model=OPENAI_MODEL_NAME)
-        self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
-        self.structured_output = structured_output
-
-    @timed
-    async def answer_user_question(self, user_question):
-        """
-        Process user question using the 4-step approval-based MAPE-K workflow.
-        
-        Args:
-            user_question: The user's question/input
-            
-        Returns:
-            Tuple of (analysis, response) where analysis contains reasoning
-            and response contains the final answer to the user
-        """
-        result = await self.run(input=user_question)
-
-        # Extract reasoning and response from the result
-        analysis = getattr(result, "reasoning", None) or "No reasoning available"
-        response = getattr(result, "response", None) or "Sorry, please try again."
-
-        return analysis, response
