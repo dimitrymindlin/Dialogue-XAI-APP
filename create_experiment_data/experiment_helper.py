@@ -243,30 +243,79 @@ class ExperimentHelper:
         if not self.instances[instance_type]:
             return None
 
-        instance_keys = ["most_complex_instance", "hard_counterfactual_instance", "easy_counterfactual_instance"]
-        instance_key = instance_keys[datapoint_count % 3]
         test_instances_dict = self.instances[instance_type][train_instance_id]
-        instance = test_instances_dict[instance_key]
+        instance = self._get_instance_from_test_dict(test_instances_dict, "cycle", datapoint_count)
+        
+        if instance is None:
+            return None
+        
         return train_instance_id, instance
 
     def _get_final_test_instance(self, datapoint_count, instance_type="final-test"):
         if not self.instances["test"]:
             return None
 
-        instance_key = "most_complex_instance"
         # Get final test instance based on train instance id
         train_instance_id = self.instances["train"][datapoint_count].instance_id
         test_instances_dict = self.instances["test"][train_instance_id]
-        instance = test_instances_dict[instance_key]
+        instance = self._get_instance_from_test_dict(test_instances_dict, "most_complex")
+        
+        if instance is None:
+            return None
+        
         return train_instance_id, instance
 
     def _get_intro_test_instance(self, datapoint_count, instance_type="intro-test"):
-        instance_key = "most_complex_instance"  # Random for now.
         # Get intro test instance based on train instance id
         train_instance_id = self.instances["train"][datapoint_count].instance_id
         test_instances_dict = self.instances["test"][train_instance_id]
-        instance = test_instances_dict[instance_key]
+        instance = self._get_instance_from_test_dict(test_instances_dict, "most_complex")
+        
+        if instance is None:
+            return None
+        
         return train_instance_id, instance
+
+    def _get_instance_from_test_dict(self, test_instances_dict, selection_strategy="first", datapoint_count=0):
+        """
+        Helper method to extract instance from test instances dictionary.
+        Handles both old and new structure formats.
+        
+        Args:
+            test_instances_dict: The test instances dictionary
+            selection_strategy: "first", "cycle", or "most_complex"
+            datapoint_count: Used for cycling through instances
+            
+        Returns:
+            The selected instance or None if not found
+        """
+        if isinstance(test_instances_dict, dict):
+            # Check if we have the old structure with named keys
+            old_keys = ["most_complex_instance", "hard_counterfactual_instance", "easy_counterfactual_instance"]
+            if any(key in test_instances_dict for key in old_keys):
+                # Old structure - use appropriate key based on strategy
+                if selection_strategy == "most_complex":
+                    return test_instances_dict.get("most_complex_instance")
+                elif selection_strategy == "cycle":
+                    instance_key = old_keys[datapoint_count % 3]
+                    return test_instances_dict.get(instance_key)
+                else:  # "first"
+                    return test_instances_dict.get("most_complex_instance")
+            else:
+                # New structure - get instances by available keys
+                available_keys = list(test_instances_dict.keys())
+                if not available_keys:
+                    return None
+                
+                if selection_strategy == "cycle":
+                    instance_key = available_keys[datapoint_count % len(available_keys)]
+                else:  # "first" or "most_complex"
+                    instance_key = available_keys[0]
+                
+                return test_instances_dict[instance_key]
+        else:
+            # Handle case where test_instances_dict is a single instance
+            return test_instances_dict
 
     def _round_instance_features(self, features):
         for feature, value in features.items():
