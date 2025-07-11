@@ -557,23 +557,13 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
             try:
                 # Get the bot
                 bot = bot_dict.get(user_id)
-                
-                # If bot doesn't exist, create it with default settings
-                if bot is None:
-                    app.logger.info(f"Bot not found for user {user_id}, creating new bot")
-                    from explain.logic import ExplainBot
-                    BOT = ExplainBot(study_group="chat", ml_knowledge="low", user_id=user_id)
-                    bot_dict[user_id] = BOT
-                    bot = bot_dict[user_id]
-                    app.logger.info(f"Created new bot for user {user_id}")
-                
+
                 # Check if the bot has an agent with streaming capability
                 if hasattr(bot, 'agent') and hasattr(bot.agent, 'answer_user_question_stream'):
                     app.logger.info("Using agent streaming capability")
                     
                     async def run_streaming():
                         accumulated_response = ""
-                        reasoning = ""
                         
                         # Call ExplainBot's streaming method
                         async for chunk in bot.update_state_from_nl_stream(user_message):
