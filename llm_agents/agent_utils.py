@@ -86,7 +86,19 @@ def timed(fn: Callable) -> Callable:
         start = datetime.now()
         result = await fn(self, *args, **kwargs)
         elapsed = datetime.now() - start
-        current_app.logger.info(f"{self.__class__.__name__} answered in {elapsed}")
+        
+        # Try to use Flask logger, fallback to standard logging if not available
+        try:
+            if current_app:
+                current_app.logger.info(f"{self.__class__.__name__} answered in {elapsed}")
+            else:
+                raise RuntimeError("Flask not available")
+        except (RuntimeError, AttributeError):
+            # Working outside of application context or Flask not available - use standard logger
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"{self.__class__.__name__} answered in {elapsed}")
+        
         return result
 
     return wrapper
