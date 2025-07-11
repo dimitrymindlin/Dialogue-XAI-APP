@@ -335,9 +335,9 @@ def set_user_prediction():
                 prompt = f"""Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. {baseline_prob_text} <br>To <b>understand the model's reasoning</b> and improve your future predictions, <b>select questions</b> from the right."""
         else:  # chat
             if user_correct:
-                prompt = f"""<b>Correct!</b> The model predicted <b>{correct_prediction_string}</b>. <br>If you want to <b>verify if your reasoning</b> aligns with the model, <b>type your questions</b> about the model prediction in the chat."""
+                prompt = f"""<b>Correct!</b> The model predicted <b>{correct_prediction_string}</b>. <br>If you want to <b>verify if your reasoning</b> aligns with the model, <b>ask your questions</b> in the chat."""
             else:
-                prompt = f"""Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. <br>To understand its reasoning and improve your predictions, <b>type your questions</b> in the chat, and I will answer them."""
+                prompt = f"""Not quite right according to the model… It predicted <b>{correct_prediction_string}</b> for this {bot.instance_type_naming}. <br>To understand its why and improve your predictions, <b>ask your questions</b> in the chat."""
             if bot_dict[user_id].use_llm_agent:
                 bot_dict[user_id].agent.append_to_history("agent", prompt)
 
