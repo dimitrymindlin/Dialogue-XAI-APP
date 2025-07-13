@@ -6,6 +6,7 @@ Flask[async]
 flask-cors>=3.0.13
 gin-config==0.5.0
 gunicorn==23.0.0
+gevent==24.11.1
 lime==0.2.0.1
 llama-index==0.12.33
 llama-index-agent-openai==0.4.6
