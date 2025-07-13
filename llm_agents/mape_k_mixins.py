@@ -121,34 +121,35 @@ class BaseAgentInitMixin:
 
     async def _predict_with_timing_and_logging(self, model_class, prompt, prompt_name, llm=None, nested=False):
         """
-        DRY helper for MLflow logging, timing, and prediction that all mixins can use.
-        
-        Args:
-            model_class: Pydantic model class for structured prediction
-            prompt: PromptTemplate object
-            prompt_name: Name for logging the prompt parameter
-            llm: LLM instance to use (defaults to self.llm or self.mini_llm)
-            nested: Whether to use nested MLflow run
-            
-        Returns:
-            Structured prediction result
+        Logs prompt, result, and timing to MLflow. Logs errors and stack traces. Truncates long results. Logs timing as MLflow metric.
         """
         start_time = datetime.datetime.now()
-        
-        # Default LLM selection
         if llm is None:
             llm = getattr(self, 'mini_llm', self.llm)
-        
-        with mlflow.start_run(nested=nested):
-            mlflow.log_param(prompt_name, prompt.get_template_str() if hasattr(prompt, 'get_template_str') else str(prompt))
-            result = await astructured_predict_with_fallback(
-                llm, model_class, prompt, use_structured_output=self.structured_output
-            )
-        
-        end_time = datetime.datetime.now()
-        logger.info(f"Time taken for {prompt_name.replace('_', ' ').title()}: {end_time - start_time}")
-        logger.info(f"{prompt_name.replace('_', ' ').title()} result: {result}.\n")
-        
+        try:
+            with mlflow.start_run(nested=nested):
+                prompt_str = prompt.get_template_str() if hasattr(prompt, 'get_template_str') else str(prompt)
+                mlflow.log_param(f"{prompt_name}_prompt", prompt_str)
+                logger.info(f"[MLFLOW] Logging prompt for {prompt_name}: {prompt_str}")
+                result = await astructured_predict_with_fallback(
+                    llm, model_class, prompt, use_structured_output=self.structured_output
+                )
+                result_str = str(result)
+                if len(result_str) > 500:
+                    result_str = result_str[:500] + "... [truncated]"
+                mlflow.log_param(f"{prompt_name}_result", result_str)
+        except Exception as e:
+            logger.error(f"[MLFLOW] Error during {prompt_name}: {e}", exc_info=True)
+            raise
+        finally:
+            end_time = datetime.datetime.now()
+            elapsed = (end_time - start_time).total_seconds()
+            logger.info(f"Time taken for {prompt_name.replace('_', ' ').title()}: {elapsed:.2f}s")
+            logger.info(f"{prompt_name.replace('_', ' ').title()} result: {result if 'result' in locals() else '[FAILED]'}\n")
+            try:
+                mlflow.log_metric(f"{prompt_name}_duration_sec", elapsed)
+            except Exception as e:
+                logger.warning(f"[MLFLOW] Could not log timing metric: {e}")
         return result
 
 # Streaming callback type
