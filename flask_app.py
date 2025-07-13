@@ -6,7 +6,6 @@ import traceback
 import base64
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from functools import wraps
 
 from flask import Flask
 from flask import request, Blueprint
@@ -29,7 +28,9 @@ bp = Blueprint('host', __name__, template_folder='templates')
 CORS(bp)
 
 # Global thread pool for background tasks (limit concurrent threads)
-background_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="mlflow-init")
+background_executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="mlflow-init")
+# Dedicated thread pool for ML operations to prevent blocking
+ml_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="ml-ops")
 # Lock to prevent race conditions in MLflow experiment creation
 mlflow_init_lock = threading.Lock()
 # Track ongoing MLflow initializations to prevent duplicates
@@ -425,20 +426,35 @@ def generate_audio_from_text(text, voice="alloy"):
 def get_bot_response():
     """Load the box response."""
     user_id = request.args.get("user_id")
-    # bot_dict[user_id].save_all_questions_and_answers_to_csv()
     if not user_id:
         user_id = "TEST"
+    
     if request.method == "POST":
         app.logger.info("generating the bot response")
         try:
             data = json.loads(request.data)
             question_id = data["question"]
             feature_id = data["feature"]
-            response = bot_dict[user_id].update_state_new(question_id=question_id, feature_id=feature_id)
+            
+            # Move heavy ML operation to background thread
+            from concurrent.futures import as_completed
+            future = ml_executor.submit(
+                bot_dict[user_id].update_state_new, 
+                question_id=question_id, 
+                feature_id=feature_id
+            )
+            
+            # Wait for result with timeout
+            try:
+                response = future.result(timeout=60)  # 60 second timeout
+            except Exception as e:
+                app.logger.error(f"ML operation failed: {e}")
+                raise e
+                
         except Exception as ext:
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
-            response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
+            response = ("Sorry! I couldn't understand that. Could you please try to rephrase?", None, None, "")
             feature_id = None
             question_id = None
 
@@ -460,12 +476,17 @@ def get_bot_response():
         soundwave = data.get("soundwave", True)
         if soundwave:
             voice = data.get("voice", "alloy")
-            audio_result = generate_audio_from_text(response[0], voice)
-
-            if "error" in audio_result:
-                message_dict["audio_error"] = audio_result["error"]
-            else:
-                message_dict["audio"] = audio_result
+            # Move audio generation to background as well
+            audio_future = ml_executor.submit(generate_audio_from_text, response[0], voice)
+            try:
+                audio_result = audio_future.result(timeout=30)
+                if "error" in audio_result:
+                    message_dict["audio_error"] = audio_result["error"]
+                else:
+                    message_dict["audio"] = audio_result
+            except Exception as e:
+                app.logger.warning(f"Audio generation failed: {e}")
+                message_dict["audio_error"] = "Audio generation timeout"
 
         return jsonify(message_dict)
 
@@ -480,14 +501,11 @@ async def get_bot_response_from_nl():
         app.logger.info("generating the bot response for nl input")
         try:
             data = json.loads(request.data)
-            
             # Check if streaming is requested
             enable_streaming = data.get("streaming", False)
-            
             if enable_streaming:
                 # Redirect to streaming endpoint with same data
                 return await get_bot_response_from_nl_stream_internal(user_id, data)
-            
             # Check if bot exists, create if not
             if user_id not in bot_dict:
                 app.logger.info(f"Bot not found for user {user_id}, creating new bot")
@@ -495,9 +513,14 @@ async def get_bot_response_from_nl():
                 BOT = ExplainBot(study_group="chat", ml_knowledge="low", user_id=user_id)
                 bot_dict[user_id] = BOT
                 app.logger.info(f"Created new bot for user {user_id}")
-            
-            response, question_id, feature_id, reasoning = await bot_dict[user_id].update_state_from_nl(
-                user_input=data["message"])
+            # Run the heavy ML operation in the thread pool for parallelism
+            import asyncio
+            loop = asyncio.get_event_loop()
+            def ml_task():
+                return bot_dict[user_id].update_state_from_nl(user_input=data["message"])
+            from concurrent.futures import ThreadPoolExecutor
+            future = loop.run_in_executor(ml_executor, ml_task)
+            response, question_id, feature_id, reasoning = await future
             if bot_dict[user_id].use_active_dialogue_manager:
                 followup = bot_dict[user_id].get_suggested_method()
             else:
@@ -549,29 +572,22 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
         try:
             import asyncio
             import json
-            
             # Create new event loop for this thread
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            
             try:
                 # Get the bot
                 bot = bot_dict.get(user_id)
-
                 # Check if the bot has an agent with streaming capability
                 if hasattr(bot, 'agent') and hasattr(bot.agent, 'answer_user_question_stream'):
                     app.logger.info("Using agent streaming capability")
-                    
                     async def run_streaming():
                         accumulated_response = ""
-                        
                         # Call ExplainBot's streaming method
                         async for chunk in bot.update_state_from_nl_stream(user_message):
-                            
                             if chunk.get("type") == "partial":
                                 content = chunk.get("content", "")
                                 accumulated_response += content
-                                
                                 # Send partial chunk to frontend immediately
                                 chunk_data = {
                                     "type": "partial",
@@ -579,13 +595,11 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                                     "is_complete": False
                                 }
                                 yield f"data: {json.dumps(chunk_data)}\n\n"
-                            
                             elif chunk.get("type") == "final":
                                 reasoning = chunk.get("reasoning", "")
                                 final_response = chunk.get("content", accumulated_response)
                                 question_id = chunk.get("question_id")
                                 feature_id = chunk.get("feature_id")
-                                
                                 # Get followup suggestions if available
                                 followup = []
                                 if bot.use_active_dialogue_manager:
@@ -593,7 +607,6 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                                         followup = bot.get_suggested_method()
                                     except:
                                         followup = []
-                                
                                 # Send final response
                                 final_data = {
                                     "type": "final",
@@ -606,21 +619,17 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                                     "question_id": question_id,
                                     "feature_id": feature_id
                                 }
-                                
                                 # Generate audio if requested
                                 soundwave = data.get("soundwave", True)
                                 if soundwave:
                                     voice = data.get("voice", "alloy")
                                     audio_result = generate_audio_from_text(final_response, voice)
-                                    
                                     if "error" in audio_result:
                                         final_data["audio_error"] = audio_result["error"]
                                     else:
                                         final_data["audio"] = audio_result
-                                
                                 yield f"data: {json.dumps(final_data)}\n\n"
                                 break
-                    
                     # Run the async streaming function
                     async_gen = run_streaming()
                     try:
@@ -629,23 +638,23 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                             yield chunk
                     except StopAsyncIteration:
                         pass
-                
                 else:
                     # Fallback to non-streaming response
                     app.logger.info("No streaming capability, using fallback")
-                    
                     async def run_fallback():
+                        import concurrent.futures
                         try:
-                            response, question_id, feature_id, reasoning = await bot.update_state_from_nl(
-                                user_input=user_message)
-                            
+                            # Run the heavy ML operation in the thread pool for parallelism
+                            def ml_task():
+                                return bot.update_state_from_nl(user_input=user_message)
+                            future = loop.run_in_executor(ml_executor, ml_task)
+                            response, question_id, feature_id, reasoning = await future
                             followup = []
                             if bot.use_active_dialogue_manager:
                                 try:
                                     followup = bot.get_suggested_method()
                                 except:
                                     followup = []
-                            
                             final_data = {
                                 "type": "final",
                                 "content": response,
@@ -657,7 +666,6 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                                 "question_id": question_id,
                                 "feature_id": feature_id
                             }
-                            
                             return final_data
                         except Exception as e:
                             app.logger.error(f"Fallback error: {str(e)}")
@@ -666,7 +674,6 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                                 "content": "Sorry! I couldn't understand that. Could you please try to rephrase?",
                                 "is_complete": True
                             }
-                    
                     try:
                         result = loop.run_until_complete(run_fallback())
                         yield f"data: {json.dumps(result)}\n\n"
@@ -678,10 +685,8 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                             "is_complete": True
                         }
                         yield f"data: {json.dumps(error_data)}\n\n"
-            
             finally:
                 loop.close()
-                
         except Exception as e:
             app.logger.error(f"Streaming error: {str(e)}")
             app.logger.error(traceback.format_exc())
@@ -692,7 +697,6 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                 "is_complete": True
             }
             yield f"data: {json.dumps(error_data)}\n\n"
-    
     return Response(
         generate_stream(),
         mimetype='text/event-stream',
@@ -913,3 +917,32 @@ def cleanup_background_tasks():
     app.logger.info("Shutting down background task executor...")
     background_executor.shutdown(wait=True, timeout=30)
     app.logger.info("Background task executor shutdown complete")
+
+
+## Rate limiting removed: not useful for long-running requests
+
+import atexit
+
+def cleanup_resources():
+    """Clean up resources on application shutdown."""
+    app.logger.info("Cleaning up resources...")
+    
+    # Shutdown thread pools
+    try:
+        ml_executor.shutdown(wait=True, timeout=10)
+        background_executor.shutdown(wait=True, timeout=10)
+    except Exception as e:
+        app.logger.warning(f"Thread pool shutdown warning: {e}")
+    
+    # Rate limiting cleanup removed
+    
+    # Clear bot instances
+    try:
+        bot_dict.clear()
+    except Exception as e:
+        app.logger.warning(f"Bot cleanup warning: {e}")
+    
+    app.logger.info("Resource cleanup completed")
+
+# Register cleanup function
+atexit.register(cleanup_resources)
