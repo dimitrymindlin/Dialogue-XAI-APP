@@ -26,14 +26,14 @@ OPENAI_REASONING_MODEL_NAME = os.getenv("OPENAI_REASONING_MODEL_NAME")
 # Base directory: the directory where this script is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# CSV logging configuration
-LOG_FOLDER = "mape-k-logs"
-os.makedirs(LOG_FOLDER, exist_ok=True)
 
-CSV_HEADERS = [
-    "timestamp", "experiment_id", "datapoint_count", "user_message",
-    "monitor", "analyze", "plan", "execute", "user_model"
-]
+# CSV logging configuration (DISABLED)
+# LOG_FOLDER = "mape-k-logs"
+# os.makedirs(LOG_FOLDER, exist_ok=True)
+# CSV_HEADERS = [
+#     "timestamp", "experiment_id", "datapoint_count", "user_message",
+#     "monitor", "analyze", "plan", "execute", "user_model"
+# ]
 
 
 def configure_logger(name: str, log_file: str = "agent.log") -> logging.Logger:
@@ -50,6 +50,7 @@ def configure_logger(name: str, log_file: str = "agent.log") -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
 
+
     # Avoid duplicate handlers
     if not logger.handlers:
         # Console handler
@@ -57,15 +58,15 @@ def configure_logger(name: str, log_file: str = "agent.log") -> logging.Logger:
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(logging.Formatter(fmt="%(levelname)s - %(message)s"))
 
-        # File handler
-        file_handler = logging.FileHandler(log_file, mode="w")
-        file_handler.setLevel(logging.INFO)
-        file_handler.setFormatter(logging.Formatter(
-            fmt="%(asctime)s - %(name)s - %(levelname)s:\n%(message)s\n"
-        ))
+        # File handler (DISABLED)
+        # file_handler = logging.FileHandler(log_file, mode="w")
+        # file_handler.setLevel(logging.INFO)
+        # file_handler.setFormatter(logging.Formatter(
+        #     fmt="%(asctime)s - %(name)s - %(levelname)s:\n%(message)s\n"
+        # ))
 
         logger.addHandler(console_handler)
-        logger.addHandler(file_handler)
+        # logger.addHandler(file_handler)
 
     return logger
 

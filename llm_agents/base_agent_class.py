@@ -39,12 +39,14 @@ class BaseAgent(ABC):
     ):
         # Logging setup
         self.experiment_id = experiment_id
-        self.log_file = generate_log_file_name(experiment_id)
+        """self.log_file = generate_log_file_name(experiment_id)
         initialize_csv(self.log_file)
-        
         # Initialize prompt log file (for detailed prompt logging)
-        self.prompt_log_file = self.log_file.replace('.csv', '_prompts.log')
-
+        self.prompt_log_file = self.log_file.replace('.csv', '_prompts.log')"""
+        # Logging disabled
+        self.log_file = None
+        self.prompt_log_file = None
+    
         # Feature context - consolidate all feature-related information
         self._initialize_feature_context(feature_names, feature_units, feature_tooltips)
         
@@ -108,13 +110,10 @@ class BaseAgent(ABC):
 
     def log_prompt(self, component: str, prompt_str: str) -> None:
         """
-        Log a prompt to the prompt log file.
-        
-        Args:
-            component: The component name (e.g., 'monitor', 'analyze')
-            prompt_str: The raw prompt content
+        Log a prompt to the prompt log file (disabled).
         """
-        log_prompt(self.prompt_log_file, component, prompt_str)
+        if self.prompt_log_file:
+            log_prompt(self.prompt_log_file, component, prompt_str)
 
     def initialize_new_datapoint(
             self,
