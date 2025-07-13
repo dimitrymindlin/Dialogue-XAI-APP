@@ -57,6 +57,7 @@ class ExperimentHelper:
         self.instances["train"] = [instance for instance in self.instances["train"] if instance.instance_id in test_ids]
 
     def _load_train_instances(self):
+        import random
         diverse_instances = self.conversation.get_var("diverse_instances").contents
 
         # Handle both new dictionary format and legacy list format
@@ -73,7 +74,9 @@ class ExperimentHelper:
             instance_ids = diverse_instances
 
         # Turn into InstanceDatapoint
-        self.instances["train"] = [self._prepare_train_instance(instance) for instance in instance_ids]
+        train_instances = [self._prepare_train_instance(instance) for instance in instance_ids]
+        random.shuffle(train_instances)
+        self.instances["train"] = train_instances
 
     def _load_test_instances(self):
         test_instances = self.conversation.get_var("test_instances").contents
