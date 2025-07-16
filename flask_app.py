@@ -27,10 +27,29 @@ bp = Blueprint('host', __name__, template_folder='templates')
 # Allow CORS for our React frontend
 CORS(bp)
 
+
+def _get_thread_pool_size(env_var, default=None):
+    value = os.getenv(env_var)
+    if value is None:
+        raise RuntimeError(
+            f"Required environment variable '{env_var}' is not set. Please set it in your environment or .env file.")
+    try:
+        return int(value)
+    except Exception:
+        raise RuntimeError(f"Environment variable '{env_var}' must be an integer.")
+
+
 # Global thread pool for background tasks (limit concurrent threads)
-background_executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="mlflow-init")
+background_executor = ThreadPoolExecutor(
+    max_workers=_get_thread_pool_size("BACKGROUND_EXECUTOR_THREADS"),
+    thread_name_prefix="mlflow-init"
+)
 # Dedicated thread pool for ML operations to prevent blocking
-ml_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="ml-ops")
+ml_executor = ThreadPoolExecutor(
+    max_workers=_get_thread_pool_size("ML_EXECUTOR_THREADS"),
+    thread_name_prefix="ml-ops"
+)
+
 # Lock to prevent race conditions in MLflow experiment creation
 mlflow_init_lock = threading.Lock()
 # Track ongoing MLflow initializations to prevent duplicates
