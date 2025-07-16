@@ -499,9 +499,9 @@ def get_bot_response():
                 feature_id=feature_id
             )
             
-            # Wait for result with timeout
+            # Wait for result
             try:
-                response = future.result(timeout=100)
+                response = future.result()
             except Exception as e:
                 app.logger.error(f"ML operation failed: {e}")
                 raise e
@@ -535,14 +535,14 @@ def get_bot_response():
             # Move audio generation to background as well
             audio_future = ml_executor.submit(generate_audio_from_text, response[0], voice)
             try:
-                audio_result = audio_future.result(timeout=60)
+                audio_result = audio_future.result()
                 if "error" in audio_result:
                     message_dict["audio_error"] = audio_result["error"]
                 else:
                     message_dict["audio"] = audio_result
             except Exception as e:
                 app.logger.warning(f"Audio generation failed: {e}")
-                message_dict["audio_error"] = "Audio generation timeout"
+                message_dict["audio_error"] = "Audio generation failed"
 
         return jsonify(message_dict)
 
