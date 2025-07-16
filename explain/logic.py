@@ -4,6 +4,7 @@ This file contains the core logic for facilitating conversations. It orchestrate
 routines for setting up conversations, controlling the state of the conversation, and running
 the functions to get the responses to user inputs.
 """
+import asyncio
 import difflib
 import json
 import os
@@ -88,7 +89,8 @@ class ExplainBot:
                  use_llm_agent=False,
                  use_static_followup=False,
                  use_two_prompts=False,
-                 submodular_pick: bool = False):
+                 submodular_pick: bool = False,
+                 mlflow_future=None):
         """The init routine.
 
         Arguments:
@@ -152,6 +154,7 @@ class ExplainBot:
         self.use_selection = use_selection
         self.use_intent_recognition = use_intent_recognition
         self.use_active_dialogue_manager = use_active_dialogue_manager
+        self.mlflow_future = mlflow_future
 
         # Check environment variable first, fallback to gin parameter
         env_llm_agent = os.getenv('XAI_USE_LLM_AGENT')
@@ -284,6 +287,21 @@ class ExplainBot:
 
         # Initialize XAI Cache Manager
         self.xai_cache_manager = XAICacheManager()
+
+    async def _await_mlflow_init_and_set_agent_id(self):
+        """
+        Awaits the MLflow initialization future and sets the experiment ID on the agent.
+        This is called right before an agent prediction to ensure the experiment ID is available.
+        """
+        if self.mlflow_future and not self.mlflow_future.done():
+            try:
+                experiment_id = await asyncio.wrap_future(self.mlflow_future)
+                if experiment_id and self.agent:
+                    self.agent.set_experiment_id(experiment_id)
+                    self.mlflow_future = None  # Clear the future once done
+            except Exception as e:
+                print(f"Error awaiting MLflow future: {e}")
+                self.mlflow_future = None  # Clear the future to avoid repeated errors
 
     def get_feature_display_name_dict(self):
         template_manager = self.conversation.get_var('template_manager').contents
@@ -827,6 +845,7 @@ class ExplainBot:
         feature_name = None
         feature_id = None
         if self.use_llm_agent:
+            await self._await_mlflow_init_and_set_agent_id()
             reasoning, response = await self.agent.answer_user_question(user_input)
             return response, None, None, reasoning
         elif self.use_intent_recognition:
@@ -866,6 +885,8 @@ class ExplainBot:
         feature_id = None
         
         if self.use_llm_agent:
+            # Ensure MLflow experiment is set before streaming
+            await self._await_mlflow_init_and_set_agent_id()
             # Check if agent supports streaming
             if hasattr(self.agent, 'answer_user_question_stream'):
                 # Use streaming

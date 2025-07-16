@@ -6,6 +6,8 @@ from llm_agents.agent_utils import (timed, OPENAI_MODEL_NAME, OPENAI_MINI_MODEL_
 import logging
 import mlflow
 
+from llm_agents.events import MonitorDoneEvent, AnalyzeDoneEvent, PlanDoneEvent
+
 # Configure logger
 logger = logging.getLogger(__name__)
 
@@ -154,18 +156,6 @@ class BaseAgentInitMixin:
 
 # Streaming callback type
 StreamCallback = Optional[Callable[[str, bool], None]]
-
-
-class MonitorDoneEvent(Event):
-    pass
-
-
-class AnalyzeDoneEvent(Event):
-    pass
-
-
-class PlanDoneEvent(Event):
-    pass
 
 
 class StreamingMixin:
