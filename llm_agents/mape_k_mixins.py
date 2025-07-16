@@ -106,6 +106,12 @@ class BaseAgentInitMixin:
             self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
         
         self.structured_output = structured_output
+        self.logging_experiment_id = None  # Initialize logging_experiment_id
+
+    def set_logging_experiment_id(self, logging_experiment_id: str):
+        """Set the MLflow experiment ID for this agent instance."""
+        self.logging_experiment_id = logging_experiment_id
+        logger.info(f"Agent received MLflow experiment ID: {logging_experiment_id}")
 
     @timed
     async def answer_user_question(self, user_question):
@@ -727,9 +733,9 @@ class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin,
     Full 4-step MAPE-K agent: separate Monitor, Analyze, Plan, Execute steps.
     """
 
-    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+    def __init__(self, logging_experiment_id: str, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
         # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, **kwargs)
+        LlamaIndexBaseAgent.__init__(self, logging_experiment_id=logging_experiment_id, **kwargs)
         
         # Initialize agent-specific components
         self._init_agent_components(
@@ -746,9 +752,9 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
     2-step MAPE-K agent: combines Monitor+Analyze and Plan+Execute steps with streaming.
     """
 
-    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+    def __init__(self, logging_experiment_id: str, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
         # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, **kwargs)
+        LlamaIndexBaseAgent.__init__(self, logging_experiment_id=logging_experiment_id, **kwargs)
         
         # Initialize agent-specific components
         self._init_agent_components(
@@ -764,9 +770,9 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin, Streami
     Unified MAPE-K agent: performs all MAPE-K steps in a single LLM call with streaming support.
     """
 
-    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+    def __init__(self, logging_experiment_id: str, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
         # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, **kwargs)
+        LlamaIndexBaseAgent.__init__(self, logging_experiment_id=logging_experiment_id, **kwargs)
         
         # Initialize with special reasoning model
         self._init_agent_components(
@@ -912,9 +918,9 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
     based on the user's current needs and understanding state.
     """
 
-    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+    def __init__(self, logging_experiment_id: str, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
         # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, **kwargs)
+        LlamaIndexBaseAgent.__init__(self, logging_experiment_id=logging_experiment_id, **kwargs)
         
         # Initialize with specific temperature
         self._init_agent_components(
@@ -933,9 +939,9 @@ class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, Analy
     or modifies them before executing.
     """
 
-    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+    def __init__(self, logging_experiment_id: str, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
         # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, **kwargs)
+        LlamaIndexBaseAgent.__init__(self, logging_experiment_id=logging_experiment_id, **kwargs)
         
         # Initialize agent-specific components
         self._init_agent_components(
