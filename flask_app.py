@@ -492,15 +492,16 @@ def get_bot_response():
             
             # Move heavy ML operation to background thread
             from concurrent.futures import as_completed
+            bot = bot_dict[user_id]
             future = ml_executor.submit(
-                bot_dict[user_id].update_state_new, 
-                question_id=question_id, 
+                bot.update_state_new,
+                question_id=question_id,
                 feature_id=feature_id
             )
             
             # Wait for result with timeout
             try:
-                response = future.result(timeout=60)  # 60 second timeout
+                response = future.result(timeout=100)
             except Exception as e:
                 app.logger.error(f"ML operation failed: {e}")
                 raise e
