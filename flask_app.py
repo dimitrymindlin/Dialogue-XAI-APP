@@ -535,7 +535,7 @@ def get_bot_response():
             # Move audio generation to background as well
             audio_future = ml_executor.submit(generate_audio_from_text, response[0], voice)
             try:
-                audio_result = audio_future.result(timeout=30)
+                audio_result = audio_future.result(timeout=60)
                 if "error" in audio_result:
                     message_dict["audio_error"] = audio_result["error"]
                 else:
