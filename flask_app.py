@@ -224,12 +224,14 @@ def init():
         study_group = "interactive"
     if not ml_knowledge:
         ml_knowledge = "low"
-    BOT = ExplainBot(study_group, ml_knowledge, user_id)
+
+    # Submit MLflow initialization to background executor
+    mlflow_future = background_executor.submit(initialize_mlflow_experiment, user_id)
+
+    # Create bot and pass the future so it can await the experiment_id
+    BOT = ExplainBot(study_group, ml_knowledge, user_id, mlflow_future=mlflow_future)
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
-
-    # Initialize MLflow experiment for this user
-    initialize_mlflow_experiment(user_id)
 
     # Feature tooltip and units
     feature_tooltip = bot_dict[user_id].get_feature_tooltips()
@@ -259,7 +261,7 @@ def finish():
         user_id = "TEST"
     # Remove the bot from the dict
     try:
-        bot_dict.pop(user_id)
+        bot_dict.pop(user_id, None)
     except KeyError:
         print(f"User {user_id} sent finish again, but the Bot was not in the dict.")
         return "200 OK"
@@ -951,16 +953,19 @@ def safe_background_mlflow_init(user_id, datapoint_count):
         ongoing_mlflow_inits.add(experiment_key)
     
     try:
-        # Perform the actual initialization
-        success = initialize_mlflow_experiment(user_id, datapoint_count)
-        if success:
-            app.logger.info(f"Background MLflow init completed for {experiment_key}")
+        experiment_id = initialize_mlflow_experiment(user_id, datapoint_count)
+        if experiment_id:
+            # Pass the experiment_id to the bot's agent
+            if user_id in bot_dict and hasattr(bot_dict[user_id], 'agent'):
+                bot_dict[user_id].agent.set_experiment_id(experiment_id)
+                app.logger.info(f"Background MLflow init completed for {experiment_key} and passed to agent.")
+            else:
+                app.logger.warning(f"Bot or agent not found for {user_id} after MLflow init.")
         else:
             app.logger.warning(f"Background MLflow init failed for {experiment_key}")
     except Exception as e:
         app.logger.error(f"Background MLflow init error for {experiment_key}: {e}")
     finally:
-        # Always remove from ongoing set
         with mlflow_init_lock:
             ongoing_mlflow_inits.discard(experiment_key)
 
@@ -972,8 +977,6 @@ def cleanup_background_tasks():
 
 
 ## Rate limiting removed: not useful for long-running requests
-
-import atexit
 
 def cleanup_resources():
     """Clean up resources on application shutdown."""
