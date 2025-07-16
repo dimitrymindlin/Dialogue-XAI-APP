@@ -819,36 +819,32 @@ def test_tts_page():
 
 
 def initialize_mlflow_experiment(user_id, datapoint_count=None):
-    """Initialize MLflow experiment for a specific user and chat round."""
+    """Initialize MLflow experiment and return the experiment_id."""
     try:
         if user_id == "TEST" and not datapoint_count:  # for testing purposes
             datapoint_count = 0
 
-        # Create hierarchical experiment name including chat round
         if datapoint_count is not None:
-            # Format: USERID_N (e.g., user_998852294013090438_0)
             experiment_name = f"{user_id}_{datapoint_count}"
         else:
-            # Fallback for initialization without datapoint_count
             experiment_name = f"{user_id}_session"
 
-        # Set the experiment (creates it if it doesn't exist)
-        mlflow.set_experiment(experiment_name)
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if experiment is None:
+            # This is the slow part, as it might have to create the experiment
+            experiment_id = mlflow.create_experiment(experiment_name)
+        else:
+            experiment_id = experiment.experiment_id
 
-        # mlflow.openai.autolog(log_traces=True)
+        # Autologging
         mlflow.llama_index.autolog(log_traces=True)
-        app.logger.info(f"MLflow experiment '{experiment_name}' initialized for user {user_id}.")
-        return True
+        app.logger.info(f"MLflow autologging initialized for user {user_id}.")
+
+        return experiment_id
     except Exception as e:
         app.logger.warning(f"MLflow experiment init failed for user {user_id}: {e}")
         app.logger.info("Continuing without MLflow tracking. App will function normally.")
-        return False
-
-
-def update_mlflow_experiment_for_round(user_id, datapoint_count):
-    """Update MLflow experiment when moving to a new chat round."""
-    datapoint_count -= 1  # Convert to 0-indexed count
-    return initialize_mlflow_experiment(user_id, datapoint_count)
+        return None
 
 
 @bp.route('/trigger_background_computation', methods=['POST'])
