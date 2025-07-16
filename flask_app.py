@@ -50,8 +50,41 @@ class GlobalArgs:
         self.baseurl = baseurl
 
 
+# Thread-safe dict wrapper using a Lock.
+class ThreadSafeDict:
+    """Thread-safe dict wrapper using a Lock."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._dict = {}
+
+    def __getitem__(self, key):
+        with self._lock:
+            return self._dict[key]
+
+    def __setitem__(self, key, value):
+        with self._lock:
+            self._dict[key] = value
+
+    def get(self, key, default=None):
+        with self._lock:
+            return self._dict.get(key, default)
+
+    def pop(self, key, default=None):
+        with self._lock:
+            return self._dict.pop(key, default)
+
+    def __contains__(self, key):
+        with self._lock:
+            return key in self._dict
+
+    def clear(self):
+        with self._lock:
+            self._dict.clear()
+
+
 # Setup the explainbot dict to run multiple bots
-bot_dict = {}
+bot_dict = ThreadSafeDict()
 
 
 def _load_environment():
