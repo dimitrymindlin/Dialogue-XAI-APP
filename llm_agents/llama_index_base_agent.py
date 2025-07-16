@@ -32,7 +32,7 @@ class LlamaIndexBaseAgent(BaseAgent, metaclass=XAIBaseAgentMeta):
     
     def __init__(
             self,
-            experiment_id: str,
+            logging_experiment_id: str,
             feature_names: str = "",
             feature_units: str = "",
             feature_tooltips: str = "",
@@ -41,7 +41,7 @@ class LlamaIndexBaseAgent(BaseAgent, metaclass=XAIBaseAgentMeta):
             **kwargs
     ):
         super().__init__(
-            experiment_id=experiment_id,
+            logging_experiment_id=logging_experiment_id,
             feature_names=feature_names,
             feature_units=feature_units,
             feature_tooltips=feature_tooltips,

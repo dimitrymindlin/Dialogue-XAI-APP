@@ -393,30 +393,23 @@ class LoggingHelperMixin:
             "execute": "",
             "user_model": ""
         }
-        append_new_log_row(self.current_log_row, self.log_file)
+        if getattr(self, "log_file", None):
+            append_new_log_row(self.current_log_row, self.log_file)
         return self.current_log_row
 
     def update_log(self, component: str, result: Any) -> None:
-        """
-        Update the current log row with results from a MAPE-K component.
-        
-        Args:
-            component: The name of the component ('monitor', 'analyze', 'plan', 'plan_approval', 'plan_approval_execute', 'execute')
-            result: The result from the component
-        """
         if component not in self.current_log_row:
             logger.warning(f"Unknown component: {component}")
             return
-
         self.current_log_row[component] = result
-        update_last_log_row(self.current_log_row, self.log_file)
+        if getattr(self, "log_file", None):
+            update_last_log_row(self.current_log_row, self.log_file)
+
 
     def finalize_log_row(self) -> None:
-        """
-        Finalize the current log row with the updated user model.
-        """
         self.current_log_row["user_model"] = self.user_model.get_state_summary(as_dict=True)
-        update_last_log_row(self.current_log_row, self.log_file)
+        if getattr(self, "log_file", None):
+            update_last_log_row(self.current_log_row, self.log_file)
 
     def format_predefined_plan_for_prompt(self) -> str:
         """
