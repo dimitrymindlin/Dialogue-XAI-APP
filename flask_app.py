@@ -144,7 +144,7 @@ def _get_mlflow_uri():
     return f"file://{target}"
 
 
-def _initialize_mlflow(app):
+def _initialize_global_mlflow(app):
     """Initialize MLflow tracking."""
     try:
         mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", _get_mlflow_uri())
@@ -192,7 +192,7 @@ def create_app():
     app.register_blueprint(bp, url_prefix=args.baseurl)
 
     # Initialize external services
-    _initialize_mlflow(app)
+    _initialize_global_mlflow(app)
 
     # Configure logging
     _configure_logging(app)
