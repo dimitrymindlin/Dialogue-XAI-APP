@@ -14,7 +14,7 @@ from flask_cors import CORS
 import gin
 import openai
 import matplotlib
-
+import atexit
 from explain.logic import ExplainBot
 
 import mlflow
