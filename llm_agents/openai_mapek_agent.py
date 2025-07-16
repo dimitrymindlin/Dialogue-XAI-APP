@@ -633,7 +633,7 @@ class MapeKUnifiedOpenAIAgent(OpenAIAgent):
             # Log to CSV
             row = {
                 "timestamp": datetime.now().strftime("%d.%m.%Y_%H:%M"),
-                "experiment_id": self.experiment_id,
+                "experiment_id": self.logging_experiment_id,
                 "datapoint_count": self.datapoint_count,
                 "user_message": user_question,
                 "monitor": {"mode_of_engagement": unified_res.final_output.mode_of_engagement,
