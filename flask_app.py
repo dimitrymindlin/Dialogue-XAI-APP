@@ -860,19 +860,24 @@ def trigger_background_computation():
         
         if not user_id:
             user_id = "TEST"
-        
-        if user_id in bot_dict:
-            bot_dict[user_id].trigger_background_xai_computation(phase_from)
+
+        exists = user_id in bot_dict
+        if exists:
+            # Run the background XAI computation in the background_executor
+            background_executor.submit(
+                bot_dict[user_id].trigger_background_xai_computation,
+                phase_from
+            )
             return jsonify({
                 "status": "success",
-                "message": f"Background XAI computation triggered for user {user_id}"
+                "message": f"Background XAI computation started for user {user_id} (running in background)"
             })
         else:
             return jsonify({
-                "status": "error", 
+                "status": "error",
                 "message": f"User {user_id} not found"
             }), 404
-            
+
     except Exception as e:
         return jsonify({
             "status": "error",
