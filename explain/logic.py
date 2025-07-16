@@ -138,7 +138,7 @@ class ExplainBot:
         self.bot_name = name
         self.study_group = study_group
         self.ml_knowledge = ml_knowledge
-        self.experiment_id = user_id
+
         # Prompt settings
         self.prompt_metric = prompt_metric
         self.prompt_ordering = prompt_ordering
@@ -273,7 +273,7 @@ class ExplainBot:
                 feature_tooltips=self.get_feature_tooltips(),
                 domain_description=self.conversation.describe.get_dataset_description(),
                 user_ml_knowledge=self.ml_knowledge,
-                experiment_id=self.experiment_id
+                logging_experiment_id=None # will be set for each datapoint in _await_mlflow_init_and_set_agent_id
             )
 
         # Load the explanations
