@@ -513,7 +513,8 @@ def get_bot_response():
             feature_id = None
             question_id = None
 
-        if bot_dict[user_id].use_active_dialogue_manager:
+        use_active_dialogue_manager = bot_dict[user_id].use_active_dialogue_manager
+        if use_active_dialogue_manager:
             followup = bot_dict[user_id].get_suggested_method()
         else:
             followup = []
@@ -547,76 +548,72 @@ def get_bot_response():
 
 
 @bp.route("/get_response_nl", methods=['POST'])
+async def _get_bot_response_from_nl_internal(user_id: str, data: dict):
+    """Internal handler for non-streaming bot responses."""
+    try:
+        # Check if bot exists, create if not
+        if user_id not in bot_dict:
+            app.logger.info(f"Bot not found for user {user_id}, creating new bot")
+            from explain.logic import ExplainBot
+            bot = ExplainBot(study_group="chat", ml_knowledge="low", user_id=user_id)
+            bot_dict[user_id] = bot
+            app.logger.info(f"Created new bot for user {user_id}")
+
+        bot = bot_dict[user_id]
+
+        # Run the heavy ML operation in the thread pool for parallelism
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        def ml_task():
+            return bot.update_state_from_nl(user_input=data["message"])
+
+        future = loop.run_in_executor(ml_executor, ml_task)
+        response, question_id, feature_id, reasoning = await future
+
+        followup = []
+        if bot.use_active_dialogue_manager:
+            followup = bot.get_suggested_method()
+
+    except Exception as ext:
+        app.logger.error(f"Error getting bot response: {ext}\n{traceback.format_exc()}")
+        response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
+        question_id, feature_id, followup, reasoning = None, None, [], ""
+
+    message_dict = {
+        "isUser": False,
+        "feedback": True,
+        "text": response,
+        "question_id": question_id,
+        "feature_id": feature_id,
+        "followup": followup,
+        "reasoning": reasoning
+    }
+
+    # Generate audio if requested
+    if data.get("soundwave", True):
+        voice = data.get("voice", "alloy")
+        audio_result = generate_audio_from_text(response, voice)
+        if "error" in audio_result:
+            message_dict["audio_error"] = audio_result["error"]
+        else:
+            message_dict["audio"] = audio_result
+
+    return message_dict
+
+
+@bp.route("/get_response_nl", methods=['POST'])
 async def get_bot_response_from_nl():
     """Load the box response."""
-    user_id = request.args.get("user_id")
-    if not user_id:
-        user_id = "TEST"
-    if request.method == "POST":
-        app.logger.info("generating the bot response for nl input")
-        try:
-            data = json.loads(request.data)
-            # Check if streaming is requested
-            enable_streaming = data.get("streaming", False)
-            if enable_streaming:
-                # Redirect to streaming endpoint with same data
-                return await get_bot_response_from_nl_stream_internal(user_id, data)
-            # Check if bot exists, create if not
-            if user_id not in bot_dict:
-                app.logger.info(f"Bot not found for user {user_id}, creating new bot")
-                from explain.logic import ExplainBot
-                BOT = ExplainBot(study_group="chat", ml_knowledge="low", user_id=user_id)
-                bot_dict[user_id] = BOT
-                app.logger.info(f"Created new bot for user {user_id}")
-            # Run the heavy ML operation in the thread pool for parallelism
-            import asyncio
-            loop = asyncio.get_event_loop()
-            def ml_task():
-                return bot_dict[user_id].update_state_from_nl(user_input=data["message"])
-            from concurrent.futures import ThreadPoolExecutor
-            future = loop.run_in_executor(ml_executor, ml_task)
-            response, question_id, feature_id, reasoning = await future
-            if bot_dict[user_id].use_active_dialogue_manager:
-                followup = bot_dict[user_id].get_suggested_method()
-            else:
-                followup = []
-        except Exception as ext:
-            app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
-            app.logger.info(f"Exception getting bot response: {ext}")
-            response = "Sorry! I couldn't understand that. Could you please try to rephrase?"
-            question_id = None
-            feature_id = None
-            followup = []
-            reasoning = ""
+    user_id = request.args.get("user_id", "TEST")
+    data = json.loads(request.data)
 
-        assert isinstance(response, str)
-        assert isinstance(question_id, int) or question_id is None
-        assert isinstance(feature_id, int) or feature_id is None
-        assert isinstance(followup, list)
-        assert isinstance(reasoning, str)
+    if data.get("streaming", False):
+        return await get_bot_response_from_nl_stream_internal(user_id, data)
 
-        message_dict = {
-            "isUser": False,
-            "feedback": True,
-            "text": response,
-            "question_id": question_id,
-            "feature_id": feature_id,
-            "followup": followup,
-            "reasoning": reasoning
-        }
-
-        # Check if soundwave parameter is provided in the request
-        soundwave = data.get("soundwave", True)
-        if soundwave:
-            voice = data.get("voice", "alloy")
-            audio_result = generate_audio_from_text(response, voice)
-
-            if "error" in audio_result:
-                message_dict["audio_error"] = audio_result["error"]
-            else:
-                message_dict["audio"] = audio_result
-
-        return jsonify(message_dict)
+    app.logger.info("Generating non-streaming bot response for NL input")
+    response_data = await _get_bot_response_from_nl_internal(user_id, data)
+    return jsonify(response_data)
 
 
 async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
@@ -696,50 +693,13 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                 else:
                     # Fallback to non-streaming response
                     app.logger.info("No streaming capability, using fallback")
-                    async def run_fallback():
-                        import concurrent.futures
-                        try:
-                            # Run the heavy ML operation in the thread pool for parallelism
-                            def ml_task():
-                                return bot.update_state_from_nl(user_input=user_message)
-                            future = loop.run_in_executor(ml_executor, ml_task)
-                            response, question_id, feature_id, reasoning = await future
-                            followup = []
-                            if bot.use_active_dialogue_manager:
-                                try:
-                                    followup = bot.get_suggested_method()
-                                except:
-                                    followup = []
-                            final_data = {
-                                "type": "final",
-                                "content": response,
-                                "reasoning": reasoning,
-                                "followup": followup,
-                                "is_complete": True,
-                                "isUser": False,
-                                "feedback": True,
-                                "question_id": question_id,
-                                "feature_id": feature_id
-                            }
-                            return final_data
-                        except Exception as e:
-                            app.logger.error(f"Fallback error: {str(e)}")
-                            return {
-                                "type": "error",
-                                "content": "Sorry! I couldn't understand that. Could you please try to rephrase?",
-                                "is_complete": True
-                            }
-                    try:
-                        result = loop.run_until_complete(run_fallback())
-                        yield f"data: {json.dumps(result)}\n\n"
-                    except Exception as e:
-                        app.logger.error(f"Fallback execution error: {str(e)}")
-                        error_data = {
-                            "type": "error",
-                            "content": "Sorry! I couldn't understand that. Could you please try to rephrase?",
-                            "is_complete": True
-                        }
-                        yield f"data: {json.dumps(error_data)}\n\n"
+                    result = await _get_bot_response_from_nl_internal(user_id, data)
+                    final_data = {"type": "final", "content": result["text"], "reasoning": result["reasoning"],
+                                  "followup": result["followup"], "is_complete": True, "isUser": False,
+                                  "feedback": True, "question_id": result["question_id"],
+                                  "feature_id": result["feature_id"], "audio": result.get("audio"),
+                                  "audio_error": result.get("audio_error")}
+                    yield f"data: {json.dumps(final_data)}\n\n"
             finally:
                 loop.close()
         except Exception as e:
@@ -762,19 +722,6 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
             'Access-Control-Allow-Headers': 'Cache-Control'
         }
     )
-
-
-@bp.route("/get_response_nl_stream", methods=['POST'])
-async def get_bot_response_from_nl_stream():
-    """Stream the bot response using Server-Sent Events."""
-    user_id = request.args.get("user_id")
-    if user_id is None:
-        user_id = "TEST"
-    
-    data = json.loads(request.data)
-    app.logger.info(f"Starting streaming response for user {user_id}")
-    
-    return await get_bot_response_from_nl_stream_internal(user_id, data)
 
 
 @bp.route("/speech-to-text", methods=['POST'])
