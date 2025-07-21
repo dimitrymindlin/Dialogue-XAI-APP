@@ -62,12 +62,13 @@ class Explanation(NewExplanationModel):
 
 
 class UserModelFineGrained:
-    def __init__(self, user_ml_knowledge):
+    def __init__(self, user_ml_knowledge, initial_understood_concepts: Optional[List[str]] = None):
         self.explanations: Dict[str, Explanation] = {}
         self.cognitive_state: Optional[str] = ""
         self.explicit_understanding_signals: List[str] = []
         self.current_explanation_request: List[str] = []  # TODO: Not used for now.
         self.user_ml_knowledge = self.set_user_ml_knowledge(user_ml_knowledge)
+        self.initial_understood_concepts = initial_understood_concepts
 
     def set_cognitive_state(self, cognitive_state: str):
         """Set the cognitive state of the user model."""
@@ -208,6 +209,11 @@ class UserModelFineGrained:
                     self.add_explanation_step(explanation_name, step_name, step_description)
             for exp_name in understood_exp_concepts:
                 self.update_explanation_step_state(exp_name, "Concept", ExplanationState.UNDERSTOOD)
+
+            # Apply initial understood concepts if provided
+            if self.initial_understood_concepts:
+                for exp_name in self.initial_understood_concepts:
+                    self.update_explanation_step_state(exp_name, "Concept", ExplanationState.UNDERSTOOD)
 
     def add_explanations_from_plan_result(self, exp_dict_list: List[NewExplanationModel]) -> None:
         """
@@ -465,9 +471,10 @@ class UserModelFineGrained:
                 if state != "NOT_YET_EXPLAINED":
                     for exp_name in explanations_dict:
                         if exp_name != "PossibleClarifications":  # don't reset the clarifications
-                            self.reset_explanation_state(exp_name)
+                            if exp_name != "Concept":  # don't reset the Concept step
+                                self.reset_explanation_state(exp_name)
         # Return understood concepts
-        return
+        return self.get_understood_concepts()
 
     def get_understood_concepts(self):
         """
