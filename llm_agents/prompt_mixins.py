@@ -239,7 +239,7 @@ class AnalyzeTaskPrompt(SimplePromptMixin):
       <instructions>If the user demonstrates wrong assumptions or misunderstandings on previously understood explanations, mark them with an according state.</instructions>
     </step>
     <step number="3">
-      <instructions>Provide only the changes to explanation states, omitting states that remain unchanged. Do not suggest which new explanations should be shown to the user.</instructions>
+      <instructions>Provide only the changes to explanation states, omitting states that remain unchanged. Do not suggest which new explanations should be shown to the user. Differentiate between a user understanding or acknowledging the understanding and a user conforming to see a suggested explanation.</instructions>
     </step>
   </steps>
 </task>
@@ -381,6 +381,7 @@ class PlanTaskPrompt(SimplePromptMixin):
       <title>Defining New Explanations if needed</title>
       <instructions>
         - First, evaluate whether the user's message expresses a clear information need. If it does, check whether this need can be satisfied using any existing explanations. If no suitable explanation is available in the collection above, define a new one tailored to the identified need and it will be added to the explanation collection.   
+        - Ther user might have agreed to a suggested explanation that you can read in the chat history. If so, move it to the explanation plan as the next item to be shown.
         - If the user's need is unclear, do not create a new explanation yet. Instead, use scaffolding techniques from the explantion collection.
       </instructions>
     </step>
@@ -389,7 +390,7 @@ class PlanTaskPrompt(SimplePromptMixin):
       <instructions>
         - Assume the user may ask only a few questions. The explanation plan should prioritize diverse, informative explanations that highlight relevant and unexpected aspects of the current data instance to clarify the model's decision. If no explanation plan exists, create one based on the latest user message, prioritizing explanations that address the identified need. The first item will guide the next response.
         - Revise the plan only when there are major gaps, shifts in user understanding, or new high-level concepts are introduced.
-        - Map new user questions to existing explanations when possible; if matched, assume familiarity with the explanation's concept.
+        - Map new user questions to existing explanations when possible; if matched, assume familiarity with the explanation's concept. If the user asks a direct question like "what if"... skip introducing the concept and proceed with the explanation content.
       </instructions>
     </step>
     <step number="3">
