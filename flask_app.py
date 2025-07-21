@@ -18,6 +18,8 @@ import atexit
 from explain.logic import ExplainBot
 
 import mlflow
+from speech_and_text.tts_service import generate_audio_from_text
+from speech_and_text.stt_service import transcribe_audio_file
 import mlflow.llama_index
 
 from dotenv import load_dotenv
