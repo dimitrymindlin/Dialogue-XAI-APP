@@ -325,6 +325,7 @@ class ExplainBot:
         Returns the next instance in the data_instances list if possible.
         param instance_type: type of instance to return, can be train, test or final_test
         """
+        self.dialogue_manager.reset_state()
         experiment_helper = self.conversation.get_var('experiment_helper').contents
         self.current_instance = experiment_helper.get_next_instance(
             instance_type=instance_type,
