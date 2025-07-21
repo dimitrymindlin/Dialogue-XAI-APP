@@ -420,44 +420,6 @@ def get_proceeding_okay():
     return {"proceeding_okay": proceeding_okay, "message": message}
 
 
-def generate_audio_from_text(text, voice="alloy"):
-    """
-    Generate audio from text using OpenAI's TTS API.
-    
-    Args:
-        text (str): The text to convert to speech
-        voice (str): The voice to use (default: "alloy")
-        
-    Returns:
-        dict: A dictionary containing the audio data in base64 format or an error message
-    """
-    try:
-        if not openai.api_key:
-            app.logger.warning("OpenAI API key is not configured for text-to-speech!")
-            return {"error": "OpenAI API key is not configured"}
-
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-        audio_response = client.audio.speech.create(
-            model="tts-1",
-            voice=voice,
-            input=text
-        )
-
-        # Convert audio to base64 for sending in JSON response
-        audio_data = audio_response.read()
-        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
-
-        return {
-            "data": audio_base64,
-            "format": "mp3"
-        }
-    except Exception as e:
-        app.logger.error(f"Error generating speech: {str(e)}")
-        app.logger.error(traceback.format_exc())
-        return {"error": f"Error generating speech: {str(e)}"}
-
-
 @bp.route("/get_response_clicked", methods=['POST'])
 def get_bot_response():
     """Load the box response."""
@@ -744,7 +706,7 @@ async def transcribe_audio():
         print(f"Error transcribing audio: {str(e)}")
         print(traceback.format_exc())
         return jsonify({"error": f"Error transcribing audio: {str(e)}"}), 500
-        return Response(generate(), mimetype="audio/mpeg")
+        #return Response(generate(), mimetype="audio/mpeg")
 
     except Exception as e:
         print(f"Error generating speech: {str(e)}")
