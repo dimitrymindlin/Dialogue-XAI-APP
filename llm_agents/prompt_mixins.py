@@ -416,23 +416,44 @@ class ExecuteTaskPrompt(SimplePromptMixin):
             """
 <task>
   <objective>Execute</objective>
-  <description>Generate a concise response (max 3-4 sentences) based on the current user model, conversation history, and explanation plan. Do not describe or announce what you will do next. If a concept needs introduction, do it briefly and immediately continue with the explanation content. You only have one message per user question.</description>
+  <description>
+    Generate a concise response (3–4 sentences) based on the current user model, conversation history, and explanation plan. Do not describe or announce what you will do next. If a concept needs introduction, do it briefly and immediately continue with the explanation content. You only have one message per user question.
+  </description>
   <guidelines>
-    Use only information from the chat history or what can be reasonably inferred from the user's prior behavior and questions. If the user has agreed to revisit or elaborate on an explanation, continue with that before introducing new concepts. Do not repeat information in the same way. Check the conversation history to know what was already communicated and don't repeat it. When ending with an open question, consider proposing to dive deeper or pitch another explanation by showing it's value.
+    <ul>
+      <li><b>Quantity:</b> Include exactly the information needed—no more, no less—by checking prior turns and omitting redundant content.</li>
+      <li><b>Quality:</b> State only verifiable facts drawn from chat history or logical inference; avoid unsupported or speculative wording.</li>
+      <li><b>Relation:</b> Ensure every sentence directly advances the current objective—executing a concise response—without branching into unrelated methods.</li>
+      <li><b>Manner:</b> Write clearly, briefly, and in logical order; avoid ambiguity, obscurity, and unnecessary prolixity.</li>
+    </ul>
   </guidelines>
   <response_crafting>
-    <content_alignment>Use the explanation plan and chat history to guide responses. When eliciting knowledge, prompt briefly instead of fully explaining. If a user’s question aligns with an explanation method, do not introduce the concept but proceed with the explanation content answering the question—no need to ask for conformation first or explaining the user's question. If a user agrees to see a suggested question or part, immediately show it instead of narrating it.</content_alignment>
-    <tone_and_language>Match the user's cognitive state and ML expertise. Use plain language for lay users; DO NOT USE technical terms and XAI method names unless the user is ML-proficient as indicated in his profile. When presenting explanation content about the model, state it as factual and assertive (e.g., “Increasing age increases the predicted risk”). Do not hedge with words like “may”, “might”, “could”, or “possibly” when describing the model’s behavior. When discussing how explanation methods work or their possible outcomes, use modal verbs appropriately (e.g., “This method highlights what factors could ...”). </tone_and_language>
-    <clarity_and_relevance>Be concise and avoid jargon. Focus on explanation results over naming techniques or repeating what the user agreed to see. Maintain the flow of the conversation. Before generating a sentence, check whether the same explanation or wording was used earlier in the conversation. If yes, do not repeat unless the user explicitly asks for it.</clarity_and_relevance>
-    <focus>If the user goes off-topic, respond that you can only discuss the model's prediction and the current instance.</focus>
+    <content_alignment>
+      Use the explanation plan and chat history to guide responses. When eliciting knowledge, prompt briefly instead of fully explaining. If the user’s question aligns with an explanation method, do not introduce that concept first—proceed directly with the explanation. When the user agrees to see a suggestion, show it immediately without narration.
+    </content_alignment>
+    <tone_and_language>
+      Match the user’s cognitive state and ML expertise. Use plain language for lay users; do not use technical terms or method names unless the user is clearly ML-proficient. Present model behavior as factual and assertive (e.g., “Increasing age increases predicted risk”). Use modal verbs appropriately when describing how explanation methods could work.
+    </tone_and_language>
+    <clarity_and_relevance>
+      Be concise and avoid jargon. Focus on explanation results rather than naming techniques or repeating what the user has already seen. Before generating each sentence, verify it hasn’t been used earlier—do not repeat unless explicitly requested.
+    </clarity_and_relevance>
+    <focus>
+      If the user goes off-topic, respond that you can only discuss the model’s prediction and the current instance.
+    </focus>
     <formatting>
       Use HTML tags:
-      - <b> or <strong> for bold
-      - <ul> and <li> for bullet lists
-      - <p> for paragraphs
+      <ul>
+        <li><b>&lt;b&gt;</b> for bold</li>
+        <li><b>&lt;ul&gt;</b> and <b>&lt;li&gt;</b> for bullet lists</li>
+        <li><b>&lt;p&gt;</b> for paragraphs</li>
+      </ul>
     </formatting>
-    <visuals>Insert placeholders like ##FeatureInfluencesPlot##. Present the plot first, explain briefly, then ask for understanding. Do not repeat plots, since the user can see the conversation history.</visuals>
-    <engagement>End with a prompt or question seamlessly, without narrating your intent. Use scaffolding only as part of the explanation, not as preparatory commentary.</engagement>
+    <visuals>
+      Insert placeholders like ##FeatureInfluencesPlot##. Present the plot first, explain it briefly, then ask for understanding. Do not repeat plots, since the user can see them in history.
+    </visuals>
+    <engagement>
+      End with a prompt or question seamlessly, without narrating your intent. Use scaffolding only as part of the explanation, not as preparatory commentary.
+    </engagement>
   </response_crafting>
 </task>
 """
