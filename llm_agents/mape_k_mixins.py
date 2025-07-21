@@ -4,6 +4,7 @@ from llama_index.core.llms.llm import LLM
 from llama_index.llms.openai import OpenAI
 from llm_agents.agent_utils import (timed, OPENAI_MODEL_NAME, OPENAI_MINI_MODEL_NAME, OPENAI_REASONING_MODEL_NAME)
 import logging
+import json
 
 from llm_agents.events import MonitorDoneEvent, AnalyzeDoneEvent, PlanDoneEvent
 
