@@ -382,7 +382,7 @@ class LoggingHelperMixin:
         """
         self.current_log_row = {
             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "experiment_id": self.experiment_id,
+            "experiment_id": self.logging_experiment_id,
             "datapoint_count": self.datapoint_count,
             "user_message": user_message,
             "monitor": "",

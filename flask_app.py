@@ -6,7 +6,7 @@ import traceback
 import base64
 import threading
 from concurrent.futures import ThreadPoolExecutor
-
+import asyncio
 from flask import Flask
 from flask import request, Blueprint
 from flask import jsonify, Response
@@ -42,18 +42,13 @@ def _get_thread_pool_size(env_var, default=None):
 # Global thread pool for background tasks (limit concurrent threads)
 background_executor = ThreadPoolExecutor(
     max_workers=_get_thread_pool_size("BACKGROUND_EXECUTOR_THREADS"),
-    thread_name_prefix="mlflow-init"
-)
-# Dedicated thread pool for ML operations to prevent blocking
-ml_executor = ThreadPoolExecutor(
-    max_workers=_get_thread_pool_size("ML_EXECUTOR_THREADS"),
-    thread_name_prefix="ml-ops"
+    thread_name_prefix="mlflow"
 )
 
-# Lock to prevent race conditions in MLflow experiment creation
-mlflow_init_lock = threading.Lock()
-# Track ongoing MLflow initializations to prevent duplicates
-ongoing_mlflow_inits = set()
+ml_executor = ThreadPoolExecutor(
+    max_workers=_get_thread_pool_size("ML_EXECUTOR_THREADS"),
+    thread_name_prefix="ml_executor"
+)
 
 
 @gin.configurable

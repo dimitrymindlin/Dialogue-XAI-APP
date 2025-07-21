@@ -11,7 +11,7 @@ from llm_agents.events import MonitorDoneEvent, AnalyzeDoneEvent, PlanDoneEvent
 # Configure logger
 logger = logging.getLogger(__name__)
 
-from llama_index.core.workflow import Context, Event, Workflow, StartEvent, StopEvent, step
+from llama_index.core.workflow import Context, Workflow, StartEvent, StopEvent, step
 from llama_index.core.workflow.retry_policy import ConstantDelayRetryPolicy
 from llm_agents.models import MonitorResultModel, AnalyzeResult, PlanResultModel, ExecuteResult, PlanApprovalModel
 from llm_agents.prompt_mixins import (
@@ -111,6 +111,8 @@ class BaseAgentInitMixin:
     def set_logging_experiment_id(self, logging_experiment_id: str):
         """Set the MLflow experiment ID for this agent instance."""
         self.logging_experiment_id = logging_experiment_id
+        # Set the MLflow experiment for the current thread
+        mlflow.set_experiment(experiment_id=logging_experiment_id)
         logger.info(f"Agent received MLflow experiment ID: {logging_experiment_id}")
 
     @timed
@@ -119,8 +121,10 @@ class BaseAgentInitMixin:
         DRY implementation of answer_user_question that all agents inherit.
         Runs the workflow and extracts reasoning and response consistently.
         """
-        result = await self.run(input=user_question)
-        
+        with mlflow.start_run(experiment_id=self.logging_experiment_id):
+            mlflow.llama_index.autolog(log_traces=True)
+            result = await self.run(input=user_question)
+
         # Extract reasoning and response with fallbacks
         analysis = getattr(result, "reasoning", None) or "No reasoning available"
         response = getattr(result, "response", None) or "Sorry, please try again"
@@ -132,6 +136,7 @@ class BaseAgentInitMixin:
         Logs prompt, result, and timing to MLflow. Logs errors and stack traces. Truncates long results. Logs timing as MLflow metric.
         """
         start_time = datetime.datetime.now()
+        result = None
         if llm is None:
             llm = getattr(self, 'mini_llm', self.llm)
 
@@ -139,31 +144,21 @@ class BaseAgentInitMixin:
         async def core_logic():
             prompt_str = prompt.get_template_str() if hasattr(prompt, 'get_template_str') else str(prompt)
             mlflow.log_param(f"{prompt_name}_prompt", prompt_str)
-            logger.info(f"[MLFLOW] Logging prompt for {prompt_name}: {prompt_str}")
-            
             result = await astructured_predict_with_fallback(
                 llm, model_class, prompt, use_structured_output=self.structured_output
             )
-            
             result_str = str(result)
-            if len(result_str) > 500:
-                result_str = result_str[:500] + "... [truncated]"
             mlflow.log_param(f"{prompt_name}_result", result_str)
             return result
 
         try:
-            # Use the logging_experiment_id if it has been set
-            if self.logging_experiment_id:
-                with mlflow.start_run(experiment_id=self.logging_experiment_id, nested=nested):
-                    result = await core_logic()
-            # Fallback to active run if logging_experiment_id is not set (for tests or other contexts)
-            elif mlflow.active_run():
+            # Use mlflow.start_run within the context of the set experiment
+            with mlflow.start_run(nested=nested):
                 result = await core_logic()
-            # If no active run and no logging_experiment_id, create a new run
-            else:
-                with mlflow.start_run(nested=nested):
-                    result = await core_logic()
-                
+                end_time = datetime.datetime.now()
+                elapsed = (end_time - start_time).total_seconds()
+                self._log_prediction_to_mlflow(prompt_name, prompt, result, elapsed)
+
         except Exception as e:
             logger.error(f"[MLFLOW] Error during {prompt_name}: {e}", exc_info=True)
             raise
@@ -171,12 +166,21 @@ class BaseAgentInitMixin:
             end_time = datetime.datetime.now()
             elapsed = (end_time - start_time).total_seconds()
             logger.info(f"Time taken for {prompt_name.replace('_', ' ').title()}: {elapsed:.2f}s")
-            logger.info(f"{prompt_name.replace('_', ' ').title()} result: {result if 'result' in locals() else '[FAILED]'}\n")
-            try:
-                mlflow.log_metric(f"{prompt_name}_duration_sec", elapsed)
-            except Exception as e:
-                logger.warning(f"[MLFLOW] Could not log timing metric: {e}")
+            logger.info(
+                f"{prompt_name.replace('_', ' ').title()} result: {result if result is not None else '[FAILED]'}\n")
         return result
+
+    def _log_prediction_to_mlflow(self, prompt_name, prompt, result, elapsed_time):
+        try:
+            prompt_str = prompt.get_template_str() if hasattr(prompt, 'get_template_str') else str(prompt)
+            mlflow.log_param(f"{prompt_name}_prompt", prompt_str)
+            result_str = str(result)
+            mlflow.log_param(f"{prompt_name}_result", result_str)
+            mlflow.log_metric(f"{prompt_name}_duration_sec", elapsed_time)
+            logger.info(f"Logged {prompt_name} to MLflow. Duration: {elapsed_time:.2f}s")
+        except Exception as e:
+            logger.warning(f"[MLFLOW] Could not log prediction for {prompt_name}: {e}")
+
 
 # Streaming callback type
 StreamCallback = Optional[Callable[[str, bool], None]]
