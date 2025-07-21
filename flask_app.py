@@ -116,12 +116,12 @@ def _configure_gin():
     """Parse and configure gin configuration files."""
     gin.parse_config_file("global_config.gin")
     args = GlobalArgs()
-    
+
     # Override config path from environment variable if available
     env_config_path = os.getenv('XAI_CONFIG_PATH')
     if env_config_path:
         args.config = env_config_path
-        
+
     gin.parse_config_file(args.config)
     return args
 
@@ -134,18 +134,18 @@ def _setup_directories():
             os.makedirs(directory, exist_ok=True)
 
 
-def _get_mlflow_uri():
-    """Always point MLflow to ./cache/mlruns (absolute)."""
-    target = os.path.abspath(os.path.join("cache", "mlruns"))
-    os.makedirs(target, exist_ok=True)
-    return f"file://{target}"
-
-
 def _initialize_global_mlflow(app):
+    def _get_mlflow_uri():
+        """Always point MLflow to ./cache/mlruns (absolute)."""
+        target = os.path.abspath(os.path.join("cache", "mlruns"))
+        os.makedirs(target, exist_ok=True)
+        return f"file://{target}"
+
     """Initialize MLflow tracking."""
     try:
         mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", _get_mlflow_uri())
         mlflow.set_tracking_uri(mlflow_uri)
+        mlflow.tracing.enable()
         app.logger.info(f"MLflow tracking URI initialized: {mlflow_uri}")
     except Exception as e:
         app.logger.warning(f"MLflow startup init failed: {e}")
@@ -222,11 +222,12 @@ def init():
     if not ml_knowledge:
         ml_knowledge = "low"
 
-    # Submit MLflow initialization to background executor
-    mlflow_future = background_executor.submit(initialize_mlflow_experiment, user_id)
+    # Trigger background pre-creation of experiments for datapoints 1-10
+    for i in range(1, 11):  # Datapoints 1 to 10
+        background_executor.submit(initialize_mlflow_experiment, user_id, datapoint_count=i)
 
     # Create bot and pass the future so it can await the experiment_id
-    BOT = ExplainBot(study_group, ml_knowledge, user_id, mlflow_future=mlflow_future)
+    BOT = ExplainBot(study_group, ml_knowledge, user_id)
     bot_dict[user_id] = BOT
     app.logger.info("Loaded Login and created bot")
 
@@ -292,15 +293,11 @@ def get_train_datapoint():
         user_id = "TEST"
     datapoint_count = request.args.get("datapoint_count")
 
-    # Update MLflow experiment for the current chat round in background
+    # Update MLflow experiment for the current chat round
     if datapoint_count and bot_dict[user_id].use_llm_agent:
-        # Submit to thread pool to avoid blocking and prevent resource exhaustion
-        background_executor.submit(
-            safe_background_mlflow_init,
-            user_id,
-            int(datapoint_count)
-        )
-    
+        experiment_id = initialize_mlflow_experiment(user_id, datapoint_count=int(datapoint_count))
+        bot_dict[user_id].agent.set_logging_experiment_id(experiment_id)
+
     user_study_group = bot_dict[user_id].get_study_group()
     result_dict = get_datapoint(user_id, "train", datapoint_count)
     if bot_dict[user_id].use_active_dialogue_manager:
@@ -375,6 +372,7 @@ def set_user_prediction():
         return jsonify({"message": "OK"}), 200
     else:
         # Create initial message depending on the user study group and whether the user was correct
+
         user_study_group = bot.get_study_group()
 
         # Generate dataset-dependent baseline probability text
@@ -479,14 +477,14 @@ def get_bot_response():
     user_id = request.args.get("user_id")
     if not user_id:
         user_id = "TEST"
-    
+
     if request.method == "POST":
         app.logger.info("generating the bot response")
         try:
             data = json.loads(request.data)
             question_id = data["question"]
             feature_id = data["feature"]
-            
+
             # Move heavy ML operation to background thread
             from concurrent.futures import as_completed
             bot = bot_dict[user_id]
@@ -495,14 +493,14 @@ def get_bot_response():
                 question_id=question_id,
                 feature_id=feature_id
             )
-            
+
             # Wait for result
             try:
                 response = future.result()
             except Exception as e:
                 app.logger.error(f"ML operation failed: {e}")
                 raise e
-                
+
         except Exception as ext:
             app.logger.info(f"Traceback getting bot response: {traceback.format_exc()}")
             app.logger.info(f"Exception getting bot response: {ext}")
@@ -526,7 +524,7 @@ def get_bot_response():
         }
 
         # Check if soundwave parameter is provided in the request
-        soundwave = data.get("soundwave", True)
+        soundwave = data.get("soundwave", False)
         if soundwave:
             voice = data.get("voice", "alloy")
             # Move audio generation to background as well
@@ -544,7 +542,6 @@ def get_bot_response():
         return jsonify(message_dict)
 
 
-@bp.route("/get_response_nl", methods=['POST'])
 async def _get_bot_response_from_nl_internal(user_id: str, data: dict):
     """Internal handler for non-streaming bot responses."""
     try:
@@ -559,8 +556,7 @@ async def _get_bot_response_from_nl_internal(user_id: str, data: dict):
         bot = bot_dict[user_id]
 
         # Run the heavy ML operation in the thread pool for parallelism
-        import asyncio
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def ml_task():
             return bot.update_state_from_nl(user_input=data["message"])
@@ -588,39 +584,37 @@ async def _get_bot_response_from_nl_internal(user_id: str, data: dict):
     }
 
     # Generate audio if requested
-    if data.get("soundwave", True):
+    if data.get("soundwave", False):
         voice = data.get("voice", "alloy")
         audio_result = generate_audio_from_text(response, voice)
         if "error" in audio_result:
             message_dict["audio_error"] = audio_result["error"]
         else:
-            message_dict["audio"] = audio_result
+            message_dict["audio"] = audio_result["audio"]
 
     return message_dict
 
 
 @bp.route("/get_response_nl", methods=['POST'])
-async def get_bot_response_from_nl():
+def get_bot_response_from_nl():
     """Load the box response."""
     user_id = request.args.get("user_id", "TEST")
     data = json.loads(request.data)
 
     if data.get("streaming", False):
-        return await get_bot_response_from_nl_stream_internal(user_id, data)
+        return asyncio.run(get_bot_response_from_nl_stream_internal(user_id, data))
 
     app.logger.info("Generating non-streaming bot response for NL input")
-    response_data = await _get_bot_response_from_nl_internal(user_id, data)
+    response_data = asyncio.run(_get_bot_response_from_nl_internal(user_id, data))
     return jsonify(response_data)
 
 
 async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
     """Internal streaming response handler."""
     user_message = data["message"]
-    
+
     def generate_stream():
         try:
-            import asyncio
-            import json
             # Create new event loop for this thread
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -630,6 +624,7 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                 # Check if the bot has an agent with streaming capability
                 if hasattr(bot, 'agent') and hasattr(bot.agent, 'answer_user_question_stream'):
                     app.logger.info("Using agent streaming capability")
+
                     async def run_streaming():
                         accumulated_response = ""
                         # Call ExplainBot's streaming method
@@ -669,16 +664,17 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                                     "feature_id": feature_id
                                 }
                                 # Generate audio if requested
-                                soundwave = data.get("soundwave", True)
+                                soundwave = data.get("soundwave", False)
                                 if soundwave:
                                     voice = data.get("voice", "alloy")
                                     audio_result = generate_audio_from_text(final_response, voice)
                                     if "error" in audio_result:
                                         final_data["audio_error"] = audio_result["error"]
                                     else:
-                                        final_data["audio"] = audio_result
+                                        final_data["audio"] = audio_result["audio"]
                                 yield f"data: {json.dumps(final_data)}\n\n"
                                 break
+
                     # Run the async streaming function
                     async_gen = run_streaming()
                     try:
@@ -690,7 +686,7 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                 else:
                     # Fallback to non-streaming response
                     app.logger.info("No streaming capability, using fallback")
-                    result = await _get_bot_response_from_nl_internal(user_id, data)
+                    result = loop.run_until_complete(_get_bot_response_from_nl_internal(user_id, data))
                     final_data = {"type": "final", "content": result["text"], "reasoning": result["reasoning"],
                                   "followup": result["followup"], "is_complete": True, "isUser": False,
                                   "feedback": True, "question_id": result["question_id"],
@@ -709,6 +705,7 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                 "is_complete": True
             }
             yield f"data: {json.dumps(error_data)}\n\n"
+
     return Response(
         generate_stream(),
         mimetype='text/event-stream',
@@ -739,18 +736,15 @@ async def transcribe_audio():
         audio_file.save(temp_file_path)
 
         try:
-            # Call OpenAI's API to transcribe the audio
+            # Call the refactored STT service
+            transcription_result = transcribe_audio_file(temp_file_path)
 
-            client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            with open(temp_file_path, "rb") as audio:
-                transcript = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio
-                )
+            if "error" in transcription_result:
+                return jsonify({"error": transcription_result["error"]}), 500
 
             # Return the transcribed text
             return jsonify({
-                "text": transcript.text,
+                "text": transcription_result["text"],
                 "user_id": user_id
             })
 
@@ -763,42 +757,6 @@ async def transcribe_audio():
         print(f"Error transcribing audio: {str(e)}")
         print(traceback.format_exc())
         return jsonify({"error": f"Error transcribing audio: {str(e)}"}), 500
-
-
-@bp.route("/text-to-speech", methods=['POST'])
-async def text_to_speech():
-    """
-    Endpoint to convert text to speech using OpenAI's TTS API.
-    Accepts text input and returns audio stream.
-    """
-    try:
-        data = json.loads(request.data)
-        text = data.get("text")
-        voice = data.get("voice", "alloy")  # Default voice is alloy
-
-        if not text:
-            return jsonify({"error": "No text provided"}), 400
-
-        # Check if OpenAI API key is configured
-        if not openai.api_key:
-            print("OpenAI API key is not configured!")
-            return jsonify({"error": "API key is not configured"}), 500
-
-        # Call OpenAI's API to generate speech
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice=voice,
-            input=text
-        )
-
-        # Create a streaming response
-        def generate():
-            for chunk in response.iter_bytes(chunk_size=4096):
-                yield chunk
-
-        # Return the audio stream
         return Response(generate(), mimetype="audio/mpeg")
 
     except Exception as e:
@@ -828,14 +786,13 @@ def initialize_mlflow_experiment(user_id, datapoint_count=None):
 
         experiment = mlflow.get_experiment_by_name(experiment_name)
         if experiment is None:
-            # This is the slow part, as it might have to create the experiment
+            app.logger.info(f"MLflow: Creating new experiment '{experiment_name}'...")
             experiment_id = mlflow.create_experiment(experiment_name)
+            app.logger.info(f"MLflow: Experiment '{experiment_name}' created with ID {experiment_id}.")
         else:
+            app.logger.info(
+                f"MLflow: Using existing experiment '{experiment_name}' with ID {experiment.experiment_id}.")
             experiment_id = experiment.experiment_id
-
-        # Autologging
-        mlflow.llama_index.autolog(log_traces=True)
-        app.logger.info(f"MLflow autologging initialized for user {user_id}.")
 
         return experiment_id
     except Exception as e:
@@ -854,7 +811,7 @@ def trigger_background_computation():
         data = request.get_json()
         user_id = data.get("user_id")
         phase_from = data.get("phase_from", "test")  # Default to test phase
-        
+
         if not user_id:
             user_id = "TEST"
 
@@ -887,33 +844,6 @@ app = create_app()
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', use_reloader=False)
 
-def safe_background_mlflow_init(user_id, datapoint_count):
-    """Thread-safe background MLflow initialization with error handling."""
-    experiment_key = f"{user_id}_{datapoint_count}"
-    
-    # Check if this initialization is already in progress
-    with mlflow_init_lock:
-        if experiment_key in ongoing_mlflow_inits:
-            app.logger.info(f"MLflow init for {experiment_key} already in progress, skipping")
-            return
-        ongoing_mlflow_inits.add(experiment_key)
-    
-    try:
-        experiment_id = initialize_mlflow_experiment(user_id, datapoint_count)
-        if experiment_id:
-            # Pass the experiment_id to the bot's agent
-            if user_id in bot_dict and hasattr(bot_dict[user_id], 'agent'):
-                bot_dict[user_id].agent.set_experiment_id(experiment_id)
-                app.logger.info(f"Background MLflow init completed for {experiment_key} and passed to agent.")
-            else:
-                app.logger.warning(f"Bot or agent not found for {user_id} after MLflow init.")
-        else:
-            app.logger.warning(f"Background MLflow init failed for {experiment_key}")
-    except Exception as e:
-        app.logger.error(f"Background MLflow init error for {experiment_key}: {e}")
-    finally:
-        with mlflow_init_lock:
-            ongoing_mlflow_inits.discard(experiment_key)
 
 def cleanup_background_tasks():
     """Clean shutdown of background thread pool."""
@@ -927,23 +857,24 @@ def cleanup_background_tasks():
 def cleanup_resources():
     """Clean up resources on application shutdown."""
     app.logger.info("Cleaning up resources...")
-    
+
     # Shutdown thread pools
     try:
         ml_executor.shutdown(wait=True, timeout=10)
         background_executor.shutdown(wait=True, timeout=10)
     except Exception as e:
         app.logger.warning(f"Thread pool shutdown warning: {e}")
-    
+
     # Rate limiting cleanup removed
-    
+
     # Clear bot instances
     try:
         bot_dict.clear()
     except Exception as e:
         app.logger.warning(f"Bot cleanup warning: {e}")
-    
+
     app.logger.info("Resource cleanup completed")
+
 
 # Register cleanup function
 atexit.register(cleanup_resources)

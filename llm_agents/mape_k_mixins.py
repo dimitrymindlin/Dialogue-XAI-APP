@@ -140,31 +140,18 @@ class BaseAgentInitMixin:
         if llm is None:
             llm = getattr(self, 'mini_llm', self.llm)
 
-        # Helper to execute the core logic
-        async def core_logic():
-            prompt_str = prompt.get_template_str() if hasattr(prompt, 'get_template_str') else str(prompt)
-            mlflow.log_param(f"{prompt_name}_prompt", prompt_str)
-            result = await astructured_predict_with_fallback(
-                llm, model_class, prompt, use_structured_output=self.structured_output
-            )
-            result_str = str(result)
-            mlflow.log_param(f"{prompt_name}_result", result_str)
-            return result
-
         try:
-            # Use mlflow.start_run within the context of the set experiment
             with mlflow.start_run(nested=nested):
-                result = await core_logic()
-                end_time = datetime.datetime.now()
-                elapsed = (end_time - start_time).total_seconds()
-                self._log_prediction_to_mlflow(prompt_name, prompt, result, elapsed)
-
+                result = await astructured_predict_with_fallback(
+                    llm, model_class, prompt, use_structured_output=self.structured_output
+                )
         except Exception as e:
             logger.error(f"[MLFLOW] Error during {prompt_name}: {e}", exc_info=True)
             raise
         finally:
             end_time = datetime.datetime.now()
             elapsed = (end_time - start_time).total_seconds()
+            self._log_prediction_to_mlflow(prompt_name, prompt, result, elapsed)
             logger.info(f"Time taken for {prompt_name.replace('_', ' ').title()}: {elapsed:.2f}s")
             logger.info(
                 f"{prompt_name.replace('_', ' ').title()} result: {result if result is not None else '[FAILED]'}\n")
@@ -309,18 +296,18 @@ class StreamingMixin:
     async def _stream_predict_with_callback(self, model_class, prompt, method_name):
         """Real token-level streaming with improved JSON parsing."""
         if not self.enable_streaming or not self.stream_callback:
-            return await astructured_predict_with_fallback(
-                self.llm, model_class, prompt, use_structured_output=self.structured_output)
+            return await self._predict_with_timing_and_logging(model_class, prompt, method_name)
         try:
             logger.info(f"Starting real token streaming for {method_name}")
+            start_time = datetime.datetime.now()
+            with mlflow.start_run(nested=True):
+                # Convert structured prompt to completion prompt
+                schema_prompt = self._build_schema_prompt(model_class, prompt)
 
-            # Convert structured prompt to completion prompt
-            schema_prompt = self._build_schema_prompt(model_class, prompt)
+                # Use normal streaming completion for real token-by-token streaming
+                stream_response = await self.llm.astream_complete(schema_prompt)
 
-            # Use normal streaming completion for real token-by-token streaming
-            stream_response = await self.llm.astream_complete(schema_prompt)
-
-            return await self._process_token_stream(stream_response, model_class, method_name, prompt)
+                return await self._process_token_stream(stream_response, model_class, method_name, prompt)
 
         except Exception as e:
             logger.warning(f"Token streaming failed for {method_name}: {e}, using fallback")
@@ -338,6 +325,7 @@ Ensure your response is properly structured JSON."""
 
     async def _process_token_stream(self, stream_response, model_class, method_name, prompt):
         """Process token stream with improved JSON extraction."""
+        start_time = datetime.datetime.now()
         accumulated_content = ""
         last_streamed_response = ""
         response_field_started = False
@@ -367,7 +355,11 @@ Ensure your response is properly structured JSON."""
             self.stream_callback("", True)
 
         # Parse final result with better error handling
-        return await self._parse_final_result(accumulated_content, model_class, method_name, prompt)
+        final_result = await self._parse_final_result(accumulated_content, model_class, method_name, prompt)
+        end_time = datetime.datetime.now()
+        elapsed = (end_time - start_time).total_seconds()
+        self._log_prediction_to_mlflow(method_name, prompt, final_result, elapsed)
+        return final_result
 
     def _extract_token(self, token_chunk):
         if hasattr(token_chunk, 'delta') and token_chunk.delta:
@@ -454,7 +446,7 @@ class MonitorMixin(LoggingHelperMixin, UserModelHelperMixin):
             understanding_displays=self.understanding_displays.as_text(),
             modes_of_engagement=self.modes_of_engagement.as_text(),
         )
-        
+
         monitor_prompt = PromptTemplate(prompt_str)
         monitor_result = await self._predict_with_timing_and_logging(
             MonitorResultModel, monitor_prompt, "monitor_prompt", llm=self.mini_llm
@@ -750,15 +742,16 @@ class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
 
 # Composed agent classes
 
-class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin, ExecuteMixin, StreamingMixin, BaseAgentInitMixin):
+class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin, ExecuteMixin,
+                      StreamingMixin, BaseAgentInitMixin):
     """
     Full 4-step MAPE-K agent: separate Monitor, Analyze, Plan, Execute steps.
     """
 
-    def __init__(self, logging_experiment_id: str, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
         # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, logging_experiment_id=logging_experiment_id, **kwargs)
-        
+        LlamaIndexBaseAgent.__init__(self, **kwargs)
+
         # Initialize agent-specific components
         self._init_agent_components(
             llm=llm,
@@ -769,15 +762,16 @@ class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin,
         )
 
 
-class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin, StreamingMixin, BaseAgentInitMixin):
+class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanExecuteMixin, StreamingMixin,
+                      BaseAgentInitMixin):
     """
     2-step MAPE-K agent: combines Monitor+Analyze and Plan+Execute steps with streaming.
     """
 
-    def __init__(self, logging_experiment_id: str, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
         # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, logging_experiment_id=logging_experiment_id, **kwargs)
-        
+        LlamaIndexBaseAgent.__init__(self, **kwargs)
+
         # Initialize agent-specific components
         self._init_agent_components(
             llm=llm,
@@ -792,10 +786,10 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin, Streami
     Unified MAPE-K agent: performs all MAPE-K steps in a single LLM call with streaming support.
     """
 
-    def __init__(self, logging_experiment_id: str, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
         # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, logging_experiment_id=logging_experiment_id, **kwargs)
-        
+        LlamaIndexBaseAgent.__init__(self, **kwargs)
+
         # Initialize with special reasoning model
         self._init_agent_components(
             llm=llm,
@@ -880,7 +874,7 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
         )
 
         plan_approval_execute_prompt = PromptTemplate(prompt_str)
-        result = await self._predict_with_timing_and_logging(
+        result = await self._stream_predict_with_callback(
             PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute_prompt"
         )
 
@@ -933,17 +927,18 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
         return StopEvent(result=result)
 
 
-class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanApprovalExecuteMixin, StreamingMixin, BaseAgentInitMixin):
+class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanApprovalExecuteMixin,
+                             StreamingMixin, BaseAgentInitMixin):
     """
     2-step MAPE-K agent with approval mechanism: combines Monitor+Analyze and PlanApproval+Execute steps.
     This agent evaluates predefined explanation plans and either approves them or modifies them
     based on the user's current needs and understanding state.
     """
 
-    def __init__(self, logging_experiment_id: str, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
         # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, logging_experiment_id=logging_experiment_id, **kwargs)
-        
+        LlamaIndexBaseAgent.__init__(self, **kwargs)
+
         # Initialize with specific temperature
         self._init_agent_components(
             llm=llm or OpenAI(model=OPENAI_MODEL_NAME, temperature=0.3),
@@ -961,10 +956,11 @@ class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, Analy
     or modifies them before executing.
     """
 
-    def __init__(self, logging_experiment_id: str, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
+    def __init__(self, llm: LLM = None, structured_output: bool = True,
+                 timeout: float = 100.0, **kwargs):
         # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, logging_experiment_id=logging_experiment_id, **kwargs)
-        
+        LlamaIndexBaseAgent.__init__(self, **kwargs)
+
         # Initialize agent-specific components
         self._init_agent_components(
             llm=llm,
