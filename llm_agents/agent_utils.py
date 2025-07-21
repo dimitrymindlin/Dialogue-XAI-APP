@@ -26,14 +26,11 @@ OPENAI_REASONING_MODEL_NAME = os.getenv("OPENAI_REASONING_MODEL_NAME")
 # Base directory: the directory where this script is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
-# CSV logging configuration (DISABLED)
-# LOG_FOLDER = "mape-k-logs"
-# os.makedirs(LOG_FOLDER, exist_ok=True)
-# CSV_HEADERS = [
-#     "timestamp", "experiment_id", "datapoint_count", "user_message",
-#     "monitor", "analyze", "plan", "execute", "user_model"
-# ]
+# Directory for CSV logs: use project-root “cache” folder
+LOG_FOLDER = os.path.join(os.getcwd(), "cache")
+os.makedirs(LOG_FOLDER, exist_ok=True)
+# CSV headers for one-row-per-run logging: timestamp, experiment_id, and JSON list of items
+CSV_HEADERS = ["timestamp", "experiment_id", "items"]
 
 
 def configure_logger(name: str, log_file: str = "agent.log") -> logging.Logger:
@@ -107,16 +104,15 @@ def timed(fn: Callable) -> Callable:
 
 def generate_log_file_name(experiment_id: str) -> str:
     """
-    Generate a timestamped log file name for the given experiment.
+    Generate a fixed log file name for all LLM executions.
     
     Args:
-        experiment_id: The unique experiment identifier
+        experiment_id: The unique experiment identifier (not used for filename, but kept for compatibility)
         
     Returns:
         The absolute path to the log file
     """
-    timestamp = datetime.now().strftime("%d.%m.%Y_%H:%M")
-    return os.path.join(LOG_FOLDER, f"{timestamp}_{experiment_id}.csv")
+    return os.path.join(LOG_FOLDER, "llm_executions.csv")
 
 
 def initialize_csv(log_file: str) -> None:

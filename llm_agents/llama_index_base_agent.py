@@ -48,6 +48,12 @@ class LlamaIndexBaseAgent(BaseAgent, metaclass=XAIBaseAgentMeta):
             **kwargs
         )
 
+    @staticmethod
+    def _get_default_llm(model_name: str, **kwargs):
+        """Get a default LLM instance."""
+        from llama_index.llms.openai import OpenAI
+        return OpenAI(model=model_name, **kwargs)
+
     async def answer_user_question(self, user_question: str) -> Any:
         """
         Process a user question through the MAPE-K workflow using LlamaIndex.
@@ -56,8 +62,30 @@ class LlamaIndexBaseAgent(BaseAgent, metaclass=XAIBaseAgentMeta):
             user_question: The user's question text
             
         Returns:
-            A tuple: (analysis, response, recommend_visualization)
+            A tuple: (analysis, response)
         """
-        # This method should be implemented by concrete subclasses or
-        # can contain LlamaIndex-specific implementation here
-        raise NotImplementedError("Concrete LlamaIndex agent must implement this method")
+        # Begin run: initialize CSV buffer
+        self._csv_items.clear()
+        self.log_prompt("UserQuestion", user_question)
+
+        if not hasattr(self, 'run'):
+            raise NotImplementedError("Agent must have a 'run' method for the workflow.")
+
+        # Execute the workflow
+        result = await self.run(input=user_question)
+
+        # Extract reasoning and response with fallbacks
+        analysis = getattr(result, "reasoning", "No reasoning available")
+        response = getattr(result, "response", "Sorry, please try again")
+
+        # Buffer analysis and response for CSV
+        self.log_prompt("Analysis", analysis)
+        self.log_prompt("Response", response)
+
+        # End run: finalize CSV log row
+        try:
+            self.finalize_log()
+        except Exception as e:
+            logger.error(f"Error writing CSV row: {e}", exc_info=True)
+        
+        return analysis, response

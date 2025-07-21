@@ -37,17 +37,17 @@ class BaseAgent(ABC):
             **kwargs
     ):
         # Logging setup
-        """self.log_file = generate_log_file_name(experiment_id)
+        self.experiment_id = kwargs.get("experiment_id", None)
+        # Create per-execution CSV log
+        self.log_file = generate_log_file_name(self.experiment_id)
         initialize_csv(self.log_file)
-        # Initialize prompt log file (for detailed prompt logging)
-        self.prompt_log_file = self.log_file.replace('.csv', '_prompts.log')"""
-        # Logging disabled
-        self.log_file = None
-        self.prompt_log_file = None
-    
+        
+        # Buffer for prompt/response pairs for a single run
+        self._csv_items = []
+
         # Feature context - consolidate all feature-related information
         self._initialize_feature_context(feature_names, feature_units, feature_tooltips)
-        
+
         # Common context
         self.domain_description = domain_description
         self.user_ml_knowledge = user_ml_knowledge
@@ -73,7 +73,7 @@ class BaseAgent(ABC):
     def _initialize_feature_context(self, feature_names: str, feature_units: str, feature_tooltips: str) -> None:
         """
         Initialize feature context information in a centralized way.
-        
+
         Args:
             feature_names: Comma-separated feature names
             feature_units: Comma-separated feature units
@@ -83,11 +83,11 @@ class BaseAgent(ABC):
         self.feature_units = feature_units
         self.feature_tooltips = feature_tooltips
         self.feature_context = self._create_feature_context()
-    
+
     def _create_feature_context(self) -> Dict[str, Any]:
         """
         Create a context dictionary with feature-related information.
-        
+
         Returns:
             A dictionary containing feature names, units, and tooltips
         """
@@ -100,7 +100,7 @@ class BaseAgent(ABC):
     def get_feature_context(self) -> Dict[str, Any]:
         """
         Get the feature context dictionary.
-        
+
         Returns:
             The feature context dictionary
         """
@@ -108,10 +108,10 @@ class BaseAgent(ABC):
 
     def log_prompt(self, component: str, prompt_str: str) -> None:
         """
-        Log a prompt to the prompt log file (disabled).
+        Log a prompt to the buffer for CSV.
         """
-        if self.prompt_log_file:
-            log_prompt(self.prompt_log_file, component, prompt_str)
+        # Buffer the prompt for final CSV
+        self._csv_items.append({"component": component, "text": prompt_str})
 
     def initialize_new_datapoint(
             self,
@@ -124,7 +124,7 @@ class BaseAgent(ABC):
     ) -> None:
         """
         Initialize agent with a new datapoint and its explanations.
-        
+
         Args:
             instance: The instance data
             xai_explanations: Explanation data from XAI methods
@@ -177,7 +177,7 @@ class BaseAgent(ABC):
     def reset_history(self) -> str:
         """
         Reset the chat history.
-        
+
         Returns:
             The initial chat history string
         """
@@ -188,7 +188,7 @@ class BaseAgent(ABC):
     def append_to_history(self, role: str, msg: str) -> None:
         """
         Append a message to the chat history.
-        
+
         Args:
             role: The role of the message sender ('user' or 'agent')
             msg: The message content
@@ -204,7 +204,7 @@ class BaseAgent(ABC):
     def complete_explanation_step(self, explanation_name: str, step_name: str) -> None:
         """
         Mark an explanation step as complete.
-        
+
         Args:
             explanation_name: The name of the explanation
             step_name: The name of the step within the explanation
@@ -217,7 +217,7 @@ class BaseAgent(ABC):
     def get_common_context(self) -> Dict[str, Any]:
         """
         Get context information common to all agent components.
-        
+
         Returns:
             A dictionary with shared context information
         """
@@ -236,13 +236,13 @@ class BaseAgent(ABC):
     def get_formatted_feature_context(self) -> str:
         """
         Get an XML-formatted string representation of the feature context for prompts.
-        
+
         Returns:
             An XML structure with individual feature tags including names, units, and descriptions
         """
         if not self.feature_names:
             return "<features />"
-        
+
         # Handle different input formats for feature_names
         if isinstance(self.feature_names, list):
             # Check if it's a list of dictionaries (complex format)
@@ -254,7 +254,7 @@ class BaseAgent(ABC):
         else:
             # Comma-separated string
             names = [name.strip() for name in self.feature_names.split(',') if name.strip()]
-        
+
         # Handle different input formats for feature_units
         units_dict = {}
         if isinstance(self.feature_units, dict):
@@ -270,7 +270,7 @@ class BaseAgent(ABC):
             for i, unit in enumerate(unit_list):
                 if i < len(names):
                     units_dict[names[i]] = unit
-        
+
         # Handle different input formats for feature_tooltips
         tooltips_dict = {}
         if isinstance(self.feature_tooltips, dict):
@@ -286,30 +286,30 @@ class BaseAgent(ABC):
             for i, tooltip in enumerate(tooltip_list):
                 if i < len(names):
                     tooltips_dict[names[i]] = tooltip
-        
+
         # Format as XML-like structure with individual feature tags
         formatted_features = []
         for name in names:
             # Create a safe tag name by replacing spaces and special characters
             tag_name = name.replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "").replace("/", "_")
-            
+
             # Start the feature tag
             feature_xml = f"    <feature name=\"{name}\""
-            
+
             # Add unit as attribute if available
             unit = units_dict.get(name, "")
             if unit:
                 feature_xml += f" unit=\"{unit}\""
-            
+
             # Close opening tag and add description if available
             tooltip = tooltips_dict.get(name, "")
             if tooltip:
                 feature_xml += f">\n        <description>{tooltip}</description>\n    </feature>"
             else:
                 feature_xml += " />"
-                
+
             formatted_features.append(feature_xml)
-        
+
         # Wrap all features in a features container
         if formatted_features:
             return "<features>\n" + "\n".join(formatted_features) + "\n</features>"
@@ -321,11 +321,24 @@ class BaseAgent(ABC):
     async def answer_user_question(self, user_question: str):
         """
         Process a user question through the MAPE-K workflow and return an answer.
-        
+
         Args:
             user_question: The user's question text
-            
+
         Returns:
             Implementation-specific result object
         """
         pass
+
+    def finalize_log(self):
+        """Write one CSV row per run with timestamp, experiment ID, and all prompts/responses."""
+        import csv, json, datetime
+        # Prepare a JSON array of buffered items
+        items = json.dumps(self._csv_items)
+        timestamp = datetime.datetime.utcnow().isoformat()
+        # Append to the CSV file
+        with open(self.log_file, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, delimiter=";")
+            writer.writerow([timestamp, self.experiment_id, items])
+        # Clear buffer for next run
+        self._csv_items.clear()

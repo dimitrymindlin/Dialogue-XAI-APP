@@ -271,7 +271,7 @@ class ExplainBot:
                 feature_tooltips=self.get_feature_tooltips(),
                 domain_description=self.conversation.describe.get_dataset_description(),
                 user_ml_knowledge=self.ml_knowledge,
-                logging_experiment_id=None  # will be set for each datapoint in
+                experiment_id=user_id  # Pass user_id as initial experiment_id
             )
 
         # Load the explanations

@@ -16,11 +16,8 @@ import openai
 import matplotlib
 import atexit
 from explain.logic import ExplainBot
-
-import mlflow
 from speech_and_text.tts_service import generate_audio_from_text
 from speech_and_text.stt_service import transcribe_audio_file
-import mlflow.llama_index
 
 from dotenv import load_dotenv
 
@@ -51,6 +48,20 @@ ml_executor = ThreadPoolExecutor(
     max_workers=_get_thread_pool_size("ML_EXECUTOR_THREADS"),
     thread_name_prefix="ml_executor"
 )
+
+
+def create_experiment_id(user_id, datapoint_count):
+    """
+    Create a unique experiment ID based on user ID and datapoint count.
+
+    Args:
+        user_id (str): The user identifier.
+        datapoint_count (str): The current datapoint count.
+
+    Returns:
+        str: A unique experiment ID.
+    """
+    return f"{user_id}_{datapoint_count}"
 
 
 @gin.configurable
@@ -134,23 +145,6 @@ def _setup_directories():
             os.makedirs(directory, exist_ok=True)
 
 
-def _initialize_global_mlflow(app):
-    def _get_mlflow_uri():
-        """Always point MLflow to ./cache/mlruns (absolute)."""
-        target = os.path.abspath(os.path.join("cache", "mlruns"))
-        os.makedirs(target, exist_ok=True)
-        return f"file://{target}"
-
-    """Initialize MLflow tracking."""
-    try:
-        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", _get_mlflow_uri())
-        mlflow.set_tracking_uri(mlflow_uri)
-        mlflow.tracing.enable()
-        app.logger.info(f"MLflow tracking URI initialized: {mlflow_uri}")
-    except Exception as e:
-        app.logger.warning(f"MLflow startup init failed: {e}")
-
-
 def _configure_logging(app):
     """Configure application logging."""
     stream_handler = logging.StreamHandler()
@@ -188,9 +182,6 @@ def create_app():
     # Register blueprints
     app.register_blueprint(bp, url_prefix=args.baseurl)
 
-    # Initialize external services
-    _initialize_global_mlflow(app)
-
     # Configure logging
     _configure_logging(app)
 
@@ -221,10 +212,6 @@ def init():
         study_group = "interactive"
     if not ml_knowledge:
         ml_knowledge = "low"
-
-    # Trigger background pre-creation of experiments for datapoints 1-10
-    for i in range(1, 11):  # Datapoints 1 to 10
-        background_executor.submit(initialize_mlflow_experiment, user_id, datapoint_count=i)
 
     # Create bot and pass the future so it can await the experiment_id
     BOT = ExplainBot(study_group, ml_knowledge, user_id)
@@ -295,8 +282,8 @@ def get_train_datapoint():
 
     # Update MLflow experiment for the current chat round
     if datapoint_count and bot_dict[user_id].use_llm_agent:
-        experiment_id = initialize_mlflow_experiment(user_id, datapoint_count=int(datapoint_count))
-        bot_dict[user_id].agent.set_logging_experiment_id(experiment_id)
+        experiment_id = create_experiment_id(user_id, datapoint_count)
+        bot_dict[user_id].agent.experiment_id = experiment_id
 
     user_study_group = bot_dict[user_id].get_study_group()
     result_dict = get_datapoint(user_id, "train", datapoint_count)
@@ -559,7 +546,7 @@ async def _get_bot_response_from_nl_internal(user_id: str, data: dict):
         loop = asyncio.get_running_loop()
 
         def ml_task():
-            return bot.update_state_from_nl(user_input=data["message"])
+            return asyncio.run(bot.update_state_from_nl(user_input=data["message"]))
 
         future = loop.run_in_executor(ml_executor, ml_task)
         response, question_id, feature_id, reasoning = await future
@@ -771,34 +758,6 @@ def test_tts_page():
     Serve the test TTS HTML page.
     """
     return app.send_static_file('test_tts.html')
-
-
-def initialize_mlflow_experiment(user_id, datapoint_count=None):
-    """Initialize MLflow experiment and return the experiment_id."""
-    try:
-        if user_id == "TEST" and not datapoint_count:  # for testing purposes
-            datapoint_count = 0
-
-        if datapoint_count is not None:
-            experiment_name = f"{user_id}_{datapoint_count}"
-        else:
-            experiment_name = f"{user_id}_session"
-
-        experiment = mlflow.get_experiment_by_name(experiment_name)
-        if experiment is None:
-            app.logger.info(f"MLflow: Creating new experiment '{experiment_name}'...")
-            experiment_id = mlflow.create_experiment(experiment_name)
-            app.logger.info(f"MLflow: Experiment '{experiment_name}' created with ID {experiment_id}.")
-        else:
-            app.logger.info(
-                f"MLflow: Using existing experiment '{experiment_name}' with ID {experiment.experiment_id}.")
-            experiment_id = experiment.experiment_id
-
-        return experiment_id
-    except Exception as e:
-        app.logger.warning(f"MLflow experiment init failed for user {user_id}: {e}")
-        app.logger.info("Continuing without MLflow tracking. App will function normally.")
-        return None
 
 
 @bp.route('/trigger_background_computation', methods=['POST'])

@@ -367,49 +367,7 @@ class UserModelHelperMixin:
                 self.last_shown_explanations = []
 
 
-class LoggingHelperMixin:
-    """Helper methods for managing logging."""
 
-    def initialize_log_row(self, user_message: str) -> Dict[str, Any]:
-        """
-        Initialize a new log row with default values.
-        
-        Args:
-            user_message: The user's message
-            
-        Returns:
-            Dict: A new log row dictionary
-        """
-        self.current_log_row = {
-            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "experiment_id": self.logging_experiment_id,
-            "datapoint_count": self.datapoint_count,
-            "user_message": user_message,
-            "monitor": "",
-            "analyze": "",
-            "plan": "",
-            "plan_approval": "",
-            "plan_approval_execute": "",
-            "execute": "",
-            "user_model": ""
-        }
-        if getattr(self, "log_file", None):
-            append_new_log_row(self.current_log_row, self.log_file)
-        return self.current_log_row
-
-    def update_log(self, component: str, result: Any) -> None:
-        if component not in self.current_log_row:
-            logger.warning(f"Unknown component: {component}")
-            return
-        self.current_log_row[component] = result
-        if getattr(self, "log_file", None):
-            update_last_log_row(self.current_log_row, self.log_file)
-
-
-    def finalize_log_row(self) -> None:
-        self.current_log_row["user_model"] = self.user_model.get_state_summary(as_dict=True)
-        if getattr(self, "log_file", None):
-            update_last_log_row(self.current_log_row, self.log_file)
 
     def format_predefined_plan_for_prompt(self) -> str:
         """
@@ -506,7 +464,7 @@ class ConversationHelperMixin:
         return '\n'.join(xml_lines)
 
 
-class UnifiedHelperMixin(UserModelHelperMixin, LoggingHelperMixin, ConversationHelperMixin):
+class UnifiedHelperMixin(UserModelHelperMixin, ConversationHelperMixin):
     """
     Combined helper mixin that provides all helper methods in one class.
     """
@@ -523,20 +481,20 @@ class UnifiedHelperMixin(UserModelHelperMixin, LoggingHelperMixin, ConversationH
         self.update_user_model_from_monitor(result)
 
         # Log monitor/analyze
-        self.update_log("monitor", {
+        self.log_prompt("MonitorResult", str({
             "mode_of_engagement": result.mode_of_engagement,
             "explicit_understanding_displays": result.explicit_understanding_displays
-        })
-        self.update_log("analyze", result.model_changes)
+        }))
+        self.log_prompt("AnalyzeResult", str(result.model_changes))
 
         # Plan phase
         self.update_explanation_plan(result)
 
         # Log plan
-        self.update_log("plan", {
+        self.log_prompt("PlanResult", str({
             "new_explanations": result.new_explanations,
             "explanation_plan": result.explanation_plan,
-        })
+        }))
 
         # Execute phase
         self.update_conversation_history(user_message, result.response)
@@ -552,8 +510,7 @@ class UnifiedHelperMixin(UserModelHelperMixin, LoggingHelperMixin, ConversationH
                 self.last_shown_explanations.append(target)
 
         # Log execute & user model
-        self.update_log("execute", result.response)
-        self.finalize_log_row()
+        self.log_prompt("ExecuteResult", result.response)
 
         # Update datapoint
         self.user_model.reset_understanding_displays()

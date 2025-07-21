@@ -4,7 +4,6 @@ from llama_index.core.llms.llm import LLM
 from llama_index.llms.openai import OpenAI
 from llm_agents.agent_utils import (timed, OPENAI_MODEL_NAME, OPENAI_MINI_MODEL_NAME, OPENAI_REASONING_MODEL_NAME)
 import logging
-import mlflow
 
 from llm_agents.events import MonitorDoneEvent, AnalyzeDoneEvent, PlanDoneEvent
 
@@ -34,7 +33,6 @@ from llm_agents.utils.dual_mode_prediction import astructured_predict_with_fallb
 
 from llm_agents.helper_mixins import (
     UserModelHelperMixin,
-    LoggingHelperMixin,
     ConversationHelperMixin,
     UnifiedHelperMixin,
 )
@@ -43,6 +41,7 @@ from llm_agents.helper_mixins import (
 from llm_agents.models import SinglePromptResultModel, MonitorAnalyzeResultModel, PlanExecuteResultModel
 
 import datetime
+import os
 from llama_index.core import PromptTemplate
 from llm_agents.llama_index_base_agent import LlamaIndexBaseAgent
 from llm_agents.explanation_state import ExplanationState
@@ -52,7 +51,24 @@ from llm_agents.utils.postprocess_message import replace_plot_placeholders
 # Add streaming support
 import asyncio
 from typing import Optional, Callable, AsyncGenerator, Dict, Any
-import json
+
+# Configure file logging for LlamaIndex events
+log_dir = os.path.join(os.getcwd(), "cache")
+os.makedirs(log_dir, exist_ok=True)
+file_handler = logging.FileHandler(os.path.join(log_dir, "llama_index.log"))
+file_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s")
+file_handler.setFormatter(formatter)
+root_logger = logging.getLogger()
+root_logger.addHandler(file_handler)
+root_logger.setLevel(logging.DEBUG)
+
+# Reduce verbosity for OpenAI and HTTP libraries
+logging.getLogger("openai._base_client").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+from llama_index.core.callbacks import CallbackManager
 
 
 class BaseAgentInitMixin:
@@ -60,20 +76,21 @@ class BaseAgentInitMixin:
     DRY mixin for common agent initialization and shared methods.
     Eliminates duplicate __init__ code and common methods across all agent classes.
     """
-    
+
     def _init_agent_components(
-        self,
-        llm: LLM = None,
-        structured_output: bool = True,
-        timeout: float = 100.0,
-        default_model: str = OPENAI_MODEL_NAME,
-        use_mini_llm: bool = False,
-        special_model: str = None,
-        **workflow_kwargs
+            self,
+            llm: LLM = None,
+            structured_output: bool = True,
+            timeout: float = 100.0,
+            default_model: str = OPENAI_MODEL_NAME,
+            use_mini_llm: bool = False,
+            special_model: str = None,
+            **workflow_kwargs
     ):
+        
         """
         Common initialization for LLM and other agent components.
-        
+
         Args:
             llm: Language model instance
             structured_output: Whether to use structured output
@@ -87,33 +104,48 @@ class BaseAgentInitMixin:
         # Workflow.__init__ typically only accepts: timeout, retry_policy, verbose
         # We'll be conservative and only pass through known safe arguments
         known_workflow_args = ['retry_policy', 'verbose']
-        workflow_specific_kwargs = {k: v for k, v in workflow_kwargs.items() 
-                                   if k in known_workflow_args}
-        
+        workflow_specific_kwargs = {k: v for k, v in workflow_kwargs.items()
+                                    if k in known_workflow_args}
+
         # Initialize Workflow with timeout and only safe workflow kwargs
         Workflow.__init__(self, timeout=timeout, **workflow_specific_kwargs)
-        
+
         # Initialize StreamingMixin
         StreamingMixin.__init__(self)
-        
-        # Set up LLM
-        if special_model:
-            self.llm = llm or OpenAI(model=special_model, reasoning_effort="low")
-        else:
-            self.llm = llm or OpenAI(model=default_model)
-            
-        if use_mini_llm:
-            self.mini_llm = OpenAI(model=OPENAI_MINI_MODEL_NAME)
-        
-        self.structured_output = structured_output
-        self.logging_experiment_id = None  # Initialize logging_experiment_id
 
-    def set_logging_experiment_id(self, logging_experiment_id: str):
-        """Set the MLflow experiment ID for this agent instance."""
-        self.logging_experiment_id = logging_experiment_id
-        # Set the MLflow experiment for the current thread
-        mlflow.set_experiment(experiment_id=logging_experiment_id)
-        logger.info(f"Agent received MLflow experiment ID: {logging_experiment_id}")
+        # Use an empty callback manager; logging is handled by the fallback method
+        self.callback_manager = CallbackManager([])
+
+        if special_model:
+            self.llm = llm or OpenAI(
+                model=special_model,
+                reasoning_effort="low",
+                callback_manager=self.callback_manager,
+                user=str(self.experiment_id),
+            )
+        else:
+            self.llm = llm or OpenAI(
+                model=default_model,
+                callback_manager=self.callback_manager,
+                user=str(self.experiment_id),
+            )
+
+        if use_mini_llm:
+            self.mini_llm = OpenAI(
+                model=OPENAI_MINI_MODEL_NAME,
+                callback_manager=self.callback_manager,
+                user=str(self.experiment_id),
+            )
+
+        self.structured_output = structured_output
+        # Initialize visual explanations storage
+        self.visual_explanations_dict = {}
+        # Buffer for CSV row items (prompt/response pairs)
+        self._csv_current_run_items = []
+
+    
+
+    
 
     @timed
     async def answer_user_question(self, user_question):
@@ -121,17 +153,21 @@ class BaseAgentInitMixin:
         DRY implementation of answer_user_question that all agents inherit.
         Runs the workflow and extracts reasoning and response consistently.
         """
-        with mlflow.start_run(experiment_id=self.logging_experiment_id):
-            mlflow.llama_index.autolog(log_traces=True)
-            result = await self.run(input=user_question)
+        result = await self.run(input=user_question)
 
         # Extract reasoning and response with fallbacks
         analysis = getattr(result, "reasoning", None) or "No reasoning available"
         response = getattr(result, "response", None) or "Sorry, please try again"
-        
+
+        # End run: write single CSV row
+        try:
+            self.finalize_log()
+        except Exception as e:
+            logger.error(f"Error finalizing CSV log: {e}", exc_info=True)
+
         return analysis, response
 
-    async def _predict_with_timing_and_logging(self, model_class, prompt, prompt_name, llm=None, nested=False):
+    async def _predict_with_timing_and_logging(self, model_class, prompt, prompt_name, llm=None, nested=True):
         """
         Logs prompt, result, and timing to MLflow. Logs errors and stack traces. Truncates long results. Logs timing as MLflow metric.
         """
@@ -141,32 +177,28 @@ class BaseAgentInitMixin:
             llm = getattr(self, 'mini_llm', self.llm)
 
         try:
-            with mlflow.start_run(nested=nested):
-                result = await astructured_predict_with_fallback(
-                    llm, model_class, prompt, use_structured_output=self.structured_output
-                )
+            result = await astructured_predict_with_fallback(
+                llm, model_class, prompt, use_structured_output=self.structured_output
+            )
         except Exception as e:
-            logger.error(f"[MLFLOW] Error during {prompt_name}: {e}", exc_info=True)
+            logger.error(f"Error during {prompt_name}: {e}", exc_info=True)
             raise
         finally:
             end_time = datetime.datetime.now()
             elapsed = (end_time - start_time).total_seconds()
-            self._log_prediction_to_mlflow(prompt_name, prompt, result, elapsed)
             logger.info(f"Time taken for {prompt_name.replace('_', ' ').title()}: {elapsed:.2f}s")
             logger.info(
                 f"{prompt_name.replace('_', ' ').title()} result: {result if result is not None else '[FAILED]'}\n")
+            # Log this LLM call via BaseAgent
+            try:
+                prompt_text = getattr(prompt, "text", None) or getattr(prompt, "content", None) or str(prompt)
+                result_text = getattr(result, "response", None) or ""
+                self.log_prompt(f"{prompt_name}_Prompt", prompt_text)
+                self.log_prompt(f"{prompt_name}_Result", result_text)
+            except Exception as e:
+                logger.error(f"Error logging {prompt_name} call: {e}", exc_info=True)
+            # (Removed debug log of full result JSON)
         return result
-
-    def _log_prediction_to_mlflow(self, prompt_name, prompt, result, elapsed_time):
-        try:
-            prompt_str = prompt.get_template_str() if hasattr(prompt, 'get_template_str') else str(prompt)
-            mlflow.log_param(f"{prompt_name}_prompt", prompt_str)
-            result_str = str(result)
-            mlflow.log_param(f"{prompt_name}_result", result_str)
-            mlflow.log_metric(f"{prompt_name}_duration_sec", elapsed_time)
-            logger.info(f"Logged {prompt_name} to MLflow. Duration: {elapsed_time:.2f}s")
-        except Exception as e:
-            logger.warning(f"[MLFLOW] Could not log prediction for {prompt_name}: {e}")
 
 
 # Streaming callback type
@@ -190,10 +222,10 @@ class StreamingMixin:
         """
         Core DRY streaming workflow implementation that all agents can use.
         This replaces all the duplicated streaming logic across different agent classes.
-        
+
         Args:
             user_question: The user's question
-            
+
         Yields:
             Dict with streaming data: {"type": "partial"|"final"|"error", "content": str, "is_complete": bool}
         """
@@ -248,6 +280,11 @@ class StreamingMixin:
                         "reasoning": analysis,
                         "is_complete": True
                     }
+                    # End run: write single CSV row
+                    try:
+                        self.finalize_log()
+                    except Exception as e:
+                        logger.error(f"Error finalizing CSV log in streaming: {e}", exc_info=True)
                     break
                 elif chunk["type"] == "error":
                     yield {"type": "error", "content": chunk["error"], "is_complete": True}
@@ -275,7 +312,8 @@ class StreamingMixin:
                     pass  # Ignore exceptions from completed tasks
             self.set_stream_callback(None)
 
-    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None) -> \
+    AsyncGenerator[Dict[str, Any], None]:
         """
         DRY streaming implementation that all agents inherit.
         This method provides consistent streaming behavior across all agent types.
@@ -300,18 +338,17 @@ class StreamingMixin:
         try:
             logger.info(f"Starting real token streaming for {method_name}")
             start_time = datetime.datetime.now()
-            with mlflow.start_run(nested=True):
-                # Convert structured prompt to completion prompt
-                schema_prompt = self._build_schema_prompt(model_class, prompt)
+            # Convert structured prompt to completion prompt
+            schema_prompt = self._build_schema_prompt(model_class, prompt)
 
-                # Use normal streaming completion for real token-by-token streaming
-                stream_response = await self.llm.astream_complete(schema_prompt)
+            # Use normal streaming completion for real token-by-token streaming
+            stream_response = await self.llm.astream_complete(schema_prompt)
 
-                return await self._process_token_stream(stream_response, model_class, method_name, prompt)
+            return await self._process_token_stream(stream_response, model_class, method_name, prompt)
 
         except Exception as e:
-            logger.warning(f"Token streaming failed for {method_name}: {e}, using fallback")
-            return await self.llm.astructured_predict(model_class, prompt)
+            logger.warning(f"Token streaming failed for {method_name}: {e}")
+            raise
 
     def _build_schema_prompt(self, model_class, prompt):
         """Build completion prompt with better schema instructions."""
@@ -356,9 +393,25 @@ Ensure your response is properly structured JSON."""
 
         # Parse final result with better error handling
         final_result = await self._parse_final_result(accumulated_content, model_class, method_name, prompt)
+
+        # Log streamed vs. final content for debugging
+        logger.info(f"COMPARISON: Streamed response was: '{last_streamed_response}'")
+        if final_result and hasattr(final_result, 'response'):
+            logger.info(f"COMPARISON: Final parsed response is: '{final_result.response}'")
+        else:
+            logger.info("COMPARISON: Final parsed result is None or has no 'response' attribute.")
+
+        # Log this streaming LLM call via BaseAgent
+        try:
+            prompt_text = getattr(prompt, "text", None) or getattr(prompt, "content", None) or str(prompt)
+            result_text = getattr(final_result, "response", None) or ""
+            self.log_prompt(f"{method_name}_Prompt", prompt_text)
+            self.log_prompt(f"{method_name}_Result", result_text)
+        except Exception as e:
+            logger.error(f"Error logging streaming {method_name} call: {e}", exc_info=True)
+
         end_time = datetime.datetime.now()
         elapsed = (end_time - start_time).total_seconds()
-        self._log_prediction_to_mlflow(method_name, prompt, final_result, elapsed)
         return final_result
 
     def _extract_token(self, token_chunk):
@@ -411,28 +464,28 @@ Ensure your response is properly structured JSON."""
             json_match = re.search(r'\{.*\}', accumulated_content, re.DOTALL)
             if json_match:
                 json_content = json_match.group()
+                logger.info(f"Attempting to parse JSON content for {method_name}: {json_content}")
                 parsed_data = json.loads(json_content)
                 result = model_class(**parsed_data)
                 logger.info(f"Successfully parsed streaming response for {method_name}")
                 return result
             else:
-                logger.warning(f"No JSON found in response for {method_name}")
+                logger.warning(
+                    f"No JSON found in response for {method_name}. Accumulated content: {accumulated_content}")
                 # Fallback to structured prediction
                 return await self.llm.astructured_predict(model_class, prompt)
 
         except Exception as e:
-            logger.warning(f"Failed to parse response for {method_name}: {e}")
+            logger.warning(
+                f"Failed to parse response for {method_name}: {e}. Accumulated content: {accumulated_content}")
             return await self.llm.astructured_predict(model_class, prompt)
 
 
-class MonitorMixin(LoggingHelperMixin, UserModelHelperMixin):
+class MonitorMixin(UserModelHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def monitor(self, ctx: Context, ev: StartEvent) -> MonitorDoneEvent:
         user_message = ev.input
         await ctx.set("user_message", user_message)
-
-        # Initialize log row using helper method
-        self.initialize_log_row(user_message)
 
         monitor_pm = MonitorPrompt()
         template = monitor_pm.get_prompts()["default"].get_template()
@@ -456,13 +509,13 @@ class MonitorMixin(LoggingHelperMixin, UserModelHelperMixin):
         self.update_user_model_from_monitor(monitor_result)
 
         # Update log with monitor results
-        self.update_log("monitor", monitor_result)
+        self.log_prompt("MonitorResult", str(monitor_result))
 
         await ctx.set("monitor_result", monitor_result)
         return MonitorDoneEvent()
 
 
-class AnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
+class AnalyzeMixin(UserModelHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def analyze(self, ctx: Context, ev: MonitorDoneEvent) -> AnalyzeDoneEvent:
         user_message = await ctx.get("user_message")
@@ -494,21 +547,18 @@ class AnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
         self.update_user_model_from_analyze(analyze_result)
 
         # Update log with analyze results using helper method
-        self.update_log("analyze", analyze_result)
+        self.log_prompt("AnalyzeResult", str(analyze_result))
 
         await ctx.set("analyze_result", analyze_result)
         return AnalyzeDoneEvent()
 
 
-class MonitorAnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
+class MonitorAnalyzeMixin(UserModelHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def monitor(self, ctx: Context, ev: StartEvent) -> MonitorDoneEvent:
         # Get user message
         user_message = ev.input
         await ctx.set("user_message", user_message)
-
-        # Initialize log row using helper method
-        self.initialize_log_row(user_message)
 
         # use modular MonitorAnalyzePrompt
         ma_pm = MonitorAnalyzePrompt()
@@ -537,13 +587,13 @@ class MonitorAnalyzeMixin(LoggingHelperMixin, UserModelHelperMixin):
         self.update_user_model_from_analyze(result)
 
         # Update log with monitor results using helper method
-        self.update_log("monitor", result)
+        self.log_prompt("MonitorAnalyzeResult", str(result))
 
         await ctx.set("monitor_result", result)
         return MonitorDoneEvent()
 
 
-class PlanMixin(LoggingHelperMixin, UserModelHelperMixin):
+class PlanMixin(UserModelHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def plan(self, ctx: Context, ev: AnalyzeDoneEvent) -> PlanDoneEvent:
         user_message = await ctx.get("user_message")
@@ -573,13 +623,13 @@ class PlanMixin(LoggingHelperMixin, UserModelHelperMixin):
         self.update_explanation_plan(plan_result)
 
         # Update log with plan results using helper method
-        self.update_log("plan", plan_result)
+        self.log_prompt("PlanResult", str(plan_result))
 
         await ctx.set("plan_result", plan_result)
         return PlanDoneEvent()
 
 
-class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
+class ExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def execute(self, ctx: Context, ev: PlanDoneEvent) -> StopEvent:
         user_message = await ctx.get("user_message")
@@ -635,13 +685,12 @@ class ExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperM
         self.update_last_shown_explanations(target_explanations)
 
         # Update log with execute results and finalize
-        self.update_log("execute", execute_result)
-        self.finalize_log_row()
+        self.log_prompt("ExecuteResult", str(execute_result))
 
         return StopEvent(result=execute_result)
 
 
-class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin, StreamingMixin):
+class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def scaffolding(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
         user_message = await ctx.get("user_message")
@@ -685,8 +734,7 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
 
         # Update datapoint and log
         self.user_model.new_datapoint()
-        self.update_log("execute", scaff)
-        self.finalize_log_row()
+        self.log_prompt("PlanExecuteResult", str(scaff))
 
         await ctx.set("scaffolding_result", scaff)
         return StopEvent(result=scaff)
@@ -698,8 +746,7 @@ class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
         user_message = ev.input
         await ctx.set("user_message", user_message)
 
-        # Initialize log row using helper method
-        self.initialize_log_row(user_message)
+        
 
         # use SinglePromptPrompt for unified call
         sp_pm = UnifiedPrompt()
@@ -800,7 +847,7 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin, Streami
         )
 
 
-class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
+class PlanApprovalMixin(UserModelHelperMixin, ConversationHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def plan_approval(self, ctx: Context, ev: AnalyzeDoneEvent) -> PlanDoneEvent:
         user_message = await ctx.get("user_message")
@@ -839,15 +886,15 @@ class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHe
         self.update_explanation_plan(plan_result)
 
         # Update log with plan results using helper method
-        self.update_log("plan_approval", approval_result)
-        self.update_log("plan", plan_result)
+        self.log_prompt("PlanApprovalResult", str(approval_result))
+        self.log_prompt("PlanResult", str(plan_result))
 
         await ctx.set("plan_result", plan_result)
         await ctx.set("approval_result", approval_result)
         return PlanDoneEvent()
 
 
-class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
+class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def plan_approval_execute(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
         user_message = await ctx.get("user_message")
@@ -919,9 +966,8 @@ class PlanApprovalExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, Convers
 
         # Update datapoint and log
         self.user_model.reset_understanding_displays()
-        self.update_log("plan_approval_execute", result)
-        self.update_log("plan", plan_result)
-        self.finalize_log_row()
+        self.log_prompt("PlanApprovalExecuteResult", str(result))
+        self.log_prompt("PlanResult", str(plan_result))
 
         await ctx.set("plan_approval_execute_result", result)
         return StopEvent(result=result)
@@ -952,7 +998,7 @@ class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, Analy
                               ExecuteMixin, StreamingMixin, BaseAgentInitMixin):
     """
     4-step MAPE-K agent with approval mechanism: separate Monitor, Analyze, PlanApproval, Execute steps.
-    This agent evaluates predefined explanation plans in a separate step and either approves them 
+    This agent evaluates predefined explanation plans in a separate step and either approves them
     or modifies them before executing.
     """
 
