@@ -53,16 +53,7 @@ from llm_agents.utils.postprocess_message import replace_plot_placeholders
 import asyncio
 from typing import Optional, Callable, AsyncGenerator, Dict, Any
 
-# Configure file logging for LlamaIndex events
-log_dir = os.path.join(os.getcwd(), "cache")
-os.makedirs(log_dir, exist_ok=True)
-file_handler = logging.FileHandler(os.path.join(log_dir, "llama_index.log"))
-file_handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s")
-file_handler.setFormatter(formatter)
-root_logger = logging.getLogger()
-root_logger.addHandler(file_handler)
-root_logger.setLevel(logging.DEBUG)
+
 
 # Reduce verbosity for OpenAI and HTTP libraries
 logging.getLogger("openai._base_client").setLevel(logging.WARNING)
