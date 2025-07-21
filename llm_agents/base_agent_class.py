@@ -29,7 +29,6 @@ class BaseAgent(ABC):
 
     def __init__(
             self,
-            logging_experiment_id: str,
             feature_names: str = "",
             feature_units: str = "",
             feature_tooltips: str = "",
@@ -38,7 +37,6 @@ class BaseAgent(ABC):
             **kwargs
     ):
         # Logging setup
-        self.logging_experiment_id = logging_experiment_id
         """self.log_file = generate_log_file_name(experiment_id)
         initialize_csv(self.log_file)
         # Initialize prompt log file (for detailed prompt logging)
