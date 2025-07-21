@@ -7,6 +7,7 @@ the LlamaIndex-based and OpenAI-based agent implementations.
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 import os
+import threading
 
 from create_experiment_data.instance_datapoint import InstanceDatapoint
 from llm_agents.agent_utils import (
@@ -44,6 +45,8 @@ class BaseAgent(ABC):
         
         # Buffer for prompt/response pairs for a single run
         self._csv_items = []
+        # Lock for thread-safe file writing
+        self._log_lock = threading.Lock()
 
         # Feature context - consolidate all feature-related information
         self._initialize_feature_context(feature_names, feature_units, feature_tooltips)
@@ -140,6 +143,11 @@ class BaseAgent(ABC):
         self.datapoint_count = datapoint_count + 1
         self.reset_history()
 
+        # Retrieve understood concepts from the previous user model, if it exists
+        understood_concepts = []
+        if hasattr(self, 'user_model') and self.user_model is not None:
+            understood_concepts = self.user_model.persist_knowledge()
+
         # Initialize explanations
         self.populator = XAIExplanationPopulator(
             template_dir=os.path.abspath(os.path.join(os.path.dirname(__file__), '..')),
@@ -152,6 +160,9 @@ class BaseAgent(ABC):
         self.populator.populate_yaml()
         self.populator.validate_substitutions()
         populated = self.populator.get_populated_json(as_dict=True)
+        
+        # Pass understood concepts to the new user model
+        self.user_model = UserModel(self.user_ml_knowledge, initial_understood_concepts=understood_concepts)
         self.user_model.set_model_from_summary(populated)
 
         # Initialize explanation plan from predefined plan if available
@@ -333,12 +344,14 @@ class BaseAgent(ABC):
     def finalize_log(self):
         """Write one CSV row per run with timestamp, experiment ID, and all prompts/responses."""
         import csv, json, datetime
-        # Prepare a JSON array of buffered items
-        items = json.dumps(self._csv_items)
-        timestamp = datetime.datetime.utcnow().isoformat()
-        # Append to the CSV file
-        with open(self.log_file, "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f, delimiter=";")
-            writer.writerow([timestamp, self.experiment_id, items])
-        # Clear buffer for next run
-        self._csv_items.clear()
+        # Acquire lock before writing to file
+        with self._log_lock:
+            # Prepare a JSON array of buffered items
+            items = json.dumps(self._csv_items)
+            timestamp = datetime.datetime.utcnow().isoformat()
+            # Append to the CSV file
+            with open(self.log_file, "a", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f, delimiter=";")
+                writer.writerow([timestamp, self.experiment_id, items])
+            # Clear buffer for next run
+            self._csv_items.clear()
