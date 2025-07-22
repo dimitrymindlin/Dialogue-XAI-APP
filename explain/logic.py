@@ -364,12 +364,12 @@ class ExplainBot:
                                                 self.get_current_prediction(),
                                                 opposite_class_name=opposite_class_name,
                                                 datapoint_count=datapoint_count)
-        # Update user_prediction_dict with current instance's correct prediction
-        true_label = self.get_current_prediction(as_int=True)
+        # Update user_prediction_dict with current instance's ML prediction
+        ml_prediction = self.get_current_prediction(as_int=True)
         try:
-            self.user_prediction_dict[instance_type][self.current_instance.counter] = {"true_label": true_label}
+            self.user_prediction_dict[instance_type][self.current_instance.counter] = {"true_label": ml_prediction}
         except KeyError:
-            self.user_prediction_dict[instance_type] = {self.current_instance.counter: {"true_label": true_label}}
+            self.user_prediction_dict[instance_type] = {self.current_instance.counter: {"true_label": ml_prediction}}
         return self.current_instance
 
     def get_study_group(self):
@@ -671,27 +671,12 @@ class ExplainBot:
                                                     "experiment_helper").contents.actionable_features,
                                                 categorical_features=self.categorical_features, )
 
-        test_instances, remove_instances_from_experiment = test_instance_explainer.get_test_instances()
+        test_instances, final_test_instances = test_instance_explainer.get_test_instances()
         # given the list of remove_instances_from_experiment, remove them from the experiment in all explanations
-        if len(remove_instances_from_experiment) > 0:
-            print(f"Removing instances from experiment: {remove_instances_from_experiment}")
-            for instance_id in remove_instances_from_experiment:
-                # Remove instance from diverse instances
-                diverse_instances = [instance for instance in diverse_instances if instance['id'] != instance_id]
-                # Remove instance from tabular dice
-                tabular_dice.cache = {k: v for k, v in tabular_dice.cache.items() if k != instance_id}
-                # Remove instance from mega explainer
-                mega_explainer.cache = {k: v for k, v in mega_explainer.cache.items() if k != instance_id}
-                # Remove instance from anchor
-                tabular_anchor.cache = {k: v for k, v in tabular_anchor.cache.items() if k != instance_id}
-                # Remove instance from ceteris paribus
-                ceteris_paribus_explainer.cache = {k: v for k, v in ceteris_paribus_explainer.cache.items() if
-                                                   k != instance_id}
-                # Remove instance from pdp
-                pdp_explainer.cache = {k: v for k, v in pdp_explainer.cache.items() if k != instance_id}
         self.conversation.add_var('test_instances', test_instances, 'test_instances')
         self.conversation.add_var('diverse_instances', diverse_instances, 'diverse_instances')
-        
+        self.conversation.add_var('final_test_instances', final_test_instances, 'final_test_instances')
+
         # Save the cluster-based diverse instances (not the flattened list format)
         diverse_instances_explainer.save_diverse_instances(diverse_instances_explainer.diverse_instances)
 

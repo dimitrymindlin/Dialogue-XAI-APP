@@ -12,7 +12,7 @@ def load_cache(cache_location: str):
     if os.path.isfile(cache_location):
         with open(cache_location, 'rb') as file:
             return pkl.load(file)
-    return []
+    return {}, {} # Return two empty dictionaries if no cache
 
 
 @gin.configurable
@@ -54,19 +54,23 @@ class TestInstances:
         self.model = model
         self.experiment_helper = experiment_helper
         self.actionable_features = actionable_features
-        self.test_instances = load_cache(cache_location)
+        
+        # Load both structured test instances and structured final_test instances from cache
+        self.test_instances_structured, self.final_test_instances_structured = load_cache(cache_location)
+
         self.categorical_features = categorical_features or []
         self.min_feature_differences = min_feature_differences
         self.max_feature_differences = max_feature_differences
         self.dataset_name = dataset_name
 
-    def get_test_instances(self, save_to_cache: bool = True, target_balance: float = 0.5, tolerance: float = 0.1) -> Tuple[Dict[str, Any], List[int]]:
+    def get_test_instances(self, save_to_cache: bool = True, target_balance: float = 0.5, tolerance: float = 0.1) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
         Main entry point for demand-driven test instance generation.
         Dynamically generates instances to achieve class balance.
+        Returns a tuple of (structured_test_instances, structured_final_test_instances).
         """
-        if self.test_instances:
-            return self.test_instances, []
+        if self.test_instances_structured and self.final_test_instances_structured:
+            return self.test_instances_structured, self.final_test_instances_structured
 
         # Prepare demand-driven generator and manager
         generator = get_demand_driven_generator(
@@ -85,18 +89,24 @@ class TestInstances:
             data=self.data
         )
 
-        test_instances = manager.generate_balanced_instances(
+        # Generate all balanced test instances in a single call
+        # This creates balanced 'test' and 'final_test' phases with intro_test=final_test
+        all_instances = manager.generate_balanced_instances(
             training_instances=self.diverse_instance_ids,
             target_balance=target_balance,
             tolerance=tolerance
         )
-        ids_to_remove = []  # Demand-driven manager handles failures internally
+        
+        # The manager returns one dict with all phases: test, final_test, intro_test
+        # For backward compatibility, return the same dict for both
+        test_instances = all_instances  
+        final_test_instances = all_instances
 
         if save_to_cache:
             with open(self.cache_location, 'wb') as file:
-                pkl.dump(test_instances, file)
+                pkl.dump((test_instances, final_test_instances), file)
 
-        return test_instances, ids_to_remove
+        return test_instances, final_test_instances
 
     def _calculate_detailed_feature_differences(self, original_instance: pd.DataFrame, generated_instance: pd.DataFrame) -> Dict[str, Any]:
         """Calculates detailed feature differences between two instances."""

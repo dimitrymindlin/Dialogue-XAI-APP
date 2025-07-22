@@ -26,7 +26,8 @@ class ExperimentHelper:
         self.current_instance_type = None
 
         # Get feature ordering from column_details to preserve the order specified in config
-        if hasattr(template_manager.feature_display_names, 'config') and 'column_details' in template_manager.feature_display_names.config:
+        if hasattr(template_manager.feature_display_names,
+                   'config') and 'column_details' in template_manager.feature_display_names.config:
             # Extract display names in the order they appear in column_details
             self.feature_ordering = []
 
@@ -52,9 +53,6 @@ class ExperimentHelper:
     def load_instances(self):
         self._load_train_instances()
         self._load_test_instances()
-        # Only keep train instances that are also in test instances by checking ids
-        test_ids = set(self.instances["test"].keys())
-        self.instances["train"] = [instance for instance in self.instances["train"] if instance.instance_id in test_ids]
 
     def _load_train_instances(self):
         import random
@@ -66,22 +64,37 @@ class ExperimentHelper:
             self.cluster_data = diverse_instances
             self.use_clusters = True
             # Create a round-robin ordered list from clusters
-            instance_ids = self._create_cluster_round_robin_order(diverse_instances)
+            instanc_dicts = self._create_cluster_round_robin_order(diverse_instances)
         else:
             # Legacy format: List[int] - no clusters
             self.cluster_data = {0: diverse_instances}  # Put all in cluster 0
             self.use_clusters = False
-            instance_ids = diverse_instances
+            instanc_dicts = diverse_instances
 
         # Turn into InstanceDatapoint
-        train_instances = [self._prepare_train_instance(instance) for instance in instance_ids]
+        train_instances = [self._turn_to_instance_datapoint(instance) for instance in instanc_dicts]
         random.shuffle(train_instances)
         self.instances["train"] = train_instances
 
     def _load_test_instances(self):
-        test_instances = self.conversation.get_var("test_instances").contents
-        self.instances["test"] = {instance_id: self._process_test_instances(instance_id, instances_dict)
-                                  for instance_id, instances_dict in test_instances.items()}
+        test_instance_dict = self.conversation.get_var("test_instances").contents
+
+        # turn test_instance_dict into InstanceDatapoint
+        new_test_instance_dict = {}
+        for train_id in test_instance_dict.keys():
+            new_test_instance_dict[train_id] = {}  # Initialize the nested dict for this train_id
+            for phase, test_instance_df in test_instance_dict[train_id].items():
+                # Turn df to dict
+                if isinstance(test_instance_df, pd.DataFrame):
+                    test_instance = test_instance_df.to_dict('records')[0]
+                else:
+                    test_instance = test_instance_df
+                # Process each test instance
+                test_instance["id"] = train_id  # Ensure the ID is set correctly
+                processed_test_instances = self._turn_to_instance_datapoint(test_instance, instance_type=phase)
+                new_test_instance_dict[train_id][phase] = processed_test_instances
+
+        self.instances["test"] = new_test_instance_dict
 
     def _convert_values_to_string(self, instance):
         for key, value in instance.items():
@@ -101,7 +114,10 @@ class ExperimentHelper:
 
     def _make_displayable_instance(self, instance, return_probabilities=False):
         # Round instance features
-        instance_features = copy.deepcopy(instance.instance_as_dict)
+        if isinstance(instance, InstanceDatapoint):
+            instance_features = copy.deepcopy(instance.instance_as_dict)
+        else:
+            instance_features = copy.deepcopy(instance)
         instance_features = self.template_manager.apply_categorical_mapping(instance_features)
         self._round_instance_features(instance_features)
 
@@ -139,32 +155,34 @@ class ExperimentHelper:
         return instance
 
     def get_next_instance(self, instance_type, datapoint_count, return_probability=False):
-        old_instance = None
-        load_instance_methods = {"train": self._load_train_instances, "test": self._load_test_instances}
-        get_instance_methods = {
-            "train": lambda: self._get_training_instance(return_probability, datapoint_count),
-            "test": lambda: self._get_test_instance(
-                self.current_instance.instance_id if self.current_instance else None,
-                datapoint_count),
-            "final-test": lambda: self._get_final_test_instance(datapoint_count),
-            "intro-test": lambda: self._get_intro_test_instance(datapoint_count)
-        }
-
-        if self.instances.get(instance_type, None) is None:
+        # Make sure train instances are loaded before any other type
+        if len(self.instances.get("train", [])) == 0:
             self.load_instances()
 
-        if not self.instances.get(instance_type, []):
-            load_instance_methods.get(instance_type, lambda: None)()
-
-        if instance_type != "train":
-            instance_id, instance = get_instance_methods[instance_type]()
+        old_instance = None
+        
+        if instance_type == "train":
+            instance = self._get_training_instance(datapoint_count)
+        else:
+            # For all test types, get the train instance ID first
+            train_instance_id = self.instances["train"][datapoint_count].instance_id
             old_instance = self.current_instance
-        else:  # "train"
-            instance = get_instance_methods[instance_type]()
+            
+            # Map instance types to phase names in the test dictionary
+            phase_mapping = {
+                "test": "test", 
+                "final-test": "final-test",
+                "intro-test": "intro_test"
+            }
+            phase = phase_mapping.get(instance_type, instance_type)
+            
+            # Directly get the instance from the nested dict structure
+            instance = self.instances["test"][train_instance_id][phase]
 
         self.current_instance_type = instance_type
 
-        if old_instance and not instance_type in ["final-test", "intro-test"]:
+        # Compare with old instance to track changes (except for final/intro tests)
+        if old_instance and instance_type not in ["final-test", "intro-test"]:
             for key, value in instance.instance_as_dict.items():
                 if value != old_instance.instance_as_dict[key]:
                     instance.instance_as_dict[key] = {"old": old_instance.instance_as_dict[key], "current": value}
@@ -193,16 +211,18 @@ class ExperimentHelper:
                          final_test_instance.model_predicted_label_string]
         print(df)
 
-    def _prepare_train_instance(self, instance):
-        # Simplified example of preparing a data instance
-        instance_values = instance['values'].copy()
-        
-        # Round instance values before creating InstanceDatapoint
-        self._round_instance_features(instance_values)
-        
+    def _turn_to_instance_datapoint(self, instance, instance_type='train'):
+        if 'values' in instance:
+            instance_values = instance['values'].copy()
+        else:
+            instance_values = {k: v for k, v in instance.items() if k not in ('id', 'label')}
+
         model_prediction = \
             self.conversation.get_var("model_prob_predict").contents(pd.DataFrame(instance_values, index=[0]))[0]
         # true_label = self._fetch_true_label(instance['id'])
+
+        # Round instance values before creating InstanceDatapoint
+        self._round_instance_features(instance_values)
         # Turn to InstanceDatapoint
         instance = InstanceDatapoint(instance_id=instance['id'],
                                      instance_as_dict=instance_values,
@@ -210,7 +230,7 @@ class ExperimentHelper:
                                      model_predicted_label_string=self.conversation.class_names[
                                          np.argmax(model_prediction)],
                                      model_predicted_label=np.argmax(model_prediction),
-                                     instance_type='train')
+                                     instance_type=instance_type)
         return instance
 
     def _process_test_instances(self, train_datapoint_id, instances_dict):
@@ -220,10 +240,10 @@ class ExperimentHelper:
         for instance_naming, instance_dict in instance_dicts.items():
             if "label" in instance_dict:
                 del instance_dict["label"]
-            
+
             # Round instance_dict values before creating InstanceDatapoint
             self._round_instance_features(instance_dict)
-            
+
             class_probabilities = self.conversation.get_var("model_prob_predict").contents(
                 pd.DataFrame(instance_dict, index=[0]))
             predicted_label_index = np.argmax(class_probabilities)
@@ -236,89 +256,11 @@ class ExperimentHelper:
                                                                     instance_type="test")
         return instances_dict_new
 
-    def _get_training_instance(self, return_probability, datapoint_count, instance_type="train"):
+    def _get_training_instance(self, datapoint_count, instance_type="train"):
         if not self.instances[instance_type]:
             return None
-        self.current_instance = self.instances[instance_type][datapoint_count]
-        return self.current_instance
+        return self.instances[instance_type][datapoint_count]
 
-    def _get_test_instance(self, train_instance_id, datapoint_count, instance_type="test"):
-        if not self.instances[instance_type]:
-            return None
-
-        test_instances_dict = self.instances[instance_type][train_instance_id]
-        instance = self._get_instance_from_test_dict(test_instances_dict, "cycle", datapoint_count)
-        
-        if instance is None:
-            return None
-        
-        return train_instance_id, instance
-
-    def _get_final_test_instance(self, datapoint_count, instance_type="final-test"):
-        if not self.instances["test"]:
-            return None
-
-        # Get final test instance based on train instance id
-        train_instance_id = self.instances["train"][datapoint_count].instance_id
-        test_instances_dict = self.instances["test"][train_instance_id]
-        instance = self._get_instance_from_test_dict(test_instances_dict, "most_complex")
-        
-        if instance is None:
-            return None
-        
-        return train_instance_id, instance
-
-    def _get_intro_test_instance(self, datapoint_count, instance_type="intro-test"):
-        # Get intro test instance based on train instance id
-        train_instance_id = self.instances["train"][datapoint_count].instance_id
-        test_instances_dict = self.instances["test"][train_instance_id]
-        instance = self._get_instance_from_test_dict(test_instances_dict, "most_complex")
-        
-        if instance is None:
-            return None
-        
-        return train_instance_id, instance
-
-    def _get_instance_from_test_dict(self, test_instances_dict, selection_strategy="first", datapoint_count=0):
-        """
-        Helper method to extract instance from test instances dictionary.
-        Handles both old and new structure formats.
-        
-        Args:
-            test_instances_dict: The test instances dictionary
-            selection_strategy: "first", "cycle", or "most_complex"
-            datapoint_count: Used for cycling through instances
-            
-        Returns:
-            The selected instance or None if not found
-        """
-        if isinstance(test_instances_dict, dict):
-            # Check if we have the old structure with named keys
-            old_keys = ["most_complex_instance", "hard_counterfactual_instance", "easy_counterfactual_instance"]
-            if any(key in test_instances_dict for key in old_keys):
-                # Old structure - use appropriate key based on strategy
-                if selection_strategy == "most_complex":
-                    return test_instances_dict.get("most_complex_instance")
-                elif selection_strategy == "cycle":
-                    instance_key = old_keys[datapoint_count % 3]
-                    return test_instances_dict.get(instance_key)
-                else:  # "first"
-                    return test_instances_dict.get("most_complex_instance")
-            else:
-                # New structure - get instances by available keys
-                available_keys = list(test_instances_dict.keys())
-                if not available_keys:
-                    return None
-                
-                if selection_strategy == "cycle":
-                    instance_key = available_keys[datapoint_count % len(available_keys)]
-                else:  # "first" or "most_complex"
-                    instance_key = available_keys[0]
-                
-                return test_instances_dict[instance_key]
-        else:
-            # Handle case where test_instances_dict is a single instance
-            return test_instances_dict
 
     def _round_instance_features(self, features):
         for feature, value in features.items():

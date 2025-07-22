@@ -15,12 +15,19 @@ class ManifoldAwareCategoricalGenerator:
     """
     
     def __init__(self, data: pd.DataFrame, model, categorical_features: List[str],
-                 actionable_features: List[str] = None, manifold_k: int = 50):
+                 actionable_features: List[str] = None, manifold_k: int = None,
+                 min_feature_differences: int = 2, max_feature_differences: int = 3):
         self.data = data.copy()
         self.model = model
         self.categorical_features = categorical_features or []
         self.actionable_features = actionable_features or list(data.columns)
-        self.manifold_k = manifold_k
+        # Adaptive k based on dataset size: scale with dataset but keep reasonable bounds
+        if manifold_k is None:
+            self.manifold_k = max(10, min(100, len(data) // 100))
+        else:
+            self.manifold_k = manifold_k
+        self.min_feature_differences = min_feature_differences
+        self.max_feature_differences = max_feature_differences
         
         # Store categorical value mappings
         self.categorical_values = {}
@@ -60,11 +67,12 @@ class ManifoldAwareCategoricalGenerator:
         # Pre-compute manifold threshold for efficiency
         self._compute_manifold_threshold()
         
-    def _compute_manifold_threshold(self, threshold_percentile: float = 90):
+    def _compute_manifold_threshold(self, threshold_percentile: float = 75):
         """Pre-compute manifold distance threshold for efficiency."""
-        # Sample distances from existing data
+        # Sample distances from existing data - adaptive sample size
         all_distances = []
-        sample_size = min(1000, len(self.data))
+        # Use more samples for larger datasets, but cap at reasonable limit
+        sample_size = max(500, min(2000, len(self.data) // 10))
         sample_indices = np.random.choice(len(self.data), sample_size, replace=False)
         
         for idx in sample_indices:
@@ -219,7 +227,7 @@ class ManifoldAwareCategoricalGenerator:
         valid_instances = []
         
         # Generate a pool of potential variants
-        variants = self._generate_categorical_variants(original_instance_values, n_variants=200)
+        variants = self._generate_categorical_variants(original_instance, max_variants=200)
         # print(f"[ManifoldCategoricalGenerator] Generated {len(variants)} categorical variants")
         
         attempts = 0
@@ -234,7 +242,7 @@ class ManifoldAwareCategoricalGenerator:
             # Enhance with numerical noise to create complexity diversity (respecting max_feature_differences)
             if np.random.random() < 0.6:  # 60% chance to add numerical noise
                 enhanced_variant = self._enhance_with_numerical_noise(variant, original_instance, 
-                                                                    max_total_changes=2)
+                                                                    max_total_changes=self.max_feature_differences)
             else:
                 enhanced_variant = variant
             
@@ -246,11 +254,20 @@ class ManifoldAwareCategoricalGenerator:
             diff_count = self._count_feature_differences(original_instance, enhanced_variant)
             
             # Log attempt
-            is_valid = is_manifold and same_prediction and 2 <= diff_count <= 2
+            is_valid = is_manifold and same_prediction and self.min_feature_differences <= diff_count <= self.max_feature_differences
+            
+            # Collect rejection reasons
+            reasons = []
+            if not is_manifold:
+                reasons.append("not in manifold")
+            if not same_prediction:
+                reasons.append("different prediction")
+            if not (self.min_feature_differences <= diff_count <= self.max_feature_differences):
+                reasons.append(f"diff_count={diff_count} not in [{self.min_feature_differences}, {self.max_feature_differences}]")
             
             # print attempt details
             if is_valid:
-                valid_instances.append(variant_instance)
+                valid_instances.append(enhanced_variant)
                 status = "✅"
                 # print(f"[ManifoldCategoricalGenerator] {status} Instance {len(valid_instances)}: {change_desc} ({diff_count} diffs)")
             else:
