@@ -21,7 +21,7 @@ ExplainBot.remove_underscores = True
 ExplainBot.use_intent_recognition = "openAI" # "openAI" or "ollama"
 ExplainBot.use_active_dialogue_manager = False
 ExplainBot.use_static_followup = True
-# ExplainBot.use_llm_agent = "mape_k_openai_unified" # MOVED TO ENVIRONMENT VARIABLE: XAI_USE_LLM_AGENT
+# ExplainBot.use_llm_agent = "mape_k_approval_2" # MOVED TO ENVIRONMENT VARIABLE: XAI_USE_LLM_AGENT
 ExplainBot.use_two_prompts = False
 ExplainBot.submodular_pick = True
 
