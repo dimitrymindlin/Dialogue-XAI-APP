@@ -375,33 +375,37 @@ class PlanTaskPrompt(SimplePromptMixin):
             """
 <task>
   <objective>Plan</objective>
-  <description>You have three steps to create and manage explanation plans</description>
+  <description>You have three steps to create and manage explanation plans.</description>
+  <definitions>
+    <AGREEMENT>Short affirmations such as “yes”, “ok”, “sure”, “show me”, “go ahead”, 👍, or lack of objection after an offer.</AGREEMENT>
+    <UNCLEAR>Replies that are off-topic, vague, or express confusion (e.g., “I don’t get it”).</UNCLEAR>
+  </definitions>
   <steps>
     <step number="1">
       <title>Defining New Explanations if needed</title>
       <instructions>
         - First, evaluate whether the user's message expresses a clear information need. If it does, check whether this need can be satisfied using any existing explanations. If no suitable explanation is available in the collection above, define a new one tailored to the identified need and it will be added to the explanation collection.   
-        - Ther user might have agreed to a suggested explanation that you can read in the chat history. If so, move it to the explanation plan as the next item to be shown.
-        - If the user's need is unclear, do not create a new explanation yet. Instead, use scaffolding techniques from the explantion collection.
+        - If the user explicitly or implicitly AGREES (e.g., “yes”, “ok”, “show me”, “go ahead”), immediately mark that explanation as APPROVED and set it as the next ExplanationTarget. Do NOT ask again or scaffold—proceed to execution.
+        - If the user's need is unclear, do not create a new explanation yet. Instead, scaffold briefly using techniques from the explanation collection.
       </instructions>
     </step>
     <step number="2">
       <title>Construct and maintaining an Explanation Plan</title>
       <instructions>
-        - Assume the user may ask only a few questions. The explanation plan should prioritize diverse, informative explanations that highlight relevant and unexpected aspects of the current data instance to clarify the model's decision. If no explanation plan exists, create one based on the latest user message, prioritizing explanations that address the identified need. The first item will guide the next response.
+        - Assume the user may ask only a few questions. Prioritize diverse, informative explanations that clarify the model's decision and surface unexpected aspects. If no explanation plan exists, create one based on the latest user message. The first item MUST be executed in the very next response once AGREEMENT is detected; do not re-ask.
         - Revise the plan only when there are major gaps, shifts in user understanding, or new high-level concepts are introduced.
-        - Map new user questions to existing explanations when possible; if matched, assume familiarity with the explanation's concept. If the user asks a direct question like "what if"... skip introducing the concept and proceed with the explanation content.
+        - Map new user questions to existing explanations when possible; if matched, assume familiarity with the explanation's concept. If the user asks a direct question like "what if", skip introducing the concept and proceed directly with the explanation content.
       </instructions>
     </step>
     <step number="3">
       <title>Generating the Next ExplanationTarget</title>
       <instructions>
         - Use the latest input, prior explanations, and the user's cognitive state and ML knowledge to generate a tailored ExplanationTarget based on the next item in the plan. If the last explanation was unclear, apply scaffolding and integrate it into the next communication goal.
-        - Ensure communication goals are concise, engaging, and aligned with the user's current understanding. If ML knowledge is low or unclear, assess familiarity through conversation context or follow-up questions.
+        - Ensure communication goals are concise, engaging, and aligned with the user's current understanding. If ML knowledge is low or unclear, assess familiarity through conversation context or brief follow-up questions.
         - For ambiguous inputs, use scaffolding to clarify intent before proceeding.
-        - Adapt content dynamically, starting with an overview of key facts, suggesting to delving deeper, simplifying, or redirecting based on the user's responses.
+        - Adapt content dynamically: start with key facts, then (optionally) offer to delve deeper, simplify, or redirect based on the user's responses.
         - Avoid repetition unless requested, and prioritize addressing user queries over rigidly following the plan.
-        - If the user asks an unrelated question, briefly explain that you can only discuss the model's prediction and the current instance, suggesting new explanations to explore without explicitely mentioning the names but rather what they reveal.
+        - If the user asks an unrelated question, briefly state that you can only discuss the model's prediction and the current instance, and offer a relevant next insight (describe what it reveals, not its method name).
       </instructions>
     </step>
   </steps>
@@ -417,7 +421,7 @@ class ExecuteTaskPrompt(SimplePromptMixin):
 <task>
   <objective>Execute</objective>
   <description>
-    Generate a concise response (3–4 sentences) based on the current user model, conversation history, and explanation plan. Do not describe or announce what you will do next. If a concept needs introduction, do it briefly and immediately continue with the explanation content. You only have one message per user question.
+    Generate a concise response (3–4 sentences) based on the current user model, conversation history, and explanation plan. Do not meta-comment on your process; if the user AGREED, start directly with the promised content. Introduce a concept only if required, in ≤1 sentence, then continue. You have exactly one message per user question.
   </description>
   <guidelines>
     <ul>
@@ -432,10 +436,10 @@ class ExecuteTaskPrompt(SimplePromptMixin):
       Use the explanation plan and chat history to guide responses. When eliciting knowledge, prompt briefly instead of fully explaining. If the user’s question aligns with an explanation method, do not introduce that concept first—proceed directly with the explanation. When the user agrees to see a suggestion, show it immediately without narration.
     </content_alignment>
     <tone_and_language>
-      Match the user’s cognitive state and ML expertise. Use plain language for lay users; do not use technical terms or method names unless the user is clearly ML-proficient. Present model behavior as factual and assertive (e.g., “Increasing age increases predicted risk”). Use modal verbs appropriately when describing how explanation methods could work.
+      Match the user’s cognitive state and ML expertise. Use plain language for lay users; avoid technical method names unless the user is clearly ML-proficient. Present model behavior with calibrated certainty—include numbers or ranges when available; avoid unsupported certainty. Use modal verbs when evidence is indirect.
     </tone_and_language>
     <clarity_and_relevance>
-      Be concise and avoid jargon. Focus on explanation results rather than naming techniques or repeating what the user has already seen. Before generating each sentence, verify it hasn’t been used earlier—do not repeat unless explicitly requested.
+      Be concise and avoid jargon. Focus on explanation results rather than naming techniques or repeating what the user has already seen. Before generating each sentence, verify it hasn’t been used earlier—do not repeat unless explicitly requested. When responding to AGREEMENT, lead with the promised artifact/result (e.g., numbers/plot), then (optionally) one short orienting sentence.
     </clarity_and_relevance>
     <focus>
       If the user goes off-topic, respond that you can only discuss the model’s prediction and the current instance.
@@ -449,10 +453,12 @@ class ExecuteTaskPrompt(SimplePromptMixin):
       </ul>
     </formatting>
     <visuals>
-      Insert placeholders like ##FeatureInfluencesPlot##. Present the plot first, explain it briefly, then ask for understanding. Do not repeat plots, since the user can see them in history.
+      Insert placeholders like ##FeatureInfluencesPlot##. Present the visual first, then give a one-sentence reading. Ask for understanding only if AGREEMENT was not given or clarification is needed. Do not repeat visuals already shown.
     </visuals>
     <engagement>
-      End with a prompt or question seamlessly, without narrating your intent. Use scaffolding only as part of the explanation, not as preparatory commentary.
+      • On AGREEMENT: deliver the explanation/artifact and stop—no follow-up question.  
+      • If a concrete choice is required and no preference is stated, ask exactly one short question (e.g., “Compare to global results?”).  
+      • To guide proactively, append a single optional next-step suggestion phrased as an offer (“Next, I can show how X interacts with Y.”). Describe what it reveals; skip method names unless the user shows high ML literacy.
     </engagement>
   </response_crafting>
 </task>
