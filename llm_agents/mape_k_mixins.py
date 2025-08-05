@@ -670,14 +670,14 @@ class ExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         # Update conversation history
         self.update_conversation_history(user_message, execute_result.response)
 
+        # Update log with execute results before adding visual plots
+        self.log_prompt("ExecuteResult", str(execute_result))
+
         # Process any visual explanations in the response
         execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
 
         # Update the last shown explanations
         self.update_last_shown_explanations(target_explanations)
-
-        # Update log with execute results and finalize
-        self.log_prompt("ExecuteResult", str(execute_result))
 
         return StopEvent(result=execute_result)
 
@@ -718,15 +718,15 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
         self.last_shown_explanations.append(target)
         self.update_conversation_history(user_message, scaff.response)
 
+        # Update datapoint and log before adding visual plots
+        self.user_model.new_datapoint()
+        self.log_prompt("PlanExecuteResult", str(scaff))
+
         # Process any visual explanations
         scaff.response = replace_plot_placeholders(scaff.response, self.visual_explanations_dict)
 
         self.update_explanation_plan(scaff)
         self.update_user_model_from_execute(scaff, target)
-
-        # Update datapoint and log
-        self.user_model.new_datapoint()
-        self.log_prompt("PlanExecuteResult", str(scaff))
 
         await ctx.set("scaffolding_result", scaff)
         return StopEvent(result=scaff)
@@ -953,13 +953,13 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
 
         self.update_conversation_history(user_message, result.response)
 
-        # Process any visual explanations
-        result.response = replace_plot_placeholders(result.response, self.visual_explanations_dict)
-
-        # Update datapoint and log
+        # Update datapoint and log before adding visual plots
         self.user_model.reset_understanding_displays()
         self.log_prompt("PlanApprovalExecuteResult", str(result))
         self.log_prompt("PlanResult", str(plan_result))
+
+        # Process any visual explanations
+        result.response = replace_plot_placeholders(result.response, self.visual_explanations_dict)
 
         await ctx.set("plan_approval_execute_result", result)
         return StopEvent(result=result)
