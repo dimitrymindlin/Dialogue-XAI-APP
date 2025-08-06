@@ -740,7 +740,7 @@ class ExplainBot:
         # 2. Update the state
         return self.update_state_new(question_id, feature_id)
 
-    async def update_state_from_nl_stream(self, user_input):
+    async def update_state_from_nl_stream(self, user_input, enable_conversational_mode: bool):
         """
         Streaming version of update_state_from_nl.
         
@@ -758,24 +758,43 @@ class ExplainBot:
             # Check if agent supports streaming
             if hasattr(self.agent, 'answer_user_question_stream'):
                 # Use streaming
-                async for chunk in self.agent.answer_user_question_stream(user_input):
-                    yield chunk
+                if enable_conversational_mode:
+                    async for chunk in self.agent.answer_user_question_stream(user_input, enable_conversational_mode):
+                        yield chunk
+                else:
+                    async for chunk in self.agent.answer_user_question_stream(user_input):
+                        yield chunk
+
             else:
                 # Fallback to normal response
-                reasoning, response = await self.agent.answer_user_question(user_input)
-                demographics_result = await self.agent.analyze_demographics(user_input)
-                yield {
-                    "type": "final",
-                    "content": response,
-                    "reasoning": reasoning,
-                    "is_complete": True
-                }
-                yield {
-                    "type": "demographics",
-                    "content": demographics_result.demographics.dict(),
-                    "reasoning": demographics_result.reasoning,
-                    "is_complete": True
-                }
+                if enable_conversational_mode:
+                
+                    reasoning, response = await self.agent.answer_user_question(user_input)
+                    demographics_result = await self.agent.analyze_demographics(user_input)
+                    
+                    yield {
+                        "type": "final",
+                        "content": response,
+                        "reasoning": reasoning,
+                        "is_complete": True
+                    }
+                    yield {
+                        "type": "demographics",
+                        "content": demographics_result.demographics.dict(),
+                        "reasoning": demographics_result.reasoning,
+                        "is_complete": True
+                    }
+                else:
+                    reasoning, response = await self.agent.answer_user_question(user_input)
+                    
+                    
+                    yield {
+                        "type": "final",
+                        "content": response,
+                        "reasoning": reasoning,
+                        "is_complete": True
+                    }
+
         elif self.use_intent_recognition:
             # Intent recognition doesn't support streaming, use normal flow
             question_id, feature_name, reasoning = self.dialogue_manager.update_state(user_input)
