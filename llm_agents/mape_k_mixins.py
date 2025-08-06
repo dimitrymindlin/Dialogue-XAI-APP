@@ -1136,6 +1136,33 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
             timeout=timeout,
             **kwargs
         )
+    
+    def initialize_new_datapoint(
+            self,
+            instance,
+            xai_explanations,
+            xai_visual_explanations,
+            predicted_class_name: str,
+            opposite_class_name: str,
+            datapoint_count: int,
+            use_precomputed_plan: bool = False  # Override default to False for adaptive behavior
+    ) -> None:
+        """
+        Initialize agent with a new datapoint, explicitly disabling precomputed plans for adaptive behavior.
+        
+        This override ensures the ConditionalPlanExecuteMixin starts with an empty plan so it can
+        properly detect "first question" vs "subsequent questions" for adaptive routing.
+        """
+        # Call parent with precomputed plan disabled by default
+        super().initialize_new_datapoint(
+            instance=instance,
+            xai_explanations=xai_explanations,
+            xai_visual_explanations=xai_visual_explanations,
+            predicted_class_name=predicted_class_name,
+            opposite_class_name=opposite_class_name,
+            datapoint_count=datapoint_count,
+            use_precomputed_plan=use_precomputed_plan
+        )
 
 
 class MapeKApproval4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanApprovalMixin,

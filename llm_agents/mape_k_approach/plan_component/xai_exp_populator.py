@@ -376,7 +376,14 @@ class XAIExplanationPopulator:
         else:
             return self.populated_yaml_content
 
-    def get_populated_json(self, as_dict=False):
+    def get_populated_json(self, as_dict=False, include_predefined_plan=True):
+        """
+        Get populated JSON data with optional predefined plan inclusion.
+        
+        Args:
+            as_dict: If True, return as dict; if False, return as JSON string
+            include_predefined_plan: If True, include predefined_plan in output; if False, exclude it
+        """
         if self.populated_yaml_content is None:
             self.populate_yaml()
 
@@ -387,21 +394,26 @@ class XAIExplanationPopulator:
             if "id" not in node:
                 node["id"] = node["explanation_name"].replace(" ", "").lower()
 
-        # Build predefined plan for JSON output: exclude ScaffoldingStrategy explanations
-        data["predefined_plan"] = []
-        for node in data.get("xai_explanations", []):
-            # Skip scaffolding strategies when generating the predefined plan
-            if node["explanation_name"] == "ScaffoldingStrategy":
-                continue
+        # Build predefined plan for JSON output only if requested
+        if include_predefined_plan:
+            # Build predefined plan for JSON output: exclude ScaffoldingStrategy explanations
+            data["predefined_plan"] = []
+            for node in data.get("xai_explanations", []):
+                # Skip scaffolding strategies when generating the predefined plan
+                if node["explanation_name"] == "ScaffoldingStrategy":
+                    continue
 
-            first_two = node["children"][:2]
-            # Generate ID from explanation_name if 'id' field doesn't exist
-            node_id = node.get("id", node["explanation_name"].replace(" ", "").lower())
-            data["predefined_plan"].append({
-                "id": node_id,
-                "title": node["explanation_name"],
-                "children": first_two
-            })
+                first_two = node["children"][:2]
+                # Generate ID from explanation_name if 'id' field doesn't exist
+                node_id = node.get("id", node["explanation_name"].replace(" ", "").lower())
+                data["predefined_plan"].append({
+                    "id": node_id,
+                    "title": node["explanation_name"],
+                    "children": first_two
+                })
+        else:
+            # Explicitly set empty predefined plan when disabled
+            data["predefined_plan"] = []
 
         if as_dict:
             return data

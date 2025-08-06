@@ -123,7 +123,8 @@ class BaseAgent(ABC):
             xai_visual_explanations: Any,
             predicted_class_name: str,
             opposite_class_name: str,
-            datapoint_count: int
+            datapoint_count: int,
+            use_precomputed_plan: bool = True
     ) -> None:
         """
         Initialize agent with a new datapoint and its explanations.
@@ -135,6 +136,7 @@ class BaseAgent(ABC):
             predicted_class_name: Name of the predicted class
             opposite_class_name: Name of the alternative class
             datapoint_count: The current datapoint count
+            use_precomputed_plan: If True, load predefined plan; if False, start with empty plan
         """
         # Set instance data
         self.instance = instance.displayable_features
@@ -159,26 +161,31 @@ class BaseAgent(ABC):
         )
         self.populator.populate_yaml()
         self.populator.validate_substitutions()
-        populated = self.populator.get_populated_json(as_dict=True)
+        populated = self.populator.get_populated_json(as_dict=True, include_predefined_plan=use_precomputed_plan)
         
         # Pass understood concepts to the new user model
         self.user_model = UserModel(self.user_ml_knowledge, initial_understood_concepts=understood_concepts)
         self.user_model.set_model_from_summary(populated)
 
-        # Initialize explanation plan from predefined plan if available
-        predefined_plan = populated.get("predefined_plan", [])
-        if predefined_plan:
-            # Convert predefined plan to explanation plan format
-            self.explanation_plan = []
-            for plan_item in predefined_plan:
-                for child in plan_item.get("children", []):
-                    step_name = child.get("step_name") or child.get("title", "")
-                    self.explanation_plan.append(ChosenExplanationModel(
-                        explanation_name=plan_item["title"],
-                        step_name=step_name
-                    ))
+        # Initialize explanation plan based on use_precomputed_plan flag
+        if use_precomputed_plan:
+            # Load predefined plan if available and requested
+            predefined_plan = populated.get("predefined_plan", [])
+            if predefined_plan:
+                # Convert predefined plan to explanation plan format
+                self.explanation_plan = []
+                for plan_item in predefined_plan:
+                    for child in plan_item.get("children", []):
+                        step_name = child.get("step_name") or child.get("title", "")
+                        self.explanation_plan.append(ChosenExplanationModel(
+                            explanation_name=plan_item["title"],
+                            step_name=step_name
+                        ))
+            else:
+                # No predefined plan available
+                self.explanation_plan = []
         else:
-            # Fallback to empty plan
+            # Explicitly start with empty plan for adaptive agents
             self.explanation_plan = []
 
         # Set visual explanations
