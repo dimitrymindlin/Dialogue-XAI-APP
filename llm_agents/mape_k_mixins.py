@@ -676,8 +676,8 @@ class ExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         # Process any visual explanations in the response
         execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
 
-        # Update the last shown explanations
-        self.update_last_shown_explanations(target_explanations)
+        # Atomically update both last_shown_explanations and remove from plan
+        self.update_plan_and_tracking_after_execute(target_explanations)
 
         return StopEvent(result=execute_result)
 
@@ -714,8 +714,6 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
         self.user_model.update_explanation_step_state(
             target.explanation_name, target.step_name, ExplanationState.SHOWN.value)
 
-        # Record shown explanations and update conversation
-        self.last_shown_explanations.append(target)
         self.update_conversation_history(user_message, scaff.response)
 
         # Update datapoint and log before adding visual plots
@@ -727,6 +725,9 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
 
         self.update_explanation_plan(scaff)
         self.update_user_model_from_execute(scaff, target)
+        
+        # Atomically update both last_shown_explanations and remove from plan
+        self.update_plan_and_tracking_after_execute([target] if target else [])
 
         await ctx.set("scaffolding_result", scaff)
         return StopEvent(result=scaff)
@@ -931,10 +932,8 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         # Determine which explanations to use based on approval decision
         target_explanations = self.get_target_explanations_from_approval(result)
 
-        # Update the plan based on approval decision
+        # Update user model with plan result using helper method (before plan updates)
         plan_result = self.update_explanation_plan_after_approval(result)
-
-        # Update user model with plan result using helper method
         self.update_explanation_plan(plan_result)
 
         if target_explanations:
@@ -948,8 +947,8 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
                 ExplanationState.SHOWN.value
             )
 
-            # Record shown explanations and update conversation
-            self.last_shown_explanations.append(target_explanation)
+            # Atomically update both last_shown_explanations and remove from plan
+            self.update_plan_and_tracking_after_execute([target_explanation])
 
         self.update_conversation_history(user_message, result.response)
 

@@ -366,6 +366,24 @@ class UserModelHelperMixin:
             else:
                 self.last_shown_explanations = []
 
+    def update_plan_and_tracking_after_execute(self, target_explanations: List[ChosenExplanationModel]) -> None:
+        """
+        Atomically update both last_shown_explanations and remove used explanations from the plan.
+        
+        This method ensures DRY coupling between explanation tracking and plan management by
+        handling both operations in a single atomic call. This prevents inconsistency between
+        what explanations are tracked as "last shown" and what gets removed from the plan.
+        
+        Args:
+            target_explanations: The explanations that were actually used/shown during execution.
+                                This is the single source of truth for both tracking and plan updates.
+        """
+        # Update tracking with the explanations that were actually shown
+        self.update_last_shown_explanations(target_explanations)
+        
+        # Remove the shown explanations from the plan to prevent duplication
+        self.update_explanation_plan_after_execute(target_explanations)
+
 
 
 
@@ -501,13 +519,17 @@ class UnifiedHelperMixin(UserModelHelperMixin, ConversationHelperMixin):
         response_with_plots = replace_plot_placeholders(result.response, self.visual_explanations_dict)
 
         # Process all explanations in the plan
+        shown_explanations = []
         for target in result.explanation_plan:
             # Handle both step_name and step attributes for compatibility
             step_name = getattr(target, 'step_name', None) or getattr(target, 'step', None)
             if step_name:
                 self.user_model.update_explanation_step_state(
                     target.explanation_name, step_name, ExplanationState.UNDERSTOOD.value)
-                self.last_shown_explanations.append(target)
+                shown_explanations.append(target)
+        
+        # Update last_shown_explanations with all shown explanations at once
+        self.update_last_shown_explanations(shown_explanations)
 
         # Log execute & user model
         self.log_prompt("ExecuteResult", result.response)
