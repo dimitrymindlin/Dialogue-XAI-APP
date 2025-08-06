@@ -573,6 +573,12 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                                 }
                                 yield f"data: {json.dumps(chunk_data)}\n\n"
                             
+                            elif chunk.get("type") == "demographics":
+                                app.logger.info("--- STREAMING DEMOGRAPHICS TO FRONTEND ---")
+                                app.logger.info(json.dumps(chunk, indent=2))
+                                app.logger.info("------------------------------------------")
+                                yield f"data: {json.dumps(chunk)}\n\n"
+                            
                             elif chunk.get("type") == "final":
                                 reasoning = chunk.get("reasoning", "")
                                 final_response = chunk.get("content", accumulated_response)
@@ -612,7 +618,7 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                                         final_data["audio"] = audio_result
                                 
                                 yield f"data: {json.dumps(final_data)}\n\n"
-                                break
+                                
                     
                     # Run the async streaming function
                     async_gen = run_streaming()
@@ -696,6 +702,40 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
             'Access-Control-Allow-Headers': 'Cache-Control'
         }
     )
+
+
+@bp.route("/update_demographics", methods=['POST'])
+def update_demographics():
+    """Update user demographics based on user input."""
+    data = request.get_json()
+    user_id = data.get("user_id")
+    if user_id is None:
+        user_id = "TEST"
+    
+    demographics_data = data.get("demographics")
+    if not demographics_data:
+        return jsonify({"error": "No demographics data provided"}), 400
+        
+    try:
+        from llm_agents.models import UserDemographics
+        
+        # Check if bot exists
+        if user_id not in bot_dict:
+            return jsonify({"error": f"Bot not found for user {user_id}"}), 404
+            
+        bot = bot_dict[user_id]
+        
+        # Validate and update demographics
+        user_demographics = UserDemographics(**demographics_data)
+        bot.agent.set_user_demographics(user_demographics)
+        
+        app.logger.info(f"Updated demographics for user {user_id}")
+        return jsonify({"message": "Demographics updated successfully"}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error updating demographics: {str(e)}")
+        app.logger.error(traceback.format_exc())
+        return jsonify({"error": f"Error updating demographics: {str(e)}"}), 500
 
 
 @bp.route("/get_response_nl_stream", methods=['POST'])
