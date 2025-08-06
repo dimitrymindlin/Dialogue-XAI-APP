@@ -500,7 +500,7 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
         return StopEvent(result=scaff)
 
     # New streaming-enabled method for external use
-    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None, enable_conversational_mode: bool = False) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream-enabled version of answer_user_question.
         
@@ -567,17 +567,18 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
                     }
                     
                     # Analyze demographics and yield the result
-                    try:
-                        demographics_result = await self.analyze_demographics(user_question)
-                        yield {
-                            "type": "demographics",
-                            "content": demographics_result.demographics.dict(),
-                            "reasoning": demographics_result.reasoning,
-                            "is_complete": True
-                        }
-                    except Exception as e:
-                        # Log error but don't fail the stream
-                        print(f"Error in demographic analysis: {e}")
+                    if enable_conversational_mode:
+                        try:
+                            demographics_result = await self.analyze_demographics(user_question)
+                            yield {
+                                "type": "demographics",
+                                "content": demographics_result.demographics.dict(),
+                                "reasoning": demographics_result.reasoning,
+                                "is_complete": True
+                            }
+                        except Exception as e:
+                            # Log error but don't fail the stream
+                            print(f"Error in demographic analysis: {e}")
                     
                     break
                 elif chunk["type"] == "error":

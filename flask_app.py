@@ -407,10 +407,11 @@ async def get_bot_response_from_nl():
             
             # Check if streaming is requested
             enable_streaming = data.get("streaming", False)
+            enable_conversational_mode = data.get("show_user_model_panel", False)
             
             if enable_streaming:
                 # Redirect to streaming endpoint with same data
-                return await get_bot_response_from_nl_stream_internal(user_id, data)
+                return await get_bot_response_from_nl_stream_internal(user_id, data, enable_conversational_mode)
             
             # Check if bot exists, create if not
             if user_id not in bot_dict:
@@ -465,10 +466,10 @@ async def get_bot_response_from_nl():
         return jsonify(message_dict)
 
 
-async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
+async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict, enable_conversational_mode: bool):
     """Internal streaming response handler."""
     user_message = data["message"]
-    
+    print("conversational mode", enable_conversational_mode)
     def generate_stream():
         try:
             import asyncio
@@ -500,7 +501,7 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                         reasoning = ""
                         
                         # Call ExplainBot's streaming method
-                        async for chunk in bot.update_state_from_nl_stream(user_message):
+                        async for chunk in bot.update_state_from_nl_stream(user_message, enable_conversational_mode):
                             
                             if chunk.get("type") == "partial":
                                 content = chunk.get("content", "")
@@ -513,12 +514,12 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                                     "is_complete": False
                                 }
                                 yield f"data: {json.dumps(chunk_data)}\n\n"
-                            
-                            elif chunk.get("type") == "demographics":
-                                app.logger.info("--- STREAMING DEMOGRAPHICS TO FRONTEND ---")
-                                app.logger.info(json.dumps(chunk, indent=2))
-                                app.logger.info("------------------------------------------")
-                                yield f"data: {json.dumps(chunk)}\n\n"
+                            if enable_conversational_mode:
+                                if chunk.get("type") == "demographics":
+                                    app.logger.info("--- STREAMING DEMOGRAPHICS TO FRONTEND ---")
+                                    app.logger.info(json.dumps(chunk, indent=2))
+                                    app.logger.info("------------------------------------------")
+                                    yield f"data: {json.dumps(chunk)}\n\n"
                             
                             elif chunk.get("type") == "final":
                                 reasoning = chunk.get("reasoning", "")
