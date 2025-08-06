@@ -236,6 +236,21 @@ def init():
     return result
 
 
+@bp.route('/get_user_model', methods=['GET'])
+def get_user_model():
+    return jsonify({
+        "ml_knowledge": ["low", ["low", "medium", "high"]],
+        "cognitive_state": ["active", ["active", "interactive", "constructive"]],
+    })
+
+@bp.route('/get_user_model', methods=['GET'])
+def update_user_model():
+    """
+   @ Egemen Get var name and new value from frontend,
+   @dimi pass to backend.
+    """
+    pass
+
 @bp.route('/finish', methods=['DELETE'])
 def finish():
     """
@@ -706,7 +721,7 @@ async def transcribe_audio():
         print(f"Error transcribing audio: {str(e)}")
         print(traceback.format_exc())
         return jsonify({"error": f"Error transcribing audio: {str(e)}"}), 500
-        #return Response(generate(), mimetype="audio/mpeg")
+        # return Response(generate(), mimetype="audio/mpeg")
 
     except Exception as e:
         print(f"Error generating speech: {str(e)}")
