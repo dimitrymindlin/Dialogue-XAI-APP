@@ -597,6 +597,38 @@ class PlanApprovalExecutePrompt(CompositePromptMixin):
         super().__init__(modules, exclude_task=exclude_task)
 
 
+# --- Demographics Prompt ---
+class DemographicsPrompt(SimplePromptMixin):
+    """Prompts for the demographics component."""
+
+    def __init__(self):
+        super().__init__(
+            """You are an expert in analyzing text to predict user demographics.
+Based on the user's input, predict their age, gender, socio-economic status, and education level.
+Also, assess their machine learning knowledge level from their message.
+
+Here is the user's message:
+---
+{user_message}
+---
+
+Provide your answer in a JSON format. For each demographic attribute (Age, Gender, Socio-economic status, Education), provide the most likely value and a confidence score between 0 and 100.
+If you have alternative predictions, include them as well.
+For ML knowledge, provide a string value.
+
+Example for a single attribute:
+"age": {{
+    "main_prediction": {{"value": "Adolescent", "confidence": 87}},
+    "alternative_predictions": [
+        {{"value": "Young Adult", "confidence": 10}}
+    ]
+}}
+
+Provide a brief reasoning for your predictions.
+"""
+        )
+
+
 # === TEST HARNESS ===
 if __name__ == "__main__":
     """

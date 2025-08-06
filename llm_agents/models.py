@@ -96,11 +96,39 @@ class PlanExecuteResultModel(ExecuteResult, PlanResultModel):
     )
 
 
-class SinglePromptResultModel(PlanExecuteResultModel, MonitorAnalyzeResultModel):
-    """
-    Data model combining all the components of the MAPE-K approach in a single prompt.
-    """
-    pass
+class SinglePromptResultModel(BaseModel):
+    """Data model for the single prompt."""
+    reasoning: str = Field(..., description="The reasoning behind the response.")
+    explanation_plan: List[ChosenExplanationModel] = Field(..., description="The explanation plan.")
+    response: str = Field(..., description="The response to the user.")
+
+
+class DemographicDetail(BaseModel):
+    """Model for a single demographic attribute detail."""
+    value: str = Field(..., description="The predicted value for the demographic attribute.")
+    confidence: int = Field(..., description="The confidence score for the prediction, from 0 to 100.")
+
+
+class DemographicPrediction(BaseModel):
+    """Model for a single demographic attribute, which can have multiple predictions."""
+    main_prediction: DemographicDetail = Field(..., description="The primary prediction for the attribute.")
+    alternative_predictions: Optional[List[DemographicDetail]] = Field(None, description="Alternative predictions.")
+
+
+class UserDemographics(BaseModel):
+    """Data model for user demographics."""
+    age: DemographicPrediction = Field(..., description="The predicted age group of the user.")
+    gender: DemographicPrediction = Field(..., description="The predicted gender of the user.")
+    socio_economic: DemographicPrediction = Field(..., description="The predicted socio-economic status of the user.")
+    education: DemographicPrediction = Field(..., description="The predicted education level of the user.")
+    ml_knowledge: str = Field(..., description="The predicted machine learning knowledge level of the user.")
+
+
+class DemographicsResponse(BaseModel):
+    """Data model for the demographics response from the LLM."""
+    demographics: UserDemographics = Field(..., description="The predicted demographics of the user.")
+    reasoning: str = Field(..., description="The reasoning behind the demographic predictions.")
+
 
 
 class PlanApprovalModel(BaseModel):

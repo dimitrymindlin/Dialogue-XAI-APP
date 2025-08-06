@@ -742,10 +742,17 @@ class ExplainBot:
             else:
                 # Fallback to normal response
                 reasoning, response = await self.agent.answer_user_question(user_input)
+                demographics_result = await self.agent.analyze_demographics(user_input)
                 yield {
                     "type": "final",
                     "content": response,
                     "reasoning": reasoning,
+                    "is_complete": True
+                }
+                yield {
+                    "type": "demographics",
+                    "content": demographics_result.demographics.dict(),
+                    "reasoning": demographics_result.reasoning,
                     "is_complete": True
                 }
         elif self.use_intent_recognition:

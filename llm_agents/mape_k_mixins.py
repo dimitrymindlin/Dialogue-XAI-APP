@@ -509,7 +509,7 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
             stream_callback: Optional callback for streaming chunks
             
         Yields:
-            Dict with streaming data: {"type": "partial"|"final", "content": str, "is_complete": bool}
+            Dict with streaming data: {"type": "partial"|"final"|"demographics", "content": str, "is_complete": bool}
         """
         if stream_callback:
             self.set_stream_callback(stream_callback)
@@ -565,6 +565,20 @@ class PlanExecuteMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHel
                         "reasoning": analysis,
                         "is_complete": True
                     }
+                    
+                    # Analyze demographics and yield the result
+                    try:
+                        demographics_result = await self.analyze_demographics(user_question)
+                        yield {
+                            "type": "demographics",
+                            "content": demographics_result.demographics.dict(),
+                            "reasoning": demographics_result.reasoning,
+                            "is_complete": True
+                        }
+                    except Exception as e:
+                        # Log error but don't fail the stream
+                        print(f"Error in demographic analysis: {e}")
+                    
                     break
                 elif chunk["type"] == "error":
                     yield {"type": "error", "content": chunk["error"], "is_complete": True}
@@ -717,8 +731,24 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
             async for chunk in agent.answer_user_question_stream(question):
                 print(chunk['content'], end='', flush=True)
         """
+        # Start demographics analysis in background
+        demographics_task = asyncio.create_task(self.analyze_demographics(user_question))
+
+        # Get the base stream from PlanExecuteMixin
         async for chunk in super().answer_user_question_stream(user_question, stream_callback):
             yield chunk
+
+        # After the main stream is complete, yield demographics
+        try:
+            demographics_result = await demographics_task
+            yield {
+                "type": "demographics",
+                "content": demographics_result.demographics.dict(),
+                "reasoning": demographics_result.reasoning,
+                "is_complete": True
+            }
+        except Exception as e:
+            print(f"Error in demographic analysis: {e}")
 
 
 class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin, StreamingMixin):
@@ -758,8 +788,19 @@ class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin, Streami
     # NEW: Streaming-enabled method  
     async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None):
         """Stream-enabled version for unified agent."""
+        # Analyze demographics first
+        demographics_task = asyncio.create_task(self.analyze_demographics(user_question))
+
         async for chunk in super().answer_user_question_stream(user_question, stream_callback):
             yield chunk
+
+        demographics_result = await demographics_task
+        yield {
+            "type": "demographics",
+            "content": demographics_result.demographics.dict(),
+            "reasoning": demographics_result.reasoning,
+            "is_complete": True
+        }
 
 
 class PlanApprovalMixin(LoggingHelperMixin, UserModelHelperMixin, ConversationHelperMixin):
