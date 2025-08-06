@@ -964,12 +964,165 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         return StopEvent(result=result)
 
 
-class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanApprovalExecuteMixin,
+class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingMixin):
+    """
+    Adaptive Plan+Execute mixin that chooses between plan creation and plan approval based on conversation state.
+    
+    For the first question (no existing plan): Uses PlanExecute logic (create new plan and execute)
+    For subsequent questions (plan exists): Uses PlanApprovalExecute logic (approve/modify plan and execute)
+    """
+    
+    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
+    async def conditional_plan_execute(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
+        """
+        Conditionally route to plan creation or plan approval based on existing explanation plan state.
+        """
+        # Check if this is the first question (no plan exists or is empty)
+        has_existing_plan = (hasattr(self, 'explanation_plan') and 
+                           self.explanation_plan and 
+                           len(self.explanation_plan) > 0)
+        
+        if not has_existing_plan:
+            # First question: Create new plan and execute (PlanExecuteMixin logic)
+            return await self._plan_and_execute_new(ctx, ev)
+        else:
+            # Subsequent questions: Approve existing plan and execute (PlanApprovalExecuteMixin logic)  
+            return await self._approve_and_execute_existing(ctx, ev)
+    
+    async def _plan_and_execute_new(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
+        """Create a new explanation plan and execute it (first question logic)."""
+        user_message = await ctx.get("user_message")
+        last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else ""
+
+        # Use modular PlanExecutePrompt for scaffolding
+        pe_pm = PlanExecutePrompt()
+        template = pe_pm.get_prompts()["default"].get_template()
+        prompt_str = template.format(
+            domain_description=self.domain_description,
+            feature_context=self.get_formatted_feature_context(),
+            instance=self.instance,
+            predicted_class_name=self.predicted_class_name,
+            user_model=self.user_model.get_state_summary(as_dict=False),
+            explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
+            chat_history=self.get_chat_history_as_xml(),
+            user_message=user_message,
+            explanation_plan=self.explanation_plan or "",
+            last_shown_explanations=last_exp,
+        )
+        prompt = PromptTemplate(prompt_str)
+
+        # Use streaming prediction with callback support
+        scaff = await self._stream_predict_with_callback(PlanExecuteResultModel, prompt, "scaffolding")
+
+        # Handle target explanations
+        target = scaff.explanation_plan[0] if scaff.explanation_plan else None
+
+        self.user_model.update_explanation_step_state(
+            target.explanation_name, target.step_name, ExplanationState.SHOWN.value)
+
+        self.update_conversation_history(user_message, scaff.response)
+
+        # Update datapoint and log before adding visual plots
+        self.user_model.new_datapoint()
+        self.log_prompt("PlanExecuteResult", str(scaff))
+
+        # Process any visual explanations
+        scaff.response = replace_plot_placeholders(scaff.response, self.visual_explanations_dict)
+
+        self.update_explanation_plan(scaff)
+        self.update_user_model_from_execute(scaff, target)
+        
+        # Atomically update both last_shown_explanations and remove from plan
+        self.update_plan_and_tracking_after_execute([target] if target else [])
+
+        await ctx.set("scaffolding_result", scaff)
+        return StopEvent(result=scaff)
+
+    async def _approve_and_execute_existing(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
+        """Approve/modify existing plan and execute it (subsequent questions logic)."""
+        user_message = await ctx.get("user_message")
+        last_exp = self.last_shown_explanations if self.last_shown_explanations else None
+
+        # Get the predefined plan as a formatted string
+        predefined_plan_str = self.format_predefined_plan_for_prompt()
+
+        plan_approval_execute_pm = PlanApprovalExecutePrompt()
+        template = plan_approval_execute_pm.get_prompts()["default"].get_template()
+        prompt_str = template.format(
+            domain_description=self.domain_description,
+            feature_context=self.get_formatted_feature_context(),
+            instance=self.instance,
+            predicted_class_name=self.predicted_class_name,
+            chat_history=self.get_chat_history_as_xml(),
+            user_model=self.user_model.get_state_summary(as_dict=False),
+            user_message=user_message,
+            explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
+            explanation_plan=predefined_plan_str,
+            last_shown_explanations=last_exp,
+            understanding_displays=self.understanding_displays.as_text_filtered(self.user_model),
+            modes_of_engagement=self.modes_of_engagement.as_text(),
+        )
+
+        plan_approval_execute_prompt = PromptTemplate(prompt_str)
+        result = await self._stream_predict_with_callback(
+            PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute_prompt"
+        )
+
+        # Check if result is None and handle gracefully
+        if result is None:
+            logger.error("Plan Approval Execute returned None - creating fallback result")
+            result = PlanApprovalExecuteResultModel(
+                reasoning="Error occurred during processing - using fallback",
+                approved=True,  # Default to approved to continue with existing plan
+                next_response=None,
+                explanations_count=1,
+                response="I apologize, but I encountered a technical issue"
+            )
+
+        # Determine which explanations to use based on approval decision
+        target_explanations = self.get_target_explanations_from_approval(result)
+
+        # Update user model with plan result using helper method (before plan updates)
+        plan_result = self.update_explanation_plan_after_approval(result)
+        self.update_explanation_plan(plan_result)
+
+        if target_explanations:
+            # Get the first explanation to mark as shown (for single explanation case)
+            target_explanation = target_explanations[0]
+
+            # Update user model to mark explanation as shown
+            self.user_model.update_explanation_step_state(
+                target_explanation.explanation_name,
+                target_explanation.step_name,
+                ExplanationState.SHOWN.value
+            )
+
+            # Atomically update both last_shown_explanations and remove from plan
+            self.update_plan_and_tracking_after_execute([target_explanation])
+
+        self.update_conversation_history(user_message, result.response)
+
+        # Update datapoint and log before adding visual plots
+        self.user_model.reset_understanding_displays()
+        self.log_prompt("PlanApprovalExecuteResult", str(result))
+        self.log_prompt("PlanResult", str(plan_result))
+
+        # Process any visual explanations
+        result.response = replace_plot_placeholders(result.response, self.visual_explanations_dict)
+
+        await ctx.set("plan_approval_execute_result", result)
+        return StopEvent(result=result)
+
+
+class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, ConditionalPlanExecuteMixin,
                              StreamingMixin, BaseAgentInitMixin):
     """
-    2-step MAPE-K agent with approval mechanism: combines Monitor+Analyze and PlanApproval+Execute steps.
-    This agent evaluates predefined explanation plans and either approves them or modifies them
-    based on the user's current needs and understanding state.
+    2-step Adaptive MAPE-K agent with conditional plan behavior:
+    - First question: Uses PlanExecute logic (creates new explanation plan and executes)
+    - Subsequent questions: Uses PlanApprovalExecute logic (approves/modifies existing plan and executes)
+    
+    This agent intelligently switches between plan creation and plan approval based on conversation state,
+    providing optimal behavior for both initial and follow-up interactions.
     """
 
     def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
