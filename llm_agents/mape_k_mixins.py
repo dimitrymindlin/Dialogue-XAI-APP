@@ -53,8 +53,6 @@ from llm_agents.utils.postprocess_message import replace_plot_placeholders
 import asyncio
 from typing import Optional, Callable, AsyncGenerator, Dict, Any
 
-
-
 # Reduce verbosity for OpenAI and HTTP libraries
 logging.getLogger("openai._base_client").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -79,7 +77,7 @@ class BaseAgentInitMixin:
             special_model: str = None,
             **workflow_kwargs
     ):
-        
+
         """
         Common initialization for LLM and other agent components.
 
@@ -135,10 +133,6 @@ class BaseAgentInitMixin:
         # Buffer for CSV row items (prompt/response pairs)
         self._csv_current_run_items = []
 
-    
-
-    
-
     @timed
     async def answer_user_question(self, user_question):
         """
@@ -181,15 +175,6 @@ class BaseAgentInitMixin:
             logger.info(f"Time taken for {prompt_name.replace('_', ' ').title()}: {elapsed:.2f}s")
             logger.info(
                 f"{prompt_name.replace('_', ' ').title()} result: {result if result is not None else '[FAILED]'}\n")
-            # Log this LLM call via BaseAgent
-            try:
-                prompt_text = getattr(prompt, "text", None) or getattr(prompt, "content", None) or str(prompt)
-                result_text = getattr(result, "response", None) or ""
-                self.log_prompt(f"{prompt_name}_Prompt", prompt_text)
-                self.log_prompt(f"{prompt_name}_Result", result_text)
-            except Exception as e:
-                logger.error(f"Error logging {prompt_name} call: {e}", exc_info=True)
-            # (Removed debug log of full result JSON)
         return result
 
 
@@ -198,6 +183,21 @@ StreamCallback = Optional[Callable[[str, bool], None]]
 
 
 class StreamingMixin:
+    async def _predict(self, model_class, prompt, method_name):
+        """
+        Unified predict: streams if enabled, otherwise non-streaming, then logs result.
+        """
+        # Choose streaming or non-streaming
+        if self.enable_streaming and self.stream_callback:
+            result = await self._stream_predict_with_callback(model_class, prompt, method_name)
+        else:
+            result = await self._predict_with_timing_and_logging(model_class, prompt, method_name)
+        # Log input and output
+        prompt_text = getattr(prompt, "text", None) or getattr(prompt, "content", None) or str(prompt)
+        result_text = getattr(result, "response", None) if hasattr(result, "response") else str(result)
+        self.log_component_input_output(method_name, prompt_text, result_text)
+        return result
+
     """Mixin to add streaming capability to agents."""
 
     def __init__(self, *args, **kwargs):
@@ -305,7 +305,7 @@ class StreamingMixin:
             self.set_stream_callback(None)
 
     async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None) -> \
-    AsyncGenerator[Dict[str, Any], None]:
+            AsyncGenerator[Dict[str, Any], None]:
         """
         DRY streaming implementation that all agents inherit.
         This method provides consistent streaming behavior across all agent types.
@@ -325,8 +325,6 @@ class StreamingMixin:
 
     async def _stream_predict_with_callback(self, model_class, prompt, method_name):
         """Real token-level streaming with improved JSON parsing."""
-        if not self.enable_streaming or not self.stream_callback:
-            return await self._predict_with_timing_and_logging(model_class, prompt, method_name)
         try:
             logger.info(f"Starting real token streaming for {method_name}")
             start_time = datetime.datetime.now()
@@ -336,6 +334,9 @@ class StreamingMixin:
             # Use normal streaming completion for real token-by-token streaming
             stream_response = await self.llm.astream_complete(schema_prompt)
 
+            end_time = datetime.datetime.now()
+            elapsed = (end_time - start_time).total_seconds()
+            logger.info(f"Time taken for {method_name} streaming: {elapsed:.2f}s")
             return await self._process_token_stream(stream_response, model_class, method_name, prompt)
 
         except Exception as e:
@@ -354,7 +355,6 @@ Ensure your response is properly structured JSON."""
 
     async def _process_token_stream(self, stream_response, model_class, method_name, prompt):
         """Process token stream with improved JSON extraction."""
-        start_time = datetime.datetime.now()
         accumulated_content = ""
         last_streamed_response = ""
         response_field_started = False
@@ -392,18 +392,6 @@ Ensure your response is properly structured JSON."""
             logger.info(f"COMPARISON: Final parsed response is: '{final_result.response}'")
         else:
             logger.info("COMPARISON: Final parsed result is None or has no 'response' attribute.")
-
-        # Log this streaming LLM call via BaseAgent
-        try:
-            prompt_text = getattr(prompt, "text", None) or getattr(prompt, "content", None) or str(prompt)
-            result_text = getattr(final_result, "response", None) or ""
-            self.log_prompt(f"{method_name}_Prompt", prompt_text)
-            self.log_prompt(f"{method_name}_Result", result_text)
-        except Exception as e:
-            logger.error(f"Error logging streaming {method_name} call: {e}", exc_info=True)
-
-        end_time = datetime.datetime.now()
-        elapsed = (end_time - start_time).total_seconds()
         return final_result
 
     def _extract_token(self, token_chunk):
@@ -500,9 +488,6 @@ class MonitorMixin(UserModelHelperMixin):
         # Update user model from monitor result
         self.update_user_model_from_monitor(monitor_result)
 
-        # Update log with monitor results
-        self.log_prompt("MonitorResult", str(monitor_result))
-
         await ctx.set("monitor_result", monitor_result)
         return MonitorDoneEvent()
 
@@ -537,9 +522,6 @@ class AnalyzeMixin(UserModelHelperMixin):
 
         # Update user model from analyze result
         self.update_user_model_from_analyze(analyze_result)
-
-        # Update log with analyze results using helper method
-        self.log_prompt("AnalyzeResult", str(analyze_result))
 
         await ctx.set("analyze_result", analyze_result)
         return AnalyzeDoneEvent()
@@ -578,9 +560,6 @@ class MonitorAnalyzeMixin(UserModelHelperMixin):
         self.update_user_model_from_monitor(result)
         self.update_user_model_from_analyze(result)
 
-        # Update log with monitor results using helper method
-        self.log_prompt("MonitorAnalyzeResult", str(result))
-
         await ctx.set("monitor_result", result)
         return MonitorDoneEvent()
 
@@ -613,9 +592,6 @@ class PlanMixin(UserModelHelperMixin):
 
         # Update user model with plan result using helper method
         self.update_explanation_plan(plan_result)
-
-        # Update log with plan results using helper method
-        self.log_prompt("PlanResult", str(plan_result))
 
         await ctx.set("plan_result", plan_result)
         return PlanDoneEvent()
@@ -657,9 +633,7 @@ class ExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         )
 
         execute_prompt = PromptTemplate(prompt_str)
-        execute_result = await self._predict_with_timing_and_logging(
-            ExecuteResult, execute_prompt, "execute_prompt"
-        )
+        execute_result = await self._predict(ExecuteResult, execute_prompt, "execute_prompt")
 
         # Update user model with execute results
         self.update_user_model_from_execute(execute_result, target_explanations)
@@ -669,9 +643,6 @@ class ExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
 
         # Update conversation history
         self.update_conversation_history(user_message, execute_result.response)
-
-        # Update log with execute results before adding visual plots
-        self.log_prompt("ExecuteResult", str(execute_result))
 
         # Process any visual explanations in the response
         execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
@@ -702,8 +673,8 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
         )
         prompt = PromptTemplate(prompt_str)
 
-        # Use streaming prediction with callback support
-        scaff = await self._stream_predict_with_callback(PlanExecuteResultModel, prompt, "scaffolding")
+        # Use unified prediction (streaming or not) with logging
+        scaff = await self._predict(PlanExecuteResultModel, prompt, "scaffolding")
 
         # Handle target explanations using universal helper (respects explanations_count)
         target_explanations = self.get_target_explanations_from_plan_result(scaff)
@@ -712,14 +683,13 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
 
         # Update datapoint and log before adding visual plots
         self.user_model.reset_understanding_displays()
-        self.log_prompt("PlanExecuteResult", str(scaff))
 
         # Process any visual explanations
         scaff.response = replace_plot_placeholders(scaff.response, self.visual_explanations_dict)
 
         # Update explanation plan first (before processing explanations to avoid duplication)
         self.update_explanation_plan(scaff)
-        
+
         # Process explanations after execution using universal helper (marks as SHOWN and removes from plan)
         self.process_explanations_after_execution(target_explanations)
 
@@ -732,8 +702,6 @@ class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
     async def unified_mape_k(self, ctx: Context, ev: StartEvent) -> StopEvent:
         user_message = ev.input
         await ctx.set("user_message", user_message)
-
-        
 
         # use SinglePromptPrompt for unified call
         sp_pm = UnifiedPrompt()
@@ -756,10 +724,8 @@ class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
         # Wrap the prompt string in a PromptTemplate for structured prediction
         unified_prompt = PromptTemplate(prompt_str)
 
-        # Use streaming prediction with callback support
-        result: SinglePromptResultModel = await self._stream_predict_with_callback(
-            SinglePromptResultModel, unified_prompt, "unified"
-        )
+        # Use unified prediction (streaming or not) with logging
+        result: SinglePromptResultModel = await self._predict(SinglePromptResultModel, unified_prompt, "unified")
 
         # Process the unified result using helper method
         # This handles all MAPE-K phases in one go
@@ -864,18 +830,16 @@ class PlanApprovalMixin(UserModelHelperMixin, ConversationHelperMixin):
             PlanApprovalModel, plan_approval_prompt, "plan_approval_prompt"
         )
 
+        # Update log with plan results using helper method
+        self.log_component_input_output("PlanApprovalResult", plan_approval_prompt, str(approval_result))
+
         # Update the explanation plan based on the approval result
         # This creates the updated plan that will be passed to execute
-        plan_result = self.update_explanation_plan_after_approval(approval_result)
+        approval_result = self.update_explanation_plan_after_approval(approval_result)
 
         # Update user model with the new plan result
-        self.update_explanation_plan(plan_result)
+        self.update_explanation_plan(approval_result)
 
-        # Update log with plan results using helper method
-        self.log_prompt("PlanApprovalResult", str(approval_result))
-        self.log_prompt("PlanResult", str(plan_result))
-
-        await ctx.set("plan_result", plan_result)
         await ctx.set("approval_result", approval_result)
         return PlanDoneEvent()
 
@@ -910,6 +874,7 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         result = await self._stream_predict_with_callback(
             PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute_prompt"
         )
+        self.log_component_input_output("PlanApprovalExecuteResult", plan_approval_execute_prompt, str(result))
 
         # Check if result is None and handle gracefully
         if result is None:
@@ -931,13 +896,10 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
 
         # Process explanations after execution using universal helper
         self.process_explanations_after_execution(target_explanations)
-
         self.update_conversation_history(user_message, result.response)
 
         # Update datapoint and log before adding visual plots
         self.user_model.reset_understanding_displays()
-        self.log_prompt("PlanApprovalExecuteResult", str(result))
-        self.log_prompt("PlanResult", str(plan_result))
 
         # Process any visual explanations
         result.response = replace_plot_placeholders(result.response, self.visual_explanations_dict)
@@ -953,24 +915,24 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
     For the first question (no existing plan): Uses PlanExecute logic (create new plan and execute)
     For subsequent questions (plan exists): Uses PlanApprovalExecute logic (approve/modify plan and execute)
     """
-    
+
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def conditional_plan_execute(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
         """
         Conditionally route to plan creation or plan approval based on existing explanation plan state.
         """
         # Check if this is the first question (no plan exists or is empty)
-        has_existing_plan = (hasattr(self, 'explanation_plan') and 
-                           self.explanation_plan and 
-                           len(self.explanation_plan) > 0)
-        
+        has_existing_plan = (hasattr(self, 'explanation_plan') and
+                             self.explanation_plan and
+                             len(self.explanation_plan) > 0)
+
         if not has_existing_plan:
             # First question: Create new plan and execute (PlanExecuteMixin logic)
             return await self._plan_and_execute_new(ctx, ev)
         else:
             # Subsequent questions: Approve existing plan and execute (PlanApprovalExecuteMixin logic)  
             return await self._approve_and_execute_existing(ctx, ev)
-    
+
     async def _plan_and_execute_new(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
         """Create a new explanation plan and execute it (first question logic)."""
         user_message = await ctx.get("user_message")
@@ -993,9 +955,10 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
         )
 
         prompt = PromptTemplate(prompt_str)
-        
+
         # Use streaming prediction with callback support
         scaff = await self._stream_predict_with_callback(PlanExecuteResultModel, prompt, "scaffolding")
+        self.log_component_input_output("PlanExecuteResult", prompt, str(scaff))
 
         # Handle target explanations using universal helper (respects explanations_count)
         target_explanations = self.get_target_explanations_from_plan_result(scaff)
@@ -1003,11 +966,10 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
 
         # Update datapoint and log before adding visual plots
         self.user_model.reset_understanding_displays()
-        self.log_prompt("PlanExecuteResult", str(scaff))
 
         # Process any visual explanations
         scaff.response = replace_plot_placeholders(scaff.response, self.visual_explanations_dict)
-        
+
         # Update explanation plan first (before processing explanations to avoid duplication)
         self.update_explanation_plan(scaff)
 
@@ -1058,12 +1020,14 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
                 response="I apologize, but I encountered a technical issue"
             )
 
+        self.log_component_input_output("PlanApprovalExecuteResult", plan_approval_execute_prompt, str(result))
+
         # Determine which explanations to use based on approval decision
         target_explanations = self.get_target_explanations_from_approval(result)
 
         # Update user model with plan result using helper method (before plan updates)
-        plan_result = self.update_explanation_plan_after_approval(result)
-        self.update_explanation_plan(plan_result)
+        result = self.update_explanation_plan_after_approval(result)
+        self.update_explanation_plan(result)
 
         # Process explanations after execution using universal helper
         self.process_explanations_after_execution(target_explanations)
@@ -1072,8 +1036,6 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
 
         # Update datapoint and log before adding visual plots
         self.user_model.reset_understanding_displays()
-        self.log_prompt("PlanApprovalExecuteResult", str(result))
-        self.log_prompt("PlanResult", str(plan_result))
 
         # Process any visual explanations
         result.response = replace_plot_placeholders(result.response, self.visual_explanations_dict)
@@ -1104,7 +1066,7 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
             timeout=timeout,
             **kwargs
         )
-    
+
     def initialize_new_datapoint(
             self,
             instance,

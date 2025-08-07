@@ -13,8 +13,7 @@ from pydantic import BaseModel
 
 from create_experiment_data.instance_datapoint import InstanceDatapoint
 from llm_agents.agent_utils import (
-    timed, generate_log_file_name, initialize_csv,
-    log_prompt, get_definition_paths
+    timed, generate_log_file_name, initialize_csv, get_definition_paths
 )
 from llm_agents.mape_k_approach.plan_component.xai_exp_populator import XAIExplanationPopulator
 from llm_agents.mape_k_approach.user_model.user_model_fine_grained import UserModelFineGrained as UserModel
