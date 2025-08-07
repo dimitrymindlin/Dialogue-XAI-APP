@@ -664,8 +664,8 @@ class ExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         # Update user model with execute results
         self.update_user_model_from_execute(execute_result, target_explanations)
 
-        # Mark explanations as shown in the user model
-        self.mark_explanations_as_shown(target_explanations)
+        # Process explanations after execution using universal helper (marks as shown + updates plan tracking)
+        self.process_explanations_after_execution(target_explanations)
 
         # Update conversation history
         self.update_conversation_history(user_message, execute_result.response)
@@ -675,9 +675,6 @@ class ExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
 
         # Process any visual explanations in the response
         execute_result.response = replace_plot_placeholders(execute_result.response, self.visual_explanations_dict)
-
-        # Atomically update both last_shown_explanations and remove from plan
-        self.update_plan_and_tracking_after_execute(target_explanations)
 
         return StopEvent(result=execute_result)
 
@@ -708,26 +705,23 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
         # Use streaming prediction with callback support
         scaff = await self._stream_predict_with_callback(PlanExecuteResultModel, prompt, "scaffolding")
 
-        # Handle target explanations
-        target = scaff.explanation_plan[0] if scaff.explanation_plan else None
-
-        self.user_model.update_explanation_step_state(
-            target.explanation_name, target.step_name, ExplanationState.SHOWN.value)
+        # Handle target explanations using universal helper (respects explanations_count)
+        target_explanations = self.get_target_explanations_from_plan_result(scaff)
 
         self.update_conversation_history(user_message, scaff.response)
 
         # Update datapoint and log before adding visual plots
-        self.user_model.new_datapoint()
+        self.user_model.reset_understanding_displays()
         self.log_prompt("PlanExecuteResult", str(scaff))
 
         # Process any visual explanations
         scaff.response = replace_plot_placeholders(scaff.response, self.visual_explanations_dict)
 
+        # Update explanation plan first (before processing explanations to avoid duplication)
         self.update_explanation_plan(scaff)
-        self.update_user_model_from_execute(scaff, target)
         
-        # Atomically update both last_shown_explanations and remove from plan
-        self.update_plan_and_tracking_after_execute([target] if target else [])
+        # Process explanations after execution using universal helper (marks as SHOWN and removes from plan)
+        self.process_explanations_after_execution(target_explanations)
 
         await ctx.set("scaffolding_result", scaff)
         return StopEvent(result=scaff)
@@ -775,7 +769,6 @@ class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
         final = ExecuteResult(
             reasoning=result.reasoning,
             response=replace_plot_placeholders(result.response, self.visual_explanations_dict),
-            explanations_count=getattr(result, 'explanations_count', 1),  # Default to 1 if not present
         )
         return StopEvent(result=final)
 
@@ -936,19 +929,8 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         plan_result = self.update_explanation_plan_after_approval(result)
         self.update_explanation_plan(plan_result)
 
-        if target_explanations:
-            # Get the first explanation to mark as shown (for single explanation case)
-            target_explanation = target_explanations[0]
-
-            # Update user model to mark explanation as shown
-            self.user_model.update_explanation_step_state(
-                target_explanation.explanation_name,
-                target_explanation.step_name,
-                ExplanationState.SHOWN.value
-            )
-
-            # Atomically update both last_shown_explanations and remove from plan
-            self.update_plan_and_tracking_after_execute([target_explanation])
+        # Process explanations after execution using universal helper
+        self.process_explanations_after_execution(target_explanations)
 
         self.update_conversation_history(user_message, result.response)
 
@@ -1009,31 +991,28 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
             explanation_plan=self.explanation_plan or "",
             last_shown_explanations=last_exp,
         )
-        prompt = PromptTemplate(prompt_str)
 
+        prompt = PromptTemplate(prompt_str)
+        
         # Use streaming prediction with callback support
         scaff = await self._stream_predict_with_callback(PlanExecuteResultModel, prompt, "scaffolding")
 
-        # Handle target explanations
-        target = scaff.explanation_plan[0] if scaff.explanation_plan else None
-
-        self.user_model.update_explanation_step_state(
-            target.explanation_name, target.step_name, ExplanationState.SHOWN.value)
-
+        # Handle target explanations using universal helper (respects explanations_count)
+        target_explanations = self.get_target_explanations_from_plan_result(scaff)
         self.update_conversation_history(user_message, scaff.response)
 
         # Update datapoint and log before adding visual plots
-        self.user_model.new_datapoint()
+        self.user_model.reset_understanding_displays()
         self.log_prompt("PlanExecuteResult", str(scaff))
 
         # Process any visual explanations
         scaff.response = replace_plot_placeholders(scaff.response, self.visual_explanations_dict)
-
-        self.update_explanation_plan(scaff)
-        self.update_user_model_from_execute(scaff, target)
         
-        # Atomically update both last_shown_explanations and remove from plan
-        self.update_plan_and_tracking_after_execute([target] if target else [])
+        # Update explanation plan first (before processing explanations to avoid duplication)
+        self.update_explanation_plan(scaff)
+
+        # Process explanations after execution using universal helper (marks as SHOWN and removes from plan)
+        self.process_explanations_after_execution(target_explanations)
 
         await ctx.set("scaffolding_result", scaff)
         return StopEvent(result=scaff)
@@ -1086,19 +1065,8 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
         plan_result = self.update_explanation_plan_after_approval(result)
         self.update_explanation_plan(plan_result)
 
-        if target_explanations:
-            # Get the first explanation to mark as shown (for single explanation case)
-            target_explanation = target_explanations[0]
-
-            # Update user model to mark explanation as shown
-            self.user_model.update_explanation_step_state(
-                target_explanation.explanation_name,
-                target_explanation.step_name,
-                ExplanationState.SHOWN.value
-            )
-
-            # Atomically update both last_shown_explanations and remove from plan
-            self.update_plan_and_tracking_after_execute([target_explanation])
+        # Process explanations after execution using universal helper
+        self.process_explanations_after_execution(target_explanations)
 
         self.update_conversation_history(user_message, result.response)
 

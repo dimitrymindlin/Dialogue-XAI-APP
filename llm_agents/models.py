@@ -74,14 +74,13 @@ class PlanResultModel(BaseModel):
     reasoning: str = Field(...,
                            description=f"{reasoning_prefix} for the decision of new explanations and which explanations to include in the next steps.")
     new_explanations: List[NewExplanationModel] = Field(default_factory=list,
-                                                        description="List of completely new explanations to be added to the explanation collection. Verify first if they already exist in the explanation collection before adding them.")
+                                                        description="List of completely new explanations to be added to the explanation collection, where similar explanations are not in the explanation collection already.")
     explanation_plan: List[ChosenExplanationModel] = Field(default_factory=list,
-                                                           description="List of explanations or scaffolding techniques, indicating the next explanatons and a long-term plan to explain the whole model prediction to the user.")
+                                                           description="Ordered list of explanation steps or scaffolding techniques, indicating the long-term plan to explain the whole model prediction to the user.")
+    explanations_count: int = Field(..., description="The number of explanations from the plan to include in the next response to reply to the user's message. Minimum is 1, can be 2 or 3 of next explanations together.")
 
 class ExecuteResult(BaseModel):
     reasoning: str = Field(..., description=f"{reasoning_prefix} on how to craft the response.")
-    explanations_count: int = Field(...,
-                                      description="The number of explanations from the plan to include in the response. Used to track how many explanations were actually used from the explanation plan.")
     response: str = Field(...,
                           description="The response to the user's question about the shown instance and prediction only using information from the chat history and explanation plan styled with appropriate html elements such as <b> for bold text or bullet points.")
 
@@ -115,6 +114,8 @@ class PlanApprovalModel(BaseModel):
                            description="Whether the predefined plan is approved as-is (True) or needs modification (False).")
     next_response: Optional[ChosenExplanationModel] = Field(None,
                                                   description="If not approved, the chosen explanation to show instead of the predefined plan's next step. Required when approved=False.")
+    explanations_count: int = Field(...,
+                                    description="The number of explanations from the plan to include in the next response to reply to the user's message. Minimum is 1, can be 2 or 3 of next explanations together.")
 
 
 class PlanApprovalExecuteResultModel(ExecuteResult, PlanApprovalModel):

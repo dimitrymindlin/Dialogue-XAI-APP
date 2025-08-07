@@ -62,7 +62,8 @@ class Explanation(NewExplanationModel):
 
 
 class UserModelFineGrained:
-    def __init__(self, user_ml_knowledge, initial_understood_concepts: Optional[List[str]] = None):
+    def __init__(self, user_ml_knowledge,
+                 initial_understood_concepts: Optional[List[str]] = None):
         self.explanations: Dict[str, Explanation] = {}
         self.cognitive_state: Optional[str] = ""
         self.explicit_understanding_signals: List[str] = []
@@ -148,6 +149,8 @@ class UserModelFineGrained:
                                       exp_step: str,
                                       new_state: Union[ExplanationState, str]) -> None:
         """Update the state of a specific explanation step."""
+        logger.info(f"🔄 UPDATE_EXPLANATION_STEP_STATE: {exp_name}.{exp_step} -> {new_state}")
+        
         # Convert string to ExplanationState if necessary
         if isinstance(new_state, str):
             try:
@@ -158,6 +161,9 @@ class UserModelFineGrained:
 
         explanation = self._get_explanation(exp_name)
         if explanation:
+            logger.info(f"  - Found explanation '{exp_name}' with {len(explanation.explanation_steps)} steps")
+            step_names = [s.step_name for s in explanation.explanation_steps]
+            logger.info(f"  - Available step names: {step_names}")
             explanation.update_state(exp_step, new_state)
         else:
             logger.warning(f"Explanation '{exp_name}' not found in the model.")
@@ -176,8 +182,25 @@ class UserModelFineGrained:
         containing a list of explanation dictionaries, each including 'explanation_name',
         'description', and 'steps'.
         """
+        # Debug logging to understand what data we received
+        logger.info(f"🏗️ SET_MODEL_FROM_SUMMARY DEBUG:")
+        logger.info(f"  - Summary keys: {list(summary.keys())}")
+        logger.info(f"  - Has predefined_plan: {'predefined_plan' in summary}")
+        logger.info(f"  - predefined_plan value: {summary.get('predefined_plan', 'NOT_FOUND')}")
+        
+        if 'xai_explanations' in summary:
+            logger.info(f"  - Number of xai_explanations: {len(summary['xai_explanations'])}")
+            # Log first explanation to see its structure
+            if summary['xai_explanations']:
+                first_exp = summary['xai_explanations'][0]
+                logger.info(f"  - First explanation keys: {list(first_exp.keys())}")
+                logger.info(f"  - First explanation explanation_steps: {first_exp.get('explanation_steps', 'NOT_FOUND')}")
+                logger.info(f"  - First explanation children: {first_exp.get('children', 'NOT_FOUND')}")
+        
         # If a predefined plan exists, load only the planned explanations and their steps
         plan = summary.get("predefined_plan")
+        logger.info(f"  - Taking path: {'PREDEFINED_PLAN' if plan else 'ALL_EXPLANATIONS'}")
+        
         if plan:
             # Clear any existing explanations
             self.explanations.clear()
@@ -203,7 +226,10 @@ class UserModelFineGrained:
                 explanation_name = exp_data["explanation_name"]
                 description = exp_data["description"]
                 self.add_explanation(explanation_name, description)
-                for step in exp_data.get("explanation_steps", []):
+                # Handle both field names - "children" (from get_populated_json) or "explanation_steps" (direct YAML)
+                steps_data = exp_data.get("children", exp_data.get("explanation_steps", []))
+                logger.info(f"  - Loading {len(steps_data)} steps for {explanation_name}")
+                for step in steps_data:
                     step_name = step["step_name"]
                     step_description = step["description"]
                     self.add_explanation_step(explanation_name, step_name, step_description)

@@ -10,12 +10,11 @@ xai_explanations:
           {{model_confidence}}
 
   - explanation_name: "FeatureImportances"
-    description: "Understanding the importance and influence of features in the model's decision-making."
+    description: "Explains how each feature of the current instance influences the prediction, showing positive or negative contributions to understand the importance and influence of features in the model’s decision‐making."
     explanation_steps:
       - step_name: "Concept"
         description: >
-          Feature importance explanations show how individual features influence predictions—either toward earning {{possible_classes}}. The strength of influence varies: negative values indicate influence toward {{negative_class}}, and the smaller (more negative) the value, the stronger the influence (i.e., further from 0). This helps identify key drivers behind the model’s decisions.
-          After listing the features, ask if the user would like to see a plot visualizing the feature importance and influence on the model’s decision.
+          Explain that each feature can push the prediction toward one of the classes in different amounts. Negative values pull toward {{negative_class}} and positive values toward {{possible_classes}}, with larger magnitudes indicating stronger effects. After listing the top drivers, offer to show a plot of these influences.
       - step_name: "FeatureInfluencesPlot"
         description: >
           Reading plots requires some familiarity with data science or statistics. Consider avoiding them for lay users unless specifically requested or clearly appropriate.

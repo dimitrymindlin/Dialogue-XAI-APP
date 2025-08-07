@@ -81,13 +81,24 @@ class UserModelHelperMixin:
         Args:
             plan_result: The result from the plan component
         """
-        # Update explanation plan if provided
-        if hasattr(plan_result, 'explanation_plan') and plan_result.explanation_plan:
-            self.explanation_plan = plan_result.explanation_plan
-
         # Add new explanations to user model if provided
         if hasattr(plan_result, 'new_explanations') and plan_result.new_explanations:
             self.user_model.add_explanations_from_plan_result(plan_result.new_explanations)
+
+        # Update explanation plan - prioritize complete explanation_plan over building from new_explanations
+        if hasattr(plan_result, 'explanation_plan') and plan_result.explanation_plan:
+            # Use the complete, authoritative explanation plan
+            self.explanation_plan = plan_result.explanation_plan
+        elif hasattr(plan_result, 'new_explanations') and plan_result.new_explanations:
+            # Fallback: build multi-step plan from the newly created explanations only if no complete plan provided
+            new_plan = []
+            for new_exp in plan_result.new_explanations:
+                for step in new_exp.explanation_steps:
+                    new_plan.append(ChosenExplanationModel(
+                        explanation_name=new_exp.explanation_name,
+                        step_name=step.step_name
+                    ))
+            self.explanation_plan = new_plan
 
     def update_user_model_from_execute(self, execute_result: Union[ExecuteResult, Any],
                                        next_response: ChosenExplanationModel = None) -> None:
@@ -241,7 +252,8 @@ class UserModelHelperMixin:
         return PlanResultModel(
             reasoning="Plan updated based on approval status",
             new_explanations=result.new_explanations if hasattr(result, 'new_explanations') else [],
-            explanation_plan=self.explanation_plan if hasattr(self, 'explanation_plan') else []
+            explanation_plan=self.explanation_plan if hasattr(self, 'explanation_plan') else [],
+            explanations_count=getattr(result, 'explanations_count', 1)
         )
 
     def get_target_explanations_from_approval(self, result: Union[PlanApprovalModel, PlanApprovalExecuteResultModel]) -> List[ChosenExplanationModel]:
@@ -383,6 +395,62 @@ class UserModelHelperMixin:
         
         # Remove the shown explanations from the plan to prevent duplication
         self.update_explanation_plan_after_execute(target_explanations)
+
+    def get_target_explanations_from_plan_result(self, plan_result: Union[Any], explanations_count: int = None) -> List[ChosenExplanationModel]:
+        """
+        Universal method to extract target explanations from any plan result, respecting explanations_count.
+        
+        This method provides a consistent way to get the correct number of explanations from plan results,
+        eliminating hardcoded single-explanation assumptions across different execution methods.
+        
+        Args:
+            plan_result: Any plan result object with explanation_plan attribute
+            explanations_count: Number of explanations to extract (defaults to plan_result.explanations_count or 1)
+            
+        Returns:
+            List[ChosenExplanationModel]: The target explanations to be executed
+        """
+        # Get the explanation plan from the result
+        explanation_plan = getattr(plan_result, 'explanation_plan', [])
+        if not explanation_plan:
+            return []
+        
+        # Determine how many explanations to use
+        if explanations_count is None:
+            explanations_count = getattr(plan_result, 'explanations_count', 1)
+        
+        # Ensure at least 1 explanation and don't exceed available explanations
+        explanations_count = max(1, min(explanations_count, len(explanation_plan)))
+        
+        # Return the first N explanations from the plan
+        return explanation_plan[:explanations_count]
+
+    def process_explanations_after_execution(self, target_explanations: List[ChosenExplanationModel]) -> None:
+        """
+        Atomic method to handle all post-execution explanation processing.
+        
+        This method combines the common pattern of:
+        1. Marking explanations as SHOWN in user model
+        2. Updating last_shown_explanations tracking
+        3. Removing used explanations from the plan
+        
+        Args:
+            target_explanations: The explanations that were shown during execution
+        """
+        if not target_explanations:
+            return
+
+        # Mark all explanations as shown in the user model
+        for i, explanation in enumerate(target_explanations):
+            if explanation:
+                self.user_model.update_explanation_step_state(
+                    explanation.explanation_name,
+                    explanation.step_name, 
+                    ExplanationState.SHOWN.value
+                )
+        
+        # Atomically update tracking and remove from plan
+        self.update_plan_and_tracking_after_execute(target_explanations)
 
 
 
