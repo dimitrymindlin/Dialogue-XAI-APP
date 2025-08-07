@@ -341,7 +341,15 @@ class StreamingMixin:
 
         except Exception as e:
             logger.warning(f"Token streaming failed for {method_name}: {e}")
-            raise
+            logger.info(f"Falling back to structured prediction for {method_name}")
+            try:
+                fallback_result = await self.llm.astructured_predict(model_class, prompt)
+                if fallback_result is None:
+                    logger.error(f"Fallback structured predict returned None for {method_name}")
+                return fallback_result
+            except Exception as fallback_error:
+                logger.error(f"Fallback structured predict also failed for {method_name}: {fallback_error}")
+                return None
 
     def _build_schema_prompt(self, model_class, prompt):
         """Build completion prompt with better schema instructions."""
@@ -375,7 +383,8 @@ Ensure your response is properly structured JSON."""
 
                 if new_content:
                     # Real token-by-token streaming
-                    self.stream_callback(new_content, False)
+                    if self.stream_callback:
+                        self.stream_callback(new_content, False)
                     last_streamed_response += new_content
                     response_field_started = True
 
@@ -444,7 +453,7 @@ Ensure your response is properly structured JSON."""
             json_match = re.search(r'\{.*\}', accumulated_content, re.DOTALL)
             if json_match:
                 json_content = json_match.group()
-                logger.info(f"Attempting to parse JSON content for {method_name}: {json_content}")
+                logger.info(f"Attempting to parse JSON content for {method_name}...")
                 parsed_data = json.loads(json_content)
                 result = model_class(**parsed_data)
                 logger.info(f"Successfully parsed streaming response for {method_name}")
@@ -453,12 +462,26 @@ Ensure your response is properly structured JSON."""
                 logger.warning(
                     f"No JSON found in response for {method_name}. Accumulated content: {accumulated_content}")
                 # Fallback to structured prediction
-                return await self.llm.astructured_predict(model_class, prompt)
+                try:
+                    fallback_result = await self.llm.astructured_predict(model_class, prompt)
+                    if fallback_result is None:
+                        logger.error(f"Structured predict returned None for {method_name} - this should not happen")
+                    return fallback_result
+                except Exception as fallback_error:
+                    logger.error(f"Fallback structured predict failed for {method_name}: {fallback_error}")
+                    return None
 
         except Exception as e:
             logger.warning(
                 f"Failed to parse response for {method_name}: {e}. Accumulated content: {accumulated_content}")
-            return await self.llm.astructured_predict(model_class, prompt)
+            try:
+                fallback_result = await self.llm.astructured_predict(model_class, prompt)
+                if fallback_result is None:
+                    logger.error(f"Structured predict returned None for {method_name} - this should not happen")
+                return fallback_result
+            except Exception as fallback_error:
+                logger.error(f"Fallback structured predict failed for {method_name}: {fallback_error}")
+                return None
 
 
 class MonitorMixin(UserModelHelperMixin):
@@ -871,7 +894,7 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         )
 
         plan_approval_execute_prompt = PromptTemplate(prompt_str)
-        result = await self._stream_predict_with_callback(
+        result = await self._predict(
             PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute_prompt"
         )
         self.log_component_input_output("PlanApprovalExecuteResult", plan_approval_execute_prompt, str(result))
@@ -889,6 +912,11 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
 
         # Determine which explanations to use based on approval decision
         target_explanations = self.get_target_explanations_from_approval(result)
+        
+        # Defensive check to ensure target_explanations is not None
+        if target_explanations is None:
+            logger.warning("get_target_explanations_from_approval returned None - using empty list")
+            target_explanations = []
 
         # Update user model with plan result using helper method (before plan updates)
         plan_result = self.update_explanation_plan_after_approval(result)
@@ -935,6 +963,8 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
 
     async def _plan_and_execute_new(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
         """Create a new explanation plan and execute it (first question logic)."""
+        from llm_agents.models import PlanExecuteResultModel
+        
         user_message = await ctx.get("user_message")
         last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else ""
 
@@ -956,12 +986,29 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
 
         prompt = PromptTemplate(prompt_str)
 
-        # Use streaming prediction with callback support
-        scaff = await self._stream_predict_with_callback(PlanExecuteResultModel, prompt, "scaffolding")
+        # Use unified prediction method (respects streaming settings)
+        scaff = await self._predict(PlanExecuteResultModel, prompt, "scaffolding")
+        
+        # Check if scaffolding result is None and handle gracefully
+        if scaff is None:
+            logger.error("Plan Execute returned None - creating fallback result")
+            scaff = PlanExecuteResultModel(
+                reasoning="Error occurred during processing - using fallback",
+                new_explanations=[],
+                explanation_plan=[],
+                explanations_count=1,
+                response="I apologize, but I encountered a technical issue. Let me try to help you understand the model's prediction."
+            )
+        
         self.log_component_input_output("PlanExecuteResult", prompt, str(scaff))
 
         # Handle target explanations using universal helper (respects explanations_count)
         target_explanations = self.get_target_explanations_from_plan_result(scaff)
+        
+        # Defensive check to ensure target_explanations is not None
+        if target_explanations is None:
+            logger.warning("get_target_explanations_from_plan_result returned None - using empty list")
+            target_explanations = []
         self.update_conversation_history(user_message, scaff.response)
 
         # Update datapoint and log before adding visual plots
@@ -1005,7 +1052,7 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
         )
 
         plan_approval_execute_prompt = PromptTemplate(prompt_str)
-        result = await self._stream_predict_with_callback(
+        result = await self._predict(
             PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute_prompt"
         )
 
@@ -1017,17 +1064,23 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
                 approved=True,  # Default to approved to continue with existing plan
                 next_response=None,
                 explanations_count=1,
-                response="I apologize, but I encountered a technical issue"
+                response="I apologize, but I encountered a technical issue. Let me try to continue with the existing plan."
             )
 
         self.log_component_input_output("PlanApprovalExecuteResult", plan_approval_execute_prompt, str(result))
 
         # Determine which explanations to use based on approval decision
         target_explanations = self.get_target_explanations_from_approval(result)
+        
+        # Defensive check to ensure target_explanations is not None
+        if target_explanations is None:
+            logger.warning("get_target_explanations_from_approval returned None - using empty list")
+            target_explanations = []
 
         # Update user model with plan result using helper method (before plan updates)
-        result = self.update_explanation_plan_after_approval(result)
-        self.update_explanation_plan(result)
+        # Keep original result for conversation update, get plan result separately
+        plan_result = self.update_explanation_plan_after_approval(result)
+        self.update_explanation_plan(plan_result)
 
         # Process explanations after execution using universal helper
         self.process_explanations_after_execution(target_explanations)
