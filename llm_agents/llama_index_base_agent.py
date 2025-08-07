@@ -10,7 +10,6 @@ from llama_index.core.workflow.workflow import WorkflowMeta
 from llm_agents.agent_utils import configure_logger
 from llm_agents.base_agent_class import BaseAgent
 
-
 # Configure a logger for this module
 logger = configure_logger(__name__, "llama_index_agent.log")
 
@@ -29,7 +28,7 @@ class LlamaIndexBaseAgent(BaseAgent, metaclass=XAIBaseAgentMeta):
     This class extends the BaseAgent with LlamaIndex-specific functionality
     for workflow management and execution.
     """
-    
+
     def __init__(
             self,
             feature_names: str = "",
@@ -66,7 +65,6 @@ class LlamaIndexBaseAgent(BaseAgent, metaclass=XAIBaseAgentMeta):
         """
         # Begin run: initialize CSV buffer
         self._csv_items.clear()
-        self.log_prompt("UserQuestion", user_question)
 
         if not hasattr(self, 'run'):
             raise NotImplementedError("Agent must have a 'run' method for the workflow.")
@@ -79,13 +77,12 @@ class LlamaIndexBaseAgent(BaseAgent, metaclass=XAIBaseAgentMeta):
         response = getattr(result, "response", "Sorry, please try again")
 
         # Buffer analysis and response for CSV
-        self.log_prompt("Analysis", analysis)
-        self.log_prompt("Response", response)
+        self.log_component_input_output("Turn", user_question, response)
 
         # End run: finalize CSV log row
         try:
             self.finalize_log()
         except Exception as e:
             logger.error(f"Error writing CSV row: {e}", exc_info=True)
-        
+
         return analysis, response

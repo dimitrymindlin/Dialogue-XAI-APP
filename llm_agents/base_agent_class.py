@@ -5,9 +5,11 @@ This module provides a common base class that contains shared functionality for
 the LlamaIndex-based and OpenAI-based agent implementations.
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, Union
 import os
 import threading
+
+from pydantic import BaseModel
 
 from create_experiment_data.instance_datapoint import InstanceDatapoint
 from llm_agents.agent_utils import (
@@ -42,7 +44,7 @@ class BaseAgent(ABC):
         # Create per-execution CSV log
         self.log_file = generate_log_file_name(self.experiment_id)
         initialize_csv(self.log_file)
-        
+
         # Buffer for prompt/response pairs for a single run
         self._csv_items = []
         # Lock for thread-safe file writing
@@ -109,12 +111,18 @@ class BaseAgent(ABC):
         """
         return self.feature_context
 
-    def log_prompt(self, component: str, prompt_str: str) -> None:
+    def log_component_input_output(self, component_name: str, input: str, output: Union[str, BaseModel]) -> None:
         """
         Log a prompt to the buffer for CSV.
         """
+        # Turn output to string if pydanic model
+        # Turn output to string if pydantic model
+        if isinstance(output, BaseModel):
+            output = output.json()
+        elif not isinstance(output, str):
+            output = str(output)
         # Buffer the prompt for final CSV
-        self._csv_items.append({"component": component, "text": prompt_str})
+        self._csv_items.append({"component_name": component_name, "input": input, "output": output})
 
     def initialize_new_datapoint(
             self,
@@ -162,10 +170,12 @@ class BaseAgent(ABC):
         self.populator.populate_yaml()
         self.populator.validate_substitutions()
         populated = self.populator.get_populated_json(as_dict=True, include_predefined_plan=use_precomputed_plan)
-        
+
         # Pass understood concepts to the new user model
         self.user_model = UserModel(self.user_ml_knowledge, initial_understood_concepts=understood_concepts)
         self.user_model.set_model_from_summary(populated)
+
+        print("User model initialized with understood concepts:", understood_concepts)
 
         # Initialize explanation plan based on use_precomputed_plan flag
         if use_precomputed_plan:
