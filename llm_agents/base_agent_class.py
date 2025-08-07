@@ -114,7 +114,19 @@ class BaseAgent(ABC):
         """
         Log a prompt to the buffer for CSV.
         """
-        # Turn output to string if pydanic model
+        # Convert input to string if it's not already (handles PromptTemplate objects)
+        if not isinstance(input, str):
+            # Handle PromptTemplate objects properly
+            if hasattr(input, 'get_template'):
+                # Use get_template() method for PromptTemplate objects
+                input = input.get_template()
+            elif hasattr(input, 'template'):
+                # Fallback to direct template attribute
+                input = input.template
+            else:
+                # Generic fallback for other objects
+                input = str(input)
+        
         # Turn output to string if pydantic model
         if isinstance(output, BaseModel):
             output = output.json()
