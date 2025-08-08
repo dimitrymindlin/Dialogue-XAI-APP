@@ -66,23 +66,74 @@ class LlamaIndexBaseAgent(BaseAgent, metaclass=XAIBaseAgentMeta):
         # Begin run: initialize CSV buffer
         self._csv_items.clear()
 
-        if not hasattr(self, 'run'):
-            raise NotImplementedError("Agent must have a 'run' method for the workflow.")
-
-        # Execute the workflow
-        result = await self.run(input=user_question)
-
-        # Extract reasoning and response with fallbacks
-        analysis = getattr(result, "reasoning", "No reasoning available")
-        response = getattr(result, "response", "Sorry, please try again")
-
-        # Buffer analysis and response for CSV
+        # Log state before execution
+        self.log_state_snapshot("pre_execution")
+        
+        try:
+            analysis, response = await self._execute_workflow(user_question)
+        except Exception as e:
+            logger.error(f"Workflow execution failed: {e}", exc_info=True)
+            analysis = "No reasoning available"
+            response = f"Agent execution failed: {str(e)}"
+        
+        # Log state after execution and finalize
+        self.log_state_snapshot("post_execution")
         self.log_component_input_output("Turn", user_question, response)
-
-        # End run: finalize CSV log row
+        
         try:
             self.finalize_log()
         except Exception as e:
-            logger.error(f"Error writing CSV row: {e}", exc_info=True)
-
+            logger.error(f"Error finalizing CSV log: {e}", exc_info=True)
+        
         return analysis, response
+
+    async def answer_user_question_stream(self, user_question: str, stream_callback=None):
+        """
+        Stream-enabled version of answer_user_question with unified logging.
+        
+        Args:
+            user_question: The user's question text
+            stream_callback: Optional callback for streaming chunks
+            
+        Yields:
+            Dict with streaming data: {"type": "partial"|"final"|"error", "content": str, "is_complete": bool}
+        """
+        # Begin run: initialize CSV buffer
+        self._csv_items.clear()
+        
+        # Set up streaming callback if provided
+        if stream_callback:
+            self.set_stream_callback(stream_callback)
+        
+        # Log state before execution
+        self.log_state_snapshot("pre_execution")
+        
+        final_analysis = "No reasoning available"
+        final_response = "Sorry, please try again"
+        
+        try:
+            async for chunk in self._execute_workflow_streaming(user_question):
+                if chunk["type"] == "final":
+                    final_analysis = chunk.get("reasoning", "No reasoning available")
+                    final_response = chunk.get("content", "Sorry, please try again")
+                    yield chunk
+                    break
+                elif chunk["type"] == "error":
+                    final_response = f"Agent execution failed: {chunk['content']}"
+                    yield chunk
+                    break
+                else:
+                    yield chunk
+        except Exception as e:
+            logger.error(f"Streaming workflow execution failed: {e}", exc_info=True)
+            final_response = f"Agent execution failed: {str(e)}"
+            yield {"type": "error", "content": str(e), "is_complete": True}
+        
+        # Log state after execution and finalize
+        self.log_state_snapshot("post_execution")
+        self.log_component_input_output("Turn", user_question, final_response)
+        
+        try:
+            self.finalize_log()
+        except Exception as e:
+            logger.error(f"Error finalizing CSV log: {e}", exc_info=True)

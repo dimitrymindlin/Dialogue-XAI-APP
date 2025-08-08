@@ -133,27 +133,71 @@ class BaseAgentInitMixin:
         # Buffer for CSV row items (prompt/response pairs)
         self._csv_current_run_items = []
 
-    @timed
-    async def answer_user_question(self, user_question):
+    def log_state_snapshot(self, snapshot_type: str):
         """
-        DRY implementation of answer_user_question that all agents inherit.
+        Log current user model and explanation plan state for tracking changes.
+        
+        Args:
+            snapshot_type: Type of snapshot ('pre_execution' or 'post_execution')
+        """
+        import json
+        
+        # Capture user model state
+        user_model_state = ""
+        if hasattr(self, 'user_model') and self.user_model:
+            try:
+                user_model_state = self.user_model.get_state_summary(as_dict=False)
+            except Exception as e:
+                user_model_state = f"Error capturing user model: {e}"
+        
+        # Capture explanation plan state
+        explanation_plan_state = ""
+        if hasattr(self, 'explanation_plan') and self.explanation_plan:
+            try:
+                # Convert explanation plan to readable format
+                plan_items = []
+                for exp in self.explanation_plan:
+                    plan_items.append(f"{exp.explanation_name}:{exp.step_name}")
+                explanation_plan_state = " | ".join(plan_items)
+            except Exception as e:
+                explanation_plan_state = f"Error capturing explanation plan: {e}"
+        
+        # Create state snapshot
+        state_data = {
+            "user_model_state": user_model_state,
+            "explanation_plan_state": explanation_plan_state
+        }
+        
+        # Log the state snapshot
+        self.log_component_input_output(
+            f"{snapshot_type}_state", 
+            json.dumps(state_data), 
+            f"State captured at {snapshot_type}"
+        )
+
+    @timed
+    async def _execute_workflow(self, user_question):
+        """
+        Core workflow execution without logging concerns.
         Runs the workflow and extracts reasoning and response consistently.
         """
-        result = await self.run(input=user_question)
-
-        # Extract reasoning and response with fallbacks
-        analysis = getattr(result, "reasoning", None) or "No reasoning available"
-        response = getattr(result, "response", None) or "Sorry, please try again"
-
-        # End run: write single CSV row
+        analysis = "No reasoning available"
+        response = "Sorry, please try again"
+        
         try:
-            self.finalize_log()
+            result = await self.run(input=user_question)
+            
+            # Extract reasoning and response with fallbacks
+            analysis = getattr(result, "reasoning", None) or "No reasoning available"
+            response = getattr(result, "response", None) or "Sorry, please try again"
+            
         except Exception as e:
-            logger.error(f"Error finalizing CSV log: {e}", exc_info=True)
+            logger.error(f"Error during workflow execution: {e}", exc_info=True)
+            response = f"Agent execution failed: {str(e)}"
 
         return analysis, response
 
-    async def _predict_with_timing_and_logging(self, model_class, prompt, prompt_name, llm=None, nested=True):
+    async def _predict_with_timing_and_logging(self, model_class, prompt, method_name, llm=None, nested=True):
         """
         Logs prompt, result, and timing to MLflow. Logs errors and stack traces. Truncates long results. Logs timing as MLflow metric.
         """
@@ -167,14 +211,14 @@ class BaseAgentInitMixin:
                 llm, model_class, prompt, use_structured_output=self.structured_output
             )
         except Exception as e:
-            logger.error(f"Error during {prompt_name}: {e}", exc_info=True)
+            logger.error(f"Error during {method_name}: {e}", exc_info=True)
             raise
         finally:
             end_time = datetime.datetime.now()
             elapsed = (end_time - start_time).total_seconds()
-            logger.info(f"Time taken for {prompt_name.replace('_', ' ').title()}: {elapsed:.2f}s")
+            logger.info(f"Time taken for {method_name.replace('_', ' ').title()}: {elapsed:.2f}s")
             logger.info(
-                f"{prompt_name.replace('_', ' ').title()} result: {result if result is not None else '[FAILED]'}\n")
+                f"{method_name.replace('_', ' ').title()} result: {result if result is not None else '[FAILED]'}\n")
         return result
 
 
@@ -210,9 +254,9 @@ class StreamingMixin:
         self.stream_callback = callback
         self.enable_streaming = callback is not None
 
-    async def _run_workflow_with_streaming(self, user_question: str) -> AsyncGenerator[Dict[str, Any], None]:
+    async def _execute_workflow_streaming(self, user_question: str) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Core DRY streaming workflow implementation that all agents can use.
+        Core streaming workflow implementation without logging concerns.
         This replaces all the duplicated streaming logic across different agent classes.
 
         Args:
@@ -272,11 +316,6 @@ class StreamingMixin:
                         "reasoning": analysis,
                         "is_complete": True
                     }
-                    # End run: write single CSV row
-                    try:
-                        self.finalize_log()
-                    except Exception as e:
-                        logger.error(f"Error finalizing CSV log in streaming: {e}", exc_info=True)
                     break
                 elif chunk["type"] == "error":
                     yield {"type": "error", "content": chunk["error"], "is_complete": True}
@@ -304,24 +343,6 @@ class StreamingMixin:
                     pass  # Ignore exceptions from completed tasks
             self.set_stream_callback(None)
 
-    async def answer_user_question_stream(self, user_question: str, stream_callback: StreamCallback = None) -> \
-            AsyncGenerator[Dict[str, Any], None]:
-        """
-        DRY streaming implementation that all agents inherit.
-        This method provides consistent streaming behavior across all agent types.
-
-        Args:
-            user_question: The user's question
-            stream_callback: Optional callback for streaming chunks
-
-        Yields:
-            Dict with streaming data: {"type": "partial"|"final", "content": str, "is_complete": bool}
-        """
-        if stream_callback:
-            self.set_stream_callback(stream_callback)
-
-        async for chunk in self._run_workflow_with_streaming(user_question):
-            yield chunk
 
     async def _stream_predict_with_callback(self, model_class, prompt, method_name):
         """Real token-level streaming with improved JSON parsing."""
