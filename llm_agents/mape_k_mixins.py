@@ -142,13 +142,13 @@ class BaseAgentInitMixin:
         """
         import json
         
-        # Capture user model state
-        user_model_state = ""
+        # Capture user model state as structured JSON
+        user_model_state = {}
         if hasattr(self, 'user_model') and self.user_model:
             try:
-                user_model_state = self.user_model.get_state_summary(as_dict=False)
+                user_model_state = self.user_model.get_state_summary(as_dict=True)
             except Exception as e:
-                user_model_state = f"Error capturing user model: {e}"
+                user_model_state = {"error": f"Error capturing user model: {e}"}
         
         # Capture explanation plan state
         explanation_plan_state = ""
@@ -526,7 +526,7 @@ class MonitorMixin(UserModelHelperMixin):
 
         monitor_prompt = PromptTemplate(prompt_str)
         monitor_result = await self._predict(
-            MonitorResultModel, monitor_prompt, "monitor_prompt"
+            MonitorResultModel, monitor_prompt, "monitor"
         )
 
         # Update user model from monitor result
@@ -561,7 +561,7 @@ class AnalyzeMixin(UserModelHelperMixin):
 
         analyze_prompt = PromptTemplate(prompt_str)
         analyze_result = await self._predict(
-            AnalyzeResult, analyze_prompt, "analyze_prompt"
+            AnalyzeResult, analyze_prompt, "analyze"
         )
 
         # Update user model from analyze result
@@ -597,7 +597,7 @@ class MonitorAnalyzeMixin(UserModelHelperMixin):
         )
         prompt = PromptTemplate(prompt_str)
         result = await self._predict(
-            MonitorAnalyzeResultModel, prompt, "monitor_analyze_prompt"
+            MonitorAnalyzeResultModel, prompt, "monitor_analyze"
         )
 
         # Update user model from combined result using helper methods
@@ -631,7 +631,7 @@ class PlanMixin(UserModelHelperMixin):
 
         plan_prompt = PromptTemplate(prompt_str)
         plan_result = await self._predict(
-            PlanResultModel, plan_prompt, "plan_prompt"
+            PlanResultModel, plan_prompt, "plan"
         )
 
         # Update user model with plan result using helper method
@@ -677,7 +677,7 @@ class ExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         )
 
         execute_prompt = PromptTemplate(prompt_str)
-        execute_result = await self._predict(ExecuteResult, execute_prompt, "execute_prompt")
+        execute_result = await self._predict(ExecuteResult, execute_prompt, "execute")
 
         # Update user model with execute results
         self.update_user_model_from_execute(execute_result, target_explanations)
@@ -718,7 +718,7 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
         prompt = PromptTemplate(prompt_str)
 
         # Use unified prediction (streaming or not) with logging
-        scaff = await self._predict(PlanExecuteResultModel, prompt, "scaffolding")
+        scaff = await self._predict(PlanExecuteResultModel, prompt, "plan_execute")
 
         # Handle target explanations using universal helper (respects explanations_count)
         target_explanations = self.get_target_explanations_from_plan_result(scaff)
@@ -871,7 +871,7 @@ class PlanApprovalMixin(UserModelHelperMixin, ConversationHelperMixin):
 
         plan_approval_prompt = PromptTemplate(prompt_str)
         approval_result = await self._predict(
-            PlanApprovalModel, plan_approval_prompt, "plan_approval_prompt"
+            PlanApprovalModel, plan_approval_prompt, "plan_approval"
         )
 
         # Update the explanation plan based on the approval result
@@ -913,7 +913,7 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
 
         plan_approval_execute_prompt = PromptTemplate(prompt_str)
         result = await self._predict(
-            PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute_prompt"
+            PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute"
         )
         self.log_component_input_output("PlanApprovalExecuteResult", plan_approval_execute_prompt, str(result))
 
@@ -1005,7 +1005,7 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
         prompt = PromptTemplate(prompt_str)
 
         # Use unified prediction method (respects streaming settings)
-        scaff = await self._predict(PlanExecuteResultModel, prompt, "scaffolding")
+        scaff = await self._predict(PlanExecuteResultModel, prompt, "plan_execute")
         
         # Check if scaffolding result is None and handle gracefully
         if scaff is None:
@@ -1071,7 +1071,7 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
 
         plan_approval_execute_prompt = PromptTemplate(prompt_str)
         result = await self._predict(
-            PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute_prompt"
+            PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute"
         )
 
         # Check if result is None and handle gracefully
