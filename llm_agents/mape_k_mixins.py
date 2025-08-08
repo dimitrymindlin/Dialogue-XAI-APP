@@ -504,8 +504,8 @@ class MonitorMixin(UserModelHelperMixin):
         )
 
         monitor_prompt = PromptTemplate(prompt_str)
-        monitor_result = await self._predict_with_timing_and_logging(
-            MonitorResultModel, monitor_prompt, "monitor_prompt", llm=self.mini_llm
+        monitor_result = await self._predict(
+            MonitorResultModel, monitor_prompt, "monitor_prompt"
         )
 
         # Update user model from monitor result
@@ -539,8 +539,8 @@ class AnalyzeMixin(UserModelHelperMixin):
         )
 
         analyze_prompt = PromptTemplate(prompt_str)
-        analyze_result = await self._predict_with_timing_and_logging(
-            AnalyzeResult, analyze_prompt, "analyze_prompt", llm=self.mini_llm
+        analyze_result = await self._predict(
+            AnalyzeResult, analyze_prompt, "analyze_prompt"
         )
 
         # Update user model from analyze result
@@ -575,8 +575,8 @@ class MonitorAnalyzeMixin(UserModelHelperMixin):
             user_message=user_message,
         )
         prompt = PromptTemplate(prompt_str)
-        result = await self._predict_with_timing_and_logging(
-            MonitorAnalyzeResultModel, prompt, "monitor_analyze_prompt", nested=True
+        result = await self._predict(
+            MonitorAnalyzeResultModel, prompt, "monitor_analyze_prompt"
         )
 
         # Update user model from combined result using helper methods
@@ -609,7 +609,7 @@ class PlanMixin(UserModelHelperMixin):
         )
 
         plan_prompt = PromptTemplate(prompt_str)
-        plan_result = await self._predict_with_timing_and_logging(
+        plan_result = await self._predict(
             PlanResultModel, plan_prompt, "plan_prompt"
         )
 
@@ -849,12 +849,9 @@ class PlanApprovalMixin(UserModelHelperMixin, ConversationHelperMixin):
         )
 
         plan_approval_prompt = PromptTemplate(prompt_str)
-        approval_result = await self._predict_with_timing_and_logging(
+        approval_result = await self._predict(
             PlanApprovalModel, plan_approval_prompt, "plan_approval_prompt"
         )
-
-        # Update log with plan results using helper method
-        self.log_component_input_output("PlanApprovalResult", plan_approval_prompt, str(approval_result))
 
         # Update the explanation plan based on the approval result
         # This creates the updated plan that will be passed to execute
