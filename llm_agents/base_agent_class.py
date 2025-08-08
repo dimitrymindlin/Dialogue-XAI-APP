@@ -110,6 +110,30 @@ class BaseAgent(ABC):
         """
         return self.feature_context
 
+    def clean_html_content(self, content: str) -> str:
+        """
+        Clean HTML content by replacing <img> tags with [PLOT] placeholder 
+        and removing all other HTML tags.
+        
+        Args:
+            content: String that may contain HTML content
+            
+        Returns:
+            Cleaned string with HTML filtered out
+        """
+        import re
+        
+        if not content or not isinstance(content, str):
+            return content
+        
+        # Replace <img> tags with [PLOT] placeholder
+        content = re.sub(r'<img[^>]*>', '[PLOT]', content, flags=re.IGNORECASE)
+        
+        # Remove all other HTML tags completely  
+        content = re.sub(r'<[^>]+>', '', content)
+        
+        return content
+
     def log_component_input_output(self, component_name: str, input: str, output: Union[str, BaseModel]) -> None:
         """
         Log a prompt to the buffer for CSV.
@@ -132,6 +156,11 @@ class BaseAgent(ABC):
             output = output.json()
         elif not isinstance(output, str):
             output = str(output)
+        
+        # Clean HTML content from both input and output
+        input = self.clean_html_content(input)
+        output = self.clean_html_content(output)
+        
         # Buffer the prompt for final CSV
         self._csv_items.append({"component_name": component_name, "input": input, "output": output})
 
