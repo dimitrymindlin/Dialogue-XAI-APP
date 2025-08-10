@@ -449,7 +449,8 @@ class ExecuteTaskPrompt(SimplePromptMixin):
       - Anchor: "conditions that guarantee this prediction"
       - Confidence: "how certain the model is"
     </faithful_translation>
-    If the user explicitely asks for a causal interpretation, you can provide it, but making it clear that this is not what wen can interpret from the model, but rather a causal interpretation that might be wrong.
+    If the user explicitly asks for a causal interpretation, you can provide it, but making it clear that this is not what can be interpreted from the model, but rather a causal interpretation that might be wrong.
+    Do not endorse causal/stigmatizing claims if not supported by explanation methods; clarify that attributions reflect correlations in data, not nexessarly ability or causation in real world. If encountered, add a one-sentence caution, then proceed with model-scope facts.
   </fidelity_principles>
   <human_explanations_principles>
       <contrastive>
@@ -472,17 +473,22 @@ class ExecuteTaskPrompt(SimplePromptMixin):
   </guidelines>
   <response_crafting>
     <content_alignment>
-      Use the explanation plan and chat history to guide responses. When eliciting knowledge, prompt briefly instead of fully explaining. If the user’s question aligns with an explanation method, do not introduce that concept first—proceed directly with the explanation. When the user agrees to see a suggestion, show it immediately without narration.
+      - Use the explanation plan and chat history to guide responses. 
+      - When eliciting knowledge, prompt briefly instead of fully explaining. 
+      - If the user’s question aligns with an explanation method, do not introduce that concept first—proceed directly with the explanation. 
+      - When the user agrees to see a suggestion, show it immediately without narration. 
+      - Always state scope (individual/global) and target class/polarity in the first sentence and if ambiguous, ask one short clarifying question before answering.
+      - When listing top features, show top-3 only, then say ‘others smaller’ to stay within 3–4 sentences.
     </content_alignment>
     <tone_and_language>
-        Match the user’s cognitive state, ML expertise, and conversational style, mirror their formality and phrasing and metaphors or stablished concepts.
+        Match the user’s cognitive state, ML expertise, and conversational style, mirror their formality and phrasing and metaphors or established concepts.
         Use plain language for lay users; avoid technical method names and terms like "anchoring" unless the user is clearly ML-proficient.
     </tone_and_language>
     <clarity_and_relevance>
       Be concise and avoid jargon. Focus on explanation results rather than naming techniques or repeating what the user has already seen. Before generating each sentence, verify it hasn’t been used earlier—do not repeat unless explicitly requested. When responding to AGREEMENT, lead with the promised artifact/result (e.g., numbers/plot), then (optionally) one short orienting sentence.
     </clarity_and_relevance>
     <focus>
-      If the user goes off-topic, respond that you can only discuss the model’s prediction and the current instance.
+      If the user goes off-topic, respond that you can only discuss the model’s prediction and the current instance. Counterfactuals: present the closest single-change flip first; if none, the smallest multi-change set;
     </focus>
     <formatting>
       Use HTML tags:
@@ -493,10 +499,10 @@ class ExecuteTaskPrompt(SimplePromptMixin):
       </ul>
     </formatting>
     <visuals>
-      Insert placeholders like ##FeatureInfluencesPlot##. Present the visual first, then give a one-sentence reading. Ask for understanding only if AGREEMENT was not given or clarification is needed. Do not repeat visuals already shown.
+      Insert placeholders like ##FeatureInfluencesPlot## last in your response. First, give one insight sentence. Do not repeat visuals already shown.
     </visuals>
     <engagement>
-      - On AGREEMENT: deliver the explanation/artifact right away, without reintroducing or motivating the explanation.  
+      - On AGREEMENT: deliver the explanation/artifact right away, without reintroducing or motivating the explanation, (e.g., features supporting prediction A). Do not switch polarity or scope. Ask for understanding only if AGREEMENT was not given or clarification is needed.
       - Focus on WHAT the model learned, not WHY society works that way
       - Be honest about the limits of what XAI methods reveal
       - If a concrete choice is required and no preference is stated, ask exactly one short question (e.g., “Compare to global results?”).  
@@ -694,17 +700,28 @@ class ApprovalSpecificTaskPrompt(SimplePromptMixin):
   <description>Evaluate whether the existing plan should be approved as-is or modified based on the user's latest message and current understanding state.</description>
 
   <decision_process>
-    <step number="1">
+      <step number="1">
+      <title>Lock Scope, Polarity, and Artifact</title>
+      <description>
+        - Determine scope: "for this individual" vs "global". If ambiguous, plan a single short clarification question.
+        - Determine target/polarity (e.g., "supporting class A" vs "supporting class B") consistent with the user's last request/AGREEMENT.
+        - Decide whether a visual is warranted (requested or required by plan); avoid repeating visuals already shown.
+      </description>
+    </step>
+    
+    <step number="2">
       <title>Evaluate Plan Relevance & Social Context</title>
       <description>
+        - If the user asks about a single attribute/value, prefer a local single-feature explanation with a signed magnitude and brief foil comparison (micro-contrast), potentially adding if it is included in counterfactuals and it's ceteris paribus explanation.
         - Consider the user's message, understanding displays, and cognitive engagement
+        - For ``Why P rather than Q?'' ensure the next step produces a contrastive summary (drivers toward P that outweigh drivers toward Q) supported by counterfactuals to show how Q could be archived.
         - Apply the social principle: Is this plan step appropriate for where the user is NOW?
         - Check if the next step addresses the user's implied contrastive question
         - Verify plan maintains logical flow per the correlation→causal scheme
       </description>
     </step>
 
-    <step number="2">
+    <step number="3">
       <title>Approve and Choose Quantity</title>
       <options>
         <approve>
@@ -716,13 +733,13 @@ class ApprovalSpecificTaskPrompt(SimplePromptMixin):
       </options>
       <description>
         Pick an integer explanations_count (1–3) considering:
-        - User's cognitive load and engagement level
-        - Complexity of the explanations
-        - Whether bundling related explanations would be more coherent
+        - Default explanations_count = 1. Use 2 only when bundling improves coherence (e.g., top-3 factors list + one contrastive line).
+        - Do not plan confidence unless asked or not yet provided in this thread.
+        - Consider User's cognitive load and engagement level, Complexity of the explanations and Whether bundling related explanations would be more coherent
       </description>
     </step>
 
-    <step number="3">
+    <step number="4">
       <title>Provide Alternative (if modifying)</title>
       <description>
         When not approving, select a more suitable next step that:
