@@ -396,7 +396,7 @@ class PlanSpecificTaskPrompt(SimplePromptMixin):
     <step number="2">
       <title>Construct and Maintain an Explanation Plan</title>
       <instructions>
-        - Assume the user may ask only a few questions
+        - Assume the user may ask only a few questions and adhere to human explanation design principles stated above when picking explanations
         - Prioritize diverse, informative explanations that clarify the model's decision
         - Create plan covering at least three main explanations if none exists
         - The first item MUST be executed in the very next response once AGREEMENT is detected
@@ -477,7 +477,7 @@ class ExecuteTaskPrompt(SimplePromptMixin):
       - When eliciting knowledge, prompt briefly instead of fully explaining. 
       - If the user’s question aligns with an explanation method, do not introduce that concept first—proceed directly with the explanation. 
       - When the user agrees to see a suggestion, show it immediately without narration. 
-      - Always state scope (individual/global) and target class/polarity in the first sentence and if ambiguous, ask one short clarifying question before answering.
+      - Always state scope (individual/global) and target class/polarity in the first sentence naturally without like "For this individual,..." or "In general, ..." and if ambiguous, ask one short clarifying question before answering.
       - When listing top features, show top-3 only, then say ‘others smaller’ to stay within 3–4 sentences.
     </content_alignment>
     <tone_and_language>
@@ -698,14 +698,20 @@ class ApprovalSpecificTaskPrompt(SimplePromptMixin):
 <task>
   <objective>Plan Approval</objective>
   <description>Evaluate whether the existing plan should be approved as-is or modified based on the user's latest message and current understanding state.</description>
-
+    
+  <invariants>
+    <rule>Never plan or repeat steps already delivered in this thread (derive from history).</rule>
+    <rule>If the previous reply said a version of “Next, we can …”, the very next action must deliver that artifact (no concept-only explanation).</rule>
+    <rule>Treat acknowledgements (“ok/okay/yes/right”) as approval to execute the last suggested artifact</rule>
+    <rule>Artifacts = plots, counterfactual lists, top-k attributes, numeric outputs. Concepts = ≤1 sentence inline context only.</rule>
+  </invariants>
+  
   <decision_process>
       <step number="1">
       <title>Lock Scope, Polarity, and Artifact</title>
       <description>
-        - Determine scope: "for this individual" vs "global". If ambiguous, plan a single short clarification question.
-        - Determine target/polarity (e.g., "supporting class A" vs "supporting class B") consistent with the user's last request/AGREEMENT.
-        - Decide whether a visual is warranted (requested or required by plan); avoid repeating visuals already shown.
+        - Determine scope: for this individual vs in general without explicitly using these words. Determine target/polarity (e.g., "supporting class A" vs "supporting class B") consistent with the user's last request/AGREEMENT.
+        - Choose the next explanation; prefer an artifact for “what-if/compare/show” intents. Do not repeat visuals already shown.
       </description>
     </step>
     
@@ -714,26 +720,27 @@ class ApprovalSpecificTaskPrompt(SimplePromptMixin):
       <description>
         - If the user asks about a single attribute/value, prefer a local single-feature explanation with a signed magnitude and brief foil comparison (micro-contrast), potentially adding if it is included in counterfactuals and it's ceteris paribus explanation.
         - Consider the user's message, understanding displays, and cognitive engagement
-        - For ``Why P rather than Q?'' ensure the next step produces a contrastive summary (drivers toward P that outweigh drivers toward Q) supported by counterfactuals to show how Q could be archived.
-        - Apply the social principle: Is this plan step appropriate for where the user is NOW?
+        - For ``Why P rather than Q?'' ensure the next step produces a contrastive summary (attributes toward P that outweigh attributes toward Q) supported by counterfactuals to show how Q could be archived.
+        - Check if this plan step is appropriate for where the user is NOW?
         - Check if the next step addresses the user's implied contrastive question
         - Verify plan maintains logical flow per the correlation→causal scheme
       </description>
     </step>
 
     <step number="3">
-      <title>Approve and Choose Quantity</title>
+      <title>Approve or Modify and Choose Quantity</title>
       <options>
         <approve>
           APPROVE (approved=True): If the predefined plan's next step still addresses current needs and maintains proper progression
         </approve>
         <modify>
-          MODIFY (approved=False): If user's needs have shifted or the plan no longer fits their demonstrated knowledge level
+          MODIFY (approved=False): If user's needs have shifted or the plan no longer fits their demonstrated knowledge level.
         </modify>
       </options>
       <description>
         Pick an integer explanations_count (1–3) considering:
         - Default explanations_count = 1. Use 2 only when bundling improves coherence (e.g., top-3 factors list + one contrastive line).
+        - Treat acknowledgements (“ok/okay/yes/right”) as commit to execute last suggested artifact (Next we can explore...) now, skipping to re-explain the concept. 
         - Do not plan confidence unless asked or not yet provided in this thread.
         - Consider User's cognitive load and engagement level, Complexity of the explanations and Whether bundling related explanations would be more coherent
       </description>
