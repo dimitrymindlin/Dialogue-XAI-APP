@@ -31,7 +31,7 @@ run: remove
 # Build and push multi-arch image
 build-push:
 	mv .dockerignore .dockerignore.bak 2>/dev/null || true
-	mv .dockerignore.push .dockerignore
+	cp .dockerignore.push .dockerignore
 	docker buildx build \
 		--no-cache \
 		--platform linux/arm64,linux/amd64 \
