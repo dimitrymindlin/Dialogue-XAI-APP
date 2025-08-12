@@ -34,7 +34,7 @@
       [
         "Age",
         "years",
-        "The individual's age, in years."
+        "Age in years (typical 17–90)."
       ]
     ],
     [
@@ -42,7 +42,7 @@
       [
         "Marital Status",
         "",
-        "The individual's marital status, indicating whether they are Married or Single. This simplification may encompass a broader range of legal statuses."
+        "Married or Single."
       ]
     ],
     [
@@ -50,15 +50,15 @@
       [
         "Occupation",
         "",
-        "The category of the individual's occupation, such as Admin (Administrative and clerical roles: office clerks and secretaries), Military (Personnel serving in the army), Blue‑Collar (Manual labor occupations: craft workers, machine operators, farmers, handlers, cleaners), White‑Collar (Executive and managerial positions involving strategic planning), Professional (Specialized professions requiring advanced education: doctors, lawyers, engineers, and educators), Sales (Roles related to selling products or services: sales representatives, retail personnel), Service (Occupations providing services to individuals or communities: protective services e.g., law enforcement officers, firefighters, technical support)."
+        "Job category: Admin (administrative), Military, Blue‑Collar (manual), White‑Collar (managerial), Professional, Sales, Service."
       ]
     ],
     [
-      "Hours.per.week",
+      "WeeklyWorkingHours",
       [
-        "Hours Per Week",
+        "Weekly Working Hours",
         "hours",
-        "The total number of hours the individual works in a typical week."
+        "Hours worked per week (typical 16–65)."
       ]
     ],
     [
@@ -66,7 +66,7 @@
       [
         "Work Life Balance",
         "",
-        "A self‑reported assessment of the individual's work‑life balance, ranging from poor to excellent. This subjective measure reflects the individual's satisfaction with their ability to balance work and personal life."
+        "Self‑rated work‑life balance: Poor, Fair, Good."
       ]
     ],
     [
@@ -74,7 +74,7 @@
       [
         "Education Level",
         "",
-        "Highest level of education attained by the individual, categorized as: Dropout, High School grad, Associates, Bachelors grad, Masters grad, Professional Degree or Doctorate/Prof Level."
+        "Highest level: Primary Education, Middle School, High School without Graduation, High School Graduate, College without Degree, Associate's Degrees, Bachelor's Degree, Post‑graduate Education."
       ]
     ],
     [
@@ -82,7 +82,7 @@
       [
         "Investment Outcome",
         "",
-        "The result of the individual's investment activities, categorized as: No investment, Loss, or Gain. This reflects whether the individual has investments and if so, whether they have made a profit or a loss."
+        "Investment result: Major Loss (more than 1k$), Minor Loss (up to 1k$), No Investment, Minor Gain (up to 5k$), Major Gain (above 5k$)."
       ]
     ]
   ],
