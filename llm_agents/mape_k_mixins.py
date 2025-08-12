@@ -730,8 +730,21 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
         # Update explanation plan first (before processing explanations to avoid duplication)
         self.update_explanation_plan(scaff)
 
-        # Process explanations after execution using universal helper (marks as SHOWN and removes from plan)
-        self.process_explanations_after_execution(target_explanations)
+        # For first question (plan creation), mark explanations as shown but preserve the plan intact
+        # This is different from subsequent questions where we want to modify the plan
+        if target_explanations:
+            from llm_agents.explanation_state import ExplanationState
+            # Mark all explanations as shown in the user model
+            for explanation in target_explanations:
+                if explanation:
+                    self.user_model.update_explanation_step_state(
+                        explanation.explanation_name,
+                        explanation.step_name,
+                        ExplanationState.SHOWN.value
+                    )
+
+            # Update tracking but don't remove from plan (preserve for second question)
+            self.update_last_shown_explanations(target_explanations)
 
         await ctx.set("scaffolding_result", scaff)
         return StopEvent(result=scaff)
@@ -973,7 +986,8 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
     async def _plan_and_execute_new(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
         """Create a new explanation plan and execute it (first question logic)."""
         from llm_agents.models import PlanExecuteResultModel
-        
+        from llm_agents.explanation_state import ExplanationState
+
         user_message = await ctx.get("user_message")
         last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else ""
 
@@ -1022,11 +1036,23 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
         # Process any visual explanations
         scaff.response = replace_plot_placeholders(scaff.response, self.visual_explanations_dict)
 
-        # Update explanation plan first (before processing explanations to avoid duplication)
+        # Update explanation plan first (save the initial plan)
         self.update_explanation_plan(scaff)
 
-        # Process explanations after execution using universal helper (marks as SHOWN and removes from plan)
-        self.process_explanations_after_execution(target_explanations)
+        # For first question (plan creation), mark explanations as shown but preserve the plan intact
+        # This is different from subsequent questions where we want to modify the plan
+        if target_explanations:
+            # Mark all explanations as shown in the user model
+            for explanation in target_explanations:
+                if explanation:
+                    self.user_model.update_explanation_step_state(
+                        explanation.explanation_name,
+                        explanation.step_name,
+                        ExplanationState.SHOWN.value
+                    )
+
+            # Update tracking but don't remove from plan (preserve for second question)
+            self.update_last_shown_explanations(target_explanations)
 
         await ctx.set("scaffolding_result", scaff)
         return StopEvent(result=scaff)
