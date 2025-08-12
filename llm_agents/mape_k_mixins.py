@@ -1142,7 +1142,7 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
 
         # Initialize with specific temperature
         self._init_agent_components(
-            llm=llm or OpenAI(model=OPENAI_MODEL_NAME, temperature=0.3),
+            llm=llm or OpenAI(model=OPENAI_MODEL_NAME, temperature=0.2, reasoning_effort="minimal"),
             structured_output=structured_output,
             timeout=timeout,
             **kwargs
