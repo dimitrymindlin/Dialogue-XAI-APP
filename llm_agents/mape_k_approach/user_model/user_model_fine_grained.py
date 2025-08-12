@@ -462,7 +462,11 @@ class UserModelFineGrained:
 
         # Convert to string with proper formatting
         ET.indent(root, space="  ", level=0)
-        return ET.tostring(root, encoding="unicode")
+        xml_string = ET.tostring(root, encoding="unicode")
+        
+        # Decode HTML entities to provide clean XML to the LLM
+        import html
+        return html.unescape(xml_string)
 
     def get_string_explanations_from_plan(self, explanation_plan: List[ChosenExplanationModel]) -> str:
         """

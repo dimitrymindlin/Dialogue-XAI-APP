@@ -230,16 +230,21 @@ class StreamingMixin:
     async def _predict(self, model_class, prompt, method_name):
         """
         Unified predict: streams if enabled, otherwise non-streaming, then logs result.
+        
+        Args:
+            model_class: The Pydantic model class for structured output
+            prompt: The PromptTemplate object to send to LLM
+            method_name: Name for logging purposes
         """
         # Choose streaming or non-streaming
         if self.enable_streaming and self.stream_callback:
             result = await self._stream_predict_with_callback(model_class, prompt, method_name)
         else:
             result = await self._predict_with_timing_and_logging(model_class, prompt, method_name)
-        # Log input and output
-        prompt_text = getattr(prompt, "text", None) or getattr(prompt, "content", None) or str(prompt)
-        result_text = getattr(result, "response", None) if hasattr(result, "response") else str(result)
-        self.log_component_input_output(method_name, prompt_text, result_text)
+        # Log input and output - use formatted string if provided, otherwise extract from prompt object
+        prompt_text = prompt.get_template()
+        # result_text = getattr(result, "response", None) if hasattr(result, "response") else str(result)
+        self.log_component_input_output(method_name, prompt_text, result)
         return result
 
     """Mixin to add streaming capability to agents."""
@@ -525,9 +530,7 @@ class MonitorMixin(UserModelHelperMixin):
         )
 
         monitor_prompt = PromptTemplate(prompt_str)
-        monitor_result = await self._predict(
-            MonitorResultModel, monitor_prompt, "monitor"
-        )
+        monitor_result = await self._predict(MonitorResultModel, monitor_prompt, "MonitorResult")
 
         # Update user model from monitor result
         self.update_user_model_from_monitor(monitor_result)
@@ -560,9 +563,7 @@ class AnalyzeMixin(UserModelHelperMixin):
         )
 
         analyze_prompt = PromptTemplate(prompt_str)
-        analyze_result = await self._predict(
-            AnalyzeResult, analyze_prompt, "analyze"
-        )
+        analyze_result = await self._predict(AnalyzeResult, analyze_prompt, "AnalyzeResult")
 
         # Update user model from analyze result
         self.update_user_model_from_analyze(analyze_result)
@@ -596,9 +597,7 @@ class MonitorAnalyzeMixin(UserModelHelperMixin):
             user_message=user_message,
         )
         prompt = PromptTemplate(prompt_str)
-        result = await self._predict(
-            MonitorAnalyzeResultModel, prompt, "monitor_analyze"
-        )
+        result = await self._predict(MonitorAnalyzeResultModel, prompt, "MonitorAnalyzeResult")
 
         # Update user model from combined result using helper methods
         self.update_user_model_from_monitor(result)
@@ -630,9 +629,7 @@ class PlanMixin(UserModelHelperMixin):
         )
 
         plan_prompt = PromptTemplate(prompt_str)
-        plan_result = await self._predict(
-            PlanResultModel, plan_prompt, "plan"
-        )
+        plan_result = await self._predict(PlanResultModel, plan_prompt, "PlanResult")
 
         # Update user model with plan result using helper method
         self.update_explanation_plan(plan_result)
@@ -677,7 +674,7 @@ class ExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         )
 
         execute_prompt = PromptTemplate(prompt_str)
-        execute_result = await self._predict(ExecuteResult, execute_prompt, "execute")
+        execute_result = await self._predict(ExecuteResult, execute_prompt, "ExecuteResult")
 
         # Update user model with execute results
         self.update_user_model_from_execute(execute_result, target_explanations)
@@ -716,9 +713,8 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
             last_shown_explanations=last_exp,
         )
         prompt = PromptTemplate(prompt_str)
-
         # Use unified prediction (streaming or not) with logging
-        scaff = await self._predict(PlanExecuteResultModel, prompt, "plan_execute")
+        scaff = await self._predict(PlanExecuteResultModel, prompt, "PlanExecuteResult")
 
         # Handle target explanations using universal helper (respects explanations_count)
         target_explanations = self.get_target_explanations_from_plan_result(scaff)
@@ -767,9 +763,9 @@ class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
 
         # Wrap the prompt string in a PromptTemplate for structured prediction
         unified_prompt = PromptTemplate(prompt_str)
-
         # Use unified prediction (streaming or not) with logging
-        result: SinglePromptResultModel = await self._predict(SinglePromptResultModel, unified_prompt, "unified")
+        result: SinglePromptResultModel = await self._predict(SinglePromptResultModel, unified_prompt,
+                                                              "SinglePromptResult")
 
         # Process the unified result using helper method
         # This handles all MAPE-K phases in one go
@@ -870,9 +866,7 @@ class PlanApprovalMixin(UserModelHelperMixin, ConversationHelperMixin):
         )
 
         plan_approval_prompt = PromptTemplate(prompt_str)
-        approval_result = await self._predict(
-            PlanApprovalModel, plan_approval_prompt, "plan_approval"
-        )
+        approval_result = await self._predict(PlanApprovalModel, plan_approval_prompt, "PlanApprovalResult")
 
         # Update the explanation plan based on the approval result
         # This creates the updated plan that will be passed to execute
@@ -912,10 +906,7 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
         )
 
         plan_approval_execute_prompt = PromptTemplate(prompt_str)
-        result = await self._predict(
-            PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute"
-        )
-        self.log_component_input_output("PlanApprovalExecuteResult", plan_approval_execute_prompt, str(result))
+        result = await self._predict(PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "PlanApprovalExecuteResult", prompt_str)
 
         # Check if result is None and handle gracefully
         if result is None:
@@ -1003,10 +994,8 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
         )
 
         prompt = PromptTemplate(prompt_str)
+        scaff = await self._predict(PlanExecuteResultModel, prompt, "PlanExecuteResult")
 
-        # Use unified prediction method (respects streaming settings)
-        scaff = await self._predict(PlanExecuteResultModel, prompt, "plan_execute")
-        
         # Check if scaffolding result is None and handle gracefully
         if scaff is None:
             logger.error("Plan Execute returned None - creating fallback result")
@@ -1017,8 +1006,6 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
                 explanations_count=1,
                 response="I apologize, but I encountered a technical issue. Let me try to help you understand the model's prediction."
             )
-        
-        self.log_component_input_output("PlanExecuteResult", prompt, str(scaff))
 
         # Handle target explanations using universal helper (respects explanations_count)
         target_explanations = self.get_target_explanations_from_plan_result(scaff)
@@ -1070,9 +1057,8 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
         )
 
         plan_approval_execute_prompt = PromptTemplate(prompt_str)
-        result = await self._predict(
-            PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "plan_approval_execute"
-        )
+
+        result = await self._predict(PlanApprovalExecuteResultModel, plan_approval_execute_prompt, "PlanApprovalExecuteResult")
 
         # Check if result is None and handle gracefully
         if result is None:
@@ -1084,8 +1070,6 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
                 explanations_count=1,
                 response="I apologize, but I encountered a technical issue. Let me try to continue with the existing plan."
             )
-
-        self.log_component_input_output("PlanApprovalExecuteResult", plan_approval_execute_prompt, str(result))
 
         # Determine which explanations to use based on approval decision
         target_explanations = self.get_target_explanations_from_approval(result)

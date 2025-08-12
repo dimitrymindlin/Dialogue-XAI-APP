@@ -521,13 +521,14 @@ class MapeK2OpenAIAgent(OpenAIAgent):
                 last_shown_explanations=self.last_shown_explanations,
             )
             pe_res = await Runner.run(self.plan_execute_agent, pe_input)
+            pe_res = pe_res.final_output
             self.log_component_input_output("plan_execute", pe_input, pe_res)
 
             # Update explanation plan and shown explanations
-            if pe_res.final_output.explanation_plan:
-                self.explanation_plan = pe_res.final_output.explanation_plan
-            if hasattr(pe_res.final_output, "next_response") and pe_res.final_output.next_response:
-                self.last_shown_explanations.extend(pe_res.final_output.next_response)
+            if pe_res.explanation_plan:
+                self.explanation_plan = pe_res.explanation_plan
+            if hasattr(pe_res, "next_response") and pe_res.next_response:
+                self.last_shown_explanations.extend(pe_res.next_response)
 
             # Log to CSV
             row = {
@@ -537,14 +538,14 @@ class MapeK2OpenAIAgent(OpenAIAgent):
                 "user_message": user_question,
                 "monitor": ma_res.final_output,
                 "analyze": ma_res.final_output,
-                "plan": pe_res.final_output,
-                "execute": pe_res.final_output,
+                "plan": pe_res,
+                "execute": pe_res,
                 "user_model": self.user_model.get_state_summary(as_dict=False),
             }
             append_new_log_row(row, self.log_file)
             update_last_log_row(row, self.log_file)
 
-            return getattr(pe_res.final_output, "reasoning", None), getattr(pe_res.final_output, "response", None)
+            return getattr(pe_res, "reasoning", None), getattr(pe_res, "response", None)
 
 
 class MapeKUnifiedOpenAIAgent(OpenAIAgent):

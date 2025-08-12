@@ -112,25 +112,30 @@ class BaseAgent(ABC):
 
     def clean_html_content(self, content: str) -> str:
         """
-        Clean HTML content by replacing <img> tags with [PLOT] placeholder 
-        and removing all other HTML tags.
-        
+        Clean HTML content by replacing <img> tags with [PLOT] placeholder,
+        removing only bold/italic tags (<b>, <strong>, <i>, <em>), and decoding HTML entities.
+        All other HTML/XML tags are preserved.
+
         Args:
-            content: String that may contain HTML content
-            
+            content: String that may contain HTML content and entities
+
         Returns:
-            Cleaned string with HTML filtered out
+            Cleaned string with only the specified tags removed and entities decoded
         """
         import re
-        
+        import html
+
         if not content or not isinstance(content, str):
             return content
-        
+
+        # First decode HTML entities (&lt; &gt; &amp; etc.)
+        content = html.unescape(content)
+
         # Replace <img> tags with [PLOT] placeholder
         content = re.sub(r'<img[^>]*>', '[PLOT]', content, flags=re.IGNORECASE)
-        
-        # Remove all other HTML tags completely  
-        content = re.sub(r'<[^>]+>', '', content)
+
+        # Remove only bold/italic tags (<b>, <strong>, <i>, <em>) but keep their inner text
+        content = re.sub(r'</?(?:b|strong|i|em)\b[^>]*>', '', content, flags=re.IGNORECASE)
         
         return content
 
@@ -150,10 +155,21 @@ class BaseAgent(ABC):
             else:
                 # Generic fallback for other objects
                 input = str(input)
+
+
         
         # Turn output to string if pydantic model
         if isinstance(output, BaseModel):
-            output = output.json()
+            try:
+                # Use model_dump_json() for Pydantic v2 compatibility
+                if hasattr(output, 'model_dump_json'):
+                    output = output.model_dump_json()
+                else:
+                    # Fallback for Pydantic v1
+                    output = output.json()
+            except Exception as e:
+                # If JSON conversion fails, fall back to string representation
+                output = str(output)
         elif not isinstance(output, str):
             output = str(output)
         
