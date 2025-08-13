@@ -293,7 +293,7 @@ class MapeK4OpenAIAgent(OpenAIAgent):
             anl_input = create_analyze_user_prompt(
                 chat_history=self.chat_history,
                 user_message=user_question,
-                last_shown_explanations=self.last_shown_explanations,
+                last_shown_explanations=self.get_formatted_last_shown_explanations(),
                 user_model=self.user_model,
             )
             anl_res = await Runner.run(self.analyze_agent, anl_input)
@@ -306,7 +306,7 @@ class MapeK4OpenAIAgent(OpenAIAgent):
                 user_message=user_question,
                 explanation_plan=self.explanation_plan or "",
                 user_model=self.user_model,
-                last_shown_explanations=self.last_shown_explanations,
+                last_shown_explanations=self.get_formatted_last_shown_explanations(),
             )
             plan_res = await Runner.run(self.plan_agent, plan_input)
             plan_res = plan_res.final_output
@@ -465,7 +465,7 @@ class MapeK2OpenAIAgent(OpenAIAgent):
                 explanation_collection=xai_explanations,
                 chat_history=self.chat_history,
                 user_model=self.user_model.get_state_summary(as_dict=False),
-                last_shown_explanations=self.last_shown_explanations,
+                last_shown_explanations=self.get_formatted_last_shown_explanations(),
             ),
             output_type=MonitorAnalyzeResultModel,
         )
@@ -482,7 +482,7 @@ class MapeK2OpenAIAgent(OpenAIAgent):
                 chat_history=self.chat_history,
                 user_model=self.user_model.get_state_summary(as_dict=False),
                 explanation_plan=self.explanation_plan or "",
-                last_shown_explanations=self.last_shown_explanations,
+                last_shown_explanations=self.get_formatted_last_shown_explanations(),
             ),
             output_type=PlanExecuteResultModel,
         )
@@ -518,7 +518,7 @@ class MapeK2OpenAIAgent(OpenAIAgent):
                 user_message=user_question,
                 explanation_plan=self.explanation_plan or "",
                 user_model=self.user_model,
-                last_shown_explanations=self.last_shown_explanations,
+                last_shown_explanations=self.get_formatted_last_shown_explanations(),
             )
             pe_res = await Runner.run(self.plan_execute_agent, pe_input)
             pe_res = pe_res.final_output
@@ -610,7 +610,7 @@ class MapeKUnifiedOpenAIAgent(OpenAIAgent):
                 user_message=user_question,
                 user_model=self.user_model,
                 explanation_plan=self.explanation_plan or "",
-                last_shown_explanations=self.last_shown_explanations,
+                last_shown_explanations=self.get_formatted_last_shown_explanations(),
             )
             unified_res = await Runner.run(self.unified_agent, unified_input)
             unified_res = unified_res.final_output

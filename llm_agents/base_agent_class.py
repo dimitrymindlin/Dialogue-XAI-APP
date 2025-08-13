@@ -266,7 +266,7 @@ class BaseAgent(ABC):
             The initial chat history string
         """
         self.chat_history = "No history available, beginning of the chat."
-        self.last_shown_explanations = ["No explanations shown yet, beginning of the chat."]
+        self.last_shown_explanations = []
         return self.chat_history
 
     def append_to_history(self, role: str, msg: str) -> None:
@@ -316,6 +316,28 @@ class BaseAgent(ABC):
             "user_model_state": self.user_model.get_state_summary(as_dict=False),
             "last_shown_explanations": self.last_shown_explanations,
         }
+
+    def get_formatted_last_shown_explanations(self) -> str:
+        """
+        Format last_shown_explanations list for LLM prompts.
+        
+        Returns:
+            A formatted string representation of the explanations list suitable for prompts.
+            Returns a descriptive message if no explanations have been shown yet.
+        """
+        if not self.last_shown_explanations:
+            return "No explanations shown yet, beginning of the chat."
+        
+        # Format each explanation as "explanation_name: step_name"
+        formatted_explanations = []
+        for exp in self.last_shown_explanations:
+            if hasattr(exp, 'explanation_name') and hasattr(exp, 'step_name'):
+                formatted_explanations.append(f"{exp.explanation_name}: {exp.step_name}")
+            else:
+                # Fallback for unexpected types
+                formatted_explanations.append(str(exp))
+        
+        return ", ".join(formatted_explanations)
 
     def get_formatted_feature_context(self) -> str:
         """

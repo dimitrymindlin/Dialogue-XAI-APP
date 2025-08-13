@@ -248,15 +248,15 @@ class ExplainBot:
             if self.use_llm_agent == "o1":
                 from llm_agents.o1_agent.openai_o1_agent import XAITutorAssistant as Agent
             elif self.use_llm_agent in ("mape_k", "mape_k_4"):
-                from llm_agents.mape_k_mixins import MapeK4BaseAgent as Agent
+                from llm_agents.mape_k_component_mixins import MapeK4BaseAgent as Agent
             elif self.use_llm_agent == "mape_k_2":
-                from llm_agents.mape_k_mixins import MapeK2BaseAgent as Agent
+                from llm_agents.mape_k_component_mixins import MapeK2BaseAgent as Agent
             elif self.use_llm_agent in ("unified_mape_k", "mape_k_unified"):
-                from llm_agents.mape_k_mixins import MapeKUnifiedBaseAgent as Agent
+                from llm_agents.mape_k_component_mixins import MapeKUnifiedBaseAgent as Agent
             elif self.use_llm_agent == "mape_k_approval_2":
-                from llm_agents.mape_k_mixins import MapeKApprovalBaseAgent as Agent
+                from llm_agents.mape_k_component_mixins import MapeKApprovalBaseAgent as Agent
             elif self.use_llm_agent in ("mape_k_approval", "mape_k_approval_4"):
-                from llm_agents.mape_k_mixins import MapeKApproval4BaseAgent as Agent
+                from llm_agents.mape_k_component_mixins import MapeKApproval4BaseAgent as Agent
             elif self.use_llm_agent == "mape_k_openai":
                 from llm_agents.openai_mapek_agent import MapeK4OpenAIAgent as Agent
             elif self.use_llm_agent == "mape_k_openai_2":

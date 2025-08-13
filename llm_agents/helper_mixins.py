@@ -184,78 +184,6 @@ class UserModelHelperMixin:
             target_explanation = self.explanation_plan.pop(target_index)
             self.explanation_plan.insert(0, target_explanation)
 
-    def _determine_explanations_from_approval(self, result: Union[PlanApprovalModel, PlanApprovalExecuteResultModel]) -> Tuple[List[ChosenExplanationModel], int]:
-        """
-        Core logic to determine which explanations should be used based on approval results.
-        This is a pure function that doesn't modify state.
-        
-        Args:
-            result: The plan approval result containing approval status and potential alternative explanations
-            
-        Returns:
-            tuple: (explanations_to_use, explanations_consumed_from_plan)
-        """
-        explanations_count = getattr(result, 'explanations_count', 1)
-        explanations_count = max(1, explanations_count)  # At least 1 explanation should be used
-        
-        if result.approved and hasattr(self, 'explanation_plan') and self.explanation_plan:
-            # Use predefined plan - get the explanations based on count
-            end_index = min(explanations_count, len(self.explanation_plan))
-            explanations_to_use = self.explanation_plan[:end_index]
-            explanations_consumed = end_index
-            return explanations_to_use, explanations_consumed
-            
-        elif not result.approved and result.next_response:
-            # Use alternative explanation as the first one
-            explanations_to_use = [result.next_response]
-            
-            # If explanations_count > 1, add additional explanations from the predefined plan
-            if explanations_count > 1 and hasattr(self, 'explanation_plan') and self.explanation_plan:
-                # Get additional explanations from the plan (explanations_count - 1 more)
-                additional_count = explanations_count - 1
-                end_index = min(additional_count, len(self.explanation_plan))
-                explanations_to_use.extend(self.explanation_plan[:end_index])
-                explanations_consumed = end_index  # Only plan explanations are consumed
-            else:
-                explanations_consumed = 0  # No plan explanations consumed
-                
-            return explanations_to_use, explanations_consumed
-        
-        # No explanation available
-        return [], 0
-
-    def update_explanation_plan_after_approval(self, result: Union[PlanApprovalModel, PlanApprovalExecuteResultModel]) -> PlanResultModel:
-        """
-        Update the explanation plan based on plan approval results and return a new plan result.
-        
-        This method handles the plan updating logic based on approval status:
-        - If approved: removes the used explanations from the plan based on explanations_count
-        - If not approved: moves the next_response explanation to the front of the plan
-        
-        Args:
-            result: The plan approval result containing approval status and potential alternative explanations
-            
-        Returns:
-            PlanResultModel: A new plan result with the updated explanation plan
-        """
-        _, explanations_consumed = self._determine_explanations_from_approval(result)
-        
-        if result.approved and hasattr(self, 'explanation_plan') and self.explanation_plan:
-            # Remove the used explanations from the beginning of the plan
-            updated_plan = self.explanation_plan[explanations_consumed:] if len(self.explanation_plan) > explanations_consumed else []
-            self.explanation_plan = updated_plan
-        elif not result.approved and result.next_response:
-            # Use alternative explanation - move it to the front of the plan
-            self.move_explanation_to_front_of_plan(result.next_response)
-
-        # Return a new PlanResultModel with the current state of the explanation plan
-        return PlanResultModel(
-            reasoning="Plan updated based on approval status",
-            new_explanations=result.new_explanations if hasattr(result, 'new_explanations') else [],
-            explanation_plan=self.explanation_plan if hasattr(self, 'explanation_plan') else [],
-            explanations_count=getattr(result, 'explanations_count', 1)
-        )
-
     def get_target_explanations_from_execute_result(self, execute_result: Any) -> List[ChosenExplanationModel]:
         """
         Extract target explanations from ExecuteResult using rendered_step_names field.
@@ -279,24 +207,6 @@ class UserModelHelperMixin:
             return []
             
         return rendered_steps
-
-    def get_target_explanations_from_approval(self, result: Union[PlanApprovalModel, PlanApprovalExecuteResultModel]) -> List[ChosenExplanationModel]:
-        """
-        Get the list of target explanations to be executed based on plan approval results and explanations_count.
-        
-        This method determines which explanations should be executed:
-        - If approved: returns explanations from the predefined plan based on explanations_count
-        - If not approved: returns the next_response explanation plus additional explanations from the plan
-          to reach the total specified by explanations_count
-        
-        Args:
-            result: The plan approval result containing approval status and potential alternative explanations
-            
-        Returns:
-            List[ChosenExplanationModel]: The target explanations to be used
-        """
-        explanations_to_use, _ = self._determine_explanations_from_approval(result)
-        return explanations_to_use
 
     def update_explanation_plan_after_execute(self, 
                                             target_explanations: List[ChosenExplanationModel]) -> None:
