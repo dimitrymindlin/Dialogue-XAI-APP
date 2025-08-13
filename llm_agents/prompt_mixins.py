@@ -397,7 +397,7 @@ class PlanSpecificTaskPrompt(SimplePromptMixin):
       <title>Construct and Maintain an Explanation Plan</title>
       <instructions>
         - Assume the user may ask only a few questions and adhere to human explanation design principles stated above when picking explanations
-        - Prioritize diverse, informative explanations that clarify the model's decision
+        - Prioritize diverse, informative explanations that clarify the model's decision. Do not plan confidence unless user specifically asked for it, as stated by human explanation design principles.
         - Create plan covering at least three main explanations if none exists
         - The first item MUST be executed in the very next response once AGREEMENT is detected
         - Revise the plan only when there are major gaps or shifts in understanding
@@ -456,7 +456,7 @@ class ExecuteTaskPrompt(SimplePromptMixin):
   </human_explanations_principles>
   <guidelines>
     <ul>
-      <li><b>Quantity:</b> Include exactly the information needed—no more, no less—by checking prior turns and omitting redundant content.</li>
+      <li><b>Quantity:</b> Include exactly the information needed to answer the user's information need, no more and no less, by checking prior turns and omitting redundant content. Prioritise not repeating over following the plan. </li>
       <li><b>Quality:</b> State only verifiable facts drawn from chat history or logical inference; avoid unsupported or speculative wording or interpretations that are not supported by the explanations.</li>
       <li><b>Relation:</b> Ensure every sentence directly advances the current objective—executing a concise response—without branching into unrelated methods.</li>
       <li><b>Manner:</b> Write clearly, briefly, and in logical order; avoid ambiguity, obscurity, and unnecessary prolixity.</li>
@@ -464,7 +464,7 @@ class ExecuteTaskPrompt(SimplePromptMixin):
   </guidelines>
   <response_crafting>
     <content_alignment>
-      - Use the explanation plan and chat history to guide responses. 
+      - Use the explanation plan and chat history to guide responses, but prioritize not repeating previously shown explanations if the user did not show confusion, even if they are in the plan.
       - When eliciting knowledge, prompt briefly instead of fully explaining. 
       - If the user’s question aligns with an explanation method, do not introduce that concept first—proceed directly with the explanation. 
       - When the user agrees to see a suggestion, show it immediately without narration. 
@@ -481,14 +481,6 @@ class ExecuteTaskPrompt(SimplePromptMixin):
     <focus>
       If the user goes off-topic, respond that you can only discuss the model’s prediction and the current instance. Counterfactuals: present the closest single-change flip first; if none, the smallest multi-change set;
     </focus>
-    <formatting>
-      Use HTML tags:
-      <ul>
-        <li><b>&lt;b&gt;</b> for bold</li>
-        <li><b>&lt;ul&gt;</b> and <b>&lt;li&gt;</b> for bullet lists</li>
-        <li><b>&lt;p&gt;</b> for paragraphs</li>
-      </ul>
-    </formatting>
     <visuals>
       Insert placeholders like ##FeatureInfluencesPlot## last in your response. First, give one insight sentence. Do not repeat visuals already shown.
     </visuals>
@@ -499,6 +491,14 @@ class ExecuteTaskPrompt(SimplePromptMixin):
       - If a concrete choice is required and no preference is stated, ask exactly one short question (e.g., “Compare to global results?”).  
       - To guide proactively, append a single optional next-step suggestion (that is in the explanation plan) phrased as an offer (“Next, we can explore which attributes change the model prediction.”). Describe what it reveals and skip method names unless the user shows high ML literacy.
     </engagement>
+    <formatting>
+      ALWAYS Use HTML tags to make the response more readable:
+      <ul>
+        <li><b>&lt;b&gt;</b> for bold</li>
+        <li><b>&lt;ul&gt;</b> and <b>&lt;li&gt;</b> for bullet lists</li>
+        <li><b>&lt;p&gt;</b> for paragraphs</li>
+      </ul>
+    </formatting>
   </response_crafting>
   <rendered_step_names>
     include exactly which explanations and steps were rendered in the response to track and update the plan and avoind repetition.
@@ -732,10 +732,8 @@ class ApprovalSpecificTaskPrompt(SimplePromptMixin):
         </modify>
       </options>
       <description>
-        Pick an integer explanations_count (1–3) considering:
-        - Default explanations_count = 1. Use 2 only when bundling improves coherence (e.g., top-3 factors list + one contrastive line).
         - Treat acknowledgements (“ok/okay/yes/right”) as commit to execute last suggested artifact (Next we can explore...) now, skipping to re-explain the concept. 
-        - Do not plan confidence unless asked or not yet provided in this thread.
+        - Do not plan confidence unless user specifically asked for it, as stated by human explanation design principles.
         - Consider User's cognitive load and engagement level, Complexity of the explanations and Whether bundling related explanations would be more coherent
       </description>
     </step>
