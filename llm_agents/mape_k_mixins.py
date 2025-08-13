@@ -199,7 +199,7 @@ class BaseAgentInitMixin:
 
     async def _predict_with_timing_and_logging(self, model_class, prompt, method_name, llm=None, nested=True):
         """
-        Logs prompt, result, and timing to MLflow. Logs errors and stack traces. Truncates long results. Logs timing as MLflow metric.
+        Logs prompt, result, and timing. Logs errors and stack traces. Truncates long results. Logs timing as MLflow metric.
         """
         start_time = datetime.datetime.now()
         result = None
@@ -557,7 +557,7 @@ class AnalyzeMixin(UserModelHelperMixin):
             chat_history=self.get_chat_history_as_xml(),
             understanding_displays=self.understanding_displays.as_text(),
             user_model=self.user_model.get_state_summary(as_dict=False),
-            last_shown_explanations=self.last_shown_explanations,
+            last_shown_explanations=self.get_formatted_last_shown_explanations(),
             user_message=user_message,
             explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
         )
@@ -593,7 +593,7 @@ class MonitorAnalyzeMixin(UserModelHelperMixin):
             explanation_plan=self.user_model.get_complete_explanation_collection(as_dict=False),
             chat_history=self.get_chat_history_as_xml(),
             user_model=self.user_model.get_state_summary(as_dict=False),
-            last_shown_explanations=self.last_shown_explanations,
+            last_shown_explanations=self.get_formatted_last_shown_explanations(),
             user_message=user_message,
         )
         prompt = PromptTemplate(prompt_str)
@@ -611,7 +611,7 @@ class PlanMixin(UserModelHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def plan(self, ctx: Context, ev: AnalyzeDoneEvent) -> PlanDoneEvent:
         user_message = await ctx.get("user_message")
-        last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else None
+        last_exp = self.get_formatted_last_shown_explanations()
 
         plan_pm = PlanPrompt()
         template = plan_pm.get_prompts()["default"].get_template()
@@ -695,7 +695,7 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def scaffolding(self, ctx: Context, ev: MonitorDoneEvent) -> StopEvent:
         user_message = await ctx.get("user_message")
-        last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else ""
+        last_exp = self.get_formatted_last_shown_explanations()
 
         # use modular PlanExecutePrompt for scaffolding
         pe_pm = PlanExecutePrompt()
@@ -717,7 +717,7 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
         scaff = await self._predict(PlanExecuteResultModel, prompt, "PlanExecuteResult")
 
         # Handle target explanations using universal helper (respects explanations_count)
-        target_explanations = self.get_target_explanations_from_plan_result(scaff)
+        target_explanations = self.get_target_explanations_from_execute_result(scaff)
 
         self.update_conversation_history(user_message, scaff.response)
 
@@ -771,7 +771,7 @@ class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
             user_model=self.user_model.get_state_summary(as_dict=False),
             explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
             explanation_plan=self.format_predefined_plan_for_prompt(),
-            last_shown_explanations=self.last_shown_explanations,
+            last_shown_explanations=self.get_formatted_last_shown_explanations(),
         )
 
         # Wrap the prompt string in a PromptTemplate for structured prediction
@@ -989,7 +989,7 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
         from llm_agents.explanation_state import ExplanationState
 
         user_message = await ctx.get("user_message")
-        last_exp = self.last_shown_explanations[-1] if self.last_shown_explanations else ""
+        last_exp = self.get_formatted_last_shown_explanations()
 
         # Use modular PlanExecutePrompt for scaffolding
         pe_pm = PlanExecutePrompt()
@@ -1131,7 +1131,7 @@ class MapeKApprovalBaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin,
 
         # Initialize with specific temperature
         self._init_agent_components(
-            llm=llm or OpenAI(model=OPENAI_MODEL_NAME, temperature=0.2, reasoning_effort="minimal"),
+            llm=llm or OpenAI(model=OPENAI_MODEL_NAME, temperature=0.2, reasoning_effort="low"),
             structured_output=structured_output,
             timeout=timeout,
             **kwargs
