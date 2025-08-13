@@ -344,7 +344,7 @@ class UserModelFineGrained:
 
         if user_info.get("ML Knowledge"):
             xml_parts.append(
-                f'        <ml_knowledge_level>The users machine learning knowlwsge is {user_info["ML Knowledge"]}</ml_knowledge_level>')
+                f'        <ml_knowledge_level>The users machine learning knowledge is {user_info["ML Knowledge"]}</ml_knowledge_level>')
 
         if user_info.get("Explicit Understanding Signals"):
             signals = user_info["Explicit Understanding Signals"]
@@ -367,12 +367,7 @@ class UserModelFineGrained:
                 xml_parts.append(f"        <{xml_tag}>")
 
                 for exp_name, steps in explanations_dict.items():
-                    xml_parts.append(f'            <explanation name="{exp_name}">')
-                    xml_parts.append("                <steps>")
-                    for step in steps:
-                        xml_parts.append(f"                    <step>{step}</step>")
-                    xml_parts.append("                </steps>")
-                    xml_parts.append("            </explanation>")
+                    xml_parts.append(f'            <explanation name="{exp_name}">{"  |  ".join(steps)}</explanation>')
 
                 xml_parts.append(f"        </{xml_tag}>")
 
