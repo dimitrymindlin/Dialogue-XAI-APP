@@ -322,83 +322,98 @@ class BaseAgent(ABC):
         Get an XML-formatted string representation of the feature context for prompts.
 
         Returns:
-            An XML structure with individual feature tags including names, units, and descriptions
+            A concatenation of <feature ...> elements (no outer <features> wrapper).
+            Descriptions (from tooltips) are preserved as provided (only whitespace-normalized),
+            without truncation or ellipses. Units, when present, are kept as the unit attribute.
         """
+        import re
+
+        def _normalize(text: str) -> str:
+            """Collapse whitespace; do not truncate."""
+            if not text:
+                return ""
+            return re.sub(r"\s+", " ", str(text)).strip()
+
+        def _xml_escape(s: str) -> str:
+            if s is None:
+                return ""
+            # Minimal XML escaping for attribute/text safety
+            return (
+                str(s)
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace('"', "&quot;")
+                .replace("'", "&apos;")
+            )
+
         if not self.feature_names:
-            return "<features />"
+            # No outer <features> wrapper; return empty string if no features
+            return ""
 
-        # Handle different input formats for feature_names
+        # ------- Names -------
         if isinstance(self.feature_names, list):
-            # Check if it's a list of dictionaries (complex format)
             if self.feature_names and isinstance(self.feature_names[0], dict):
-                names = [item['feature_name'] for item in self.feature_names]
+                names = [item.get("feature_name", "").strip() for item in self.feature_names]
             else:
-                # Simple list of strings
-                names = [name.strip() for name in self.feature_names if name.strip()]
+                names = [str(name).strip() for name in self.feature_names if str(name).strip()]
         else:
-            # Comma-separated string
-            names = [name.strip() for name in self.feature_names.split(',') if name.strip()]
+            names = [n.strip() for n in str(self.feature_names).split(",") if n.strip()]
 
-        # Handle different input formats for feature_units
+        # De-duplicate while preserving order
+        names = list(dict.fromkeys(names))
+
+        # ------- Units -------
         units_dict = {}
         if isinstance(self.feature_units, dict):
-            units_dict = self.feature_units
+            units_dict = {str(k): (v or "") for k, v in self.feature_units.items()}
         elif isinstance(self.feature_units, list):
-            # If it's a list, try to pair with names
             for i, unit in enumerate(self.feature_units):
                 if i < len(names):
-                    units_dict[names[i]] = unit.strip() if unit else ""
+                    units_dict[names[i]] = (unit or "").strip()
         elif self.feature_units:
-            # Comma-separated string
-            unit_list = [unit.strip() for unit in self.feature_units.split(',')]
+            unit_list = [u.strip() for u in str(self.feature_units).split(",")]
             for i, unit in enumerate(unit_list):
                 if i < len(names):
                     units_dict[names[i]] = unit
 
-        # Handle different input formats for feature_tooltips
+        # ------- Tooltips / Descriptions -------
         tooltips_dict = {}
         if isinstance(self.feature_tooltips, dict):
-            tooltips_dict = self.feature_tooltips
+            tooltips_dict = {str(k): (v or "") for k, v in self.feature_tooltips.items()}
         elif isinstance(self.feature_tooltips, list):
-            # If it's a list, try to pair with names
             for i, tooltip in enumerate(self.feature_tooltips):
                 if i < len(names):
-                    tooltips_dict[names[i]] = tooltip.strip() if tooltip else ""
+                    tooltips_dict[names[i]] = (tooltip or "").strip()
         elif self.feature_tooltips:
-            # Comma-separated string
-            tooltip_list = [tooltip.strip() for tooltip in self.feature_tooltips.split(',')]
+            tooltip_list = [t.strip() for t in str(self.feature_tooltips).split(",")]
             for i, tooltip in enumerate(tooltip_list):
                 if i < len(names):
                     tooltips_dict[names[i]] = tooltip
 
-        # Format as XML-like structure with individual feature tags
-        formatted_features = []
+        # ------- Build XML (no outer <features>) -------
+        lines = []
         for name in names:
-            # Create a safe tag name by replacing spaces and special characters
-            tag_name = name.replace(" ", "_").replace("-", "_").replace("(", "").replace(")", "").replace("/", "_")
+            raw_unit = units_dict.get(name, "")
+            raw_tip = tooltips_dict.get(name, "")
 
-            # Start the feature tag
-            feature_xml = f"    <feature name=\"{name}\""
+            unit_attr = f' unit="{_xml_escape(raw_unit)}"' if raw_unit else ""
+            desc = _normalize(raw_tip)
 
-            # Add unit as attribute if available
-            unit = units_dict.get(name, "")
-            if unit:
-                feature_xml += f" unit=\"{unit}\""
-
-            # Close opening tag and add description if available
-            tooltip = tooltips_dict.get(name, "")
-            if tooltip:
-                feature_xml += f">\n        <description>{tooltip}</description>\n    </feature>"
+            if desc:
+                # Keep child <description> for compatibility, with whitespace-normalized text only
+                line = (
+                    f"<feature name=\"{_xml_escape(name)}\"{unit_attr}>\n"
+                    f"    <description>{_xml_escape(desc)}</description>\n"
+                    f"</feature>"
+                )
             else:
-                feature_xml += " />"
+                # Self-closing when no description is available
+                line = f"<feature name=\"{_xml_escape(name)}\"{unit_attr} />"
 
-            formatted_features.append(feature_xml)
+            lines.append(line)
 
-        # Wrap all features in a features container
-        if formatted_features:
-            return "<features>\n" + "\n".join(formatted_features) + "\n</features>"
-        else:
-            return "<features />"
+        return "\n".join(lines)
 
     @timed
     @abstractmethod
