@@ -380,7 +380,7 @@ class PlanSpecificTaskPrompt(SimplePromptMixin):
             """
 <task>
   <objective>Plan</objective>
-  <description>You have three steps to create and manage explanation plans.</description>
+  <description>You have two steps to create and manage explanation plans.</description>
 
   <steps>
     <step number="1">
@@ -402,15 +402,6 @@ class PlanSpecificTaskPrompt(SimplePromptMixin):
         - The first item MUST be executed in the very next response once AGREEMENT is detected
         - Revise the plan only when there are major gaps or shifts in understanding
         - Emit the *full* ordered list of upcoming step_names for each explanation
-      </instructions>
-    </step>
-
-    <step number="3">
-      <title>Decide on the Amount of Explanations to show in next Response</title>
-      <instructions>
-        - Choose an integer explanations_count (minimum 1) for upcoming plan steps
-        - Use the latest user message, prior explanations, and cognitive state to decide
-        - Adapt content dynamically: start with key facts, then optionally offer to delve deeper
       </instructions>
     </step>
   </steps>
@@ -509,6 +500,9 @@ class ExecuteTaskPrompt(SimplePromptMixin):
       - To guide proactively, append a single optional next-step suggestion (that is in the explanation plan) phrased as an offer (“Next, we can explore which attributes change the model prediction.”). Describe what it reveals and skip method names unless the user shows high ML literacy.
     </engagement>
   </response_crafting>
+  <rendered_step_names>
+    include exactly which explanations and steps were rendered in the response to track and update the plan and avoind repetition.
+  </rendered_step_names>
 </task>
 """
         )

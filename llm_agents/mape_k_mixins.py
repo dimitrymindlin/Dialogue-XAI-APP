@@ -928,16 +928,16 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
                 reasoning="Error occurred during processing - using fallback",
                 approved=True,  # Default to approved to continue with existing plan
                 next_response=None,
-                explanations_count=1,
+                rendered_step_names=[],
                 response="I apologize, but I encountered a technical issue"
             )
 
-        # Determine which explanations to use based on approval decision
-        target_explanations = self.get_target_explanations_from_approval(result)
+        # Get target explanations from ExecuteResult's rendered_step_names (LLM determines what was shown)
+        target_explanations = self.get_target_explanations_from_execute_result(result)
         
         # Defensive check to ensure target_explanations is not None
         if target_explanations is None:
-            logger.warning("get_target_explanations_from_approval returned None - using empty list")
+            logger.warning("get_target_explanations_from_execute_result returned None - using empty list")
             target_explanations = []
 
         # Update user model with plan result using helper method (before plan updates)
@@ -1017,16 +1017,16 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
                 reasoning="Error occurred during processing - using fallback",
                 new_explanations=[],
                 explanation_plan=[],
-                explanations_count=1,
+                rendered_step_names=[],
                 response="I apologize, but I encountered a technical issue. Let me try to help you understand the model's prediction."
             )
 
-        # Handle target explanations using universal helper (respects explanations_count)
-        target_explanations = self.get_target_explanations_from_plan_result(scaff)
+        # Get target explanations from ExecuteResult's rendered_step_names (LLM determines what was shown)
+        target_explanations = self.get_target_explanations_from_execute_result(scaff)
         
         # Defensive check to ensure target_explanations is not None
         if target_explanations is None:
-            logger.warning("get_target_explanations_from_plan_result returned None - using empty list")
+            logger.warning("get_target_explanations_from_execute_result returned None - using empty list")
             target_explanations = []
         self.update_conversation_history(user_message, scaff.response)
 
@@ -1039,20 +1039,9 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
         # Update explanation plan first (save the initial plan)
         self.update_explanation_plan(scaff)
 
-        # For first question (plan creation), mark explanations as shown but preserve the plan intact
-        # This is different from subsequent questions where we want to modify the plan
-        if target_explanations:
-            # Mark all explanations as shown in the user model
-            for explanation in target_explanations:
-                if explanation:
-                    self.user_model.update_explanation_step_state(
-                        explanation.explanation_name,
-                        explanation.step_name,
-                        ExplanationState.SHOWN.value
-                    )
-
-            # Update tracking but don't remove from plan (preserve for second question)
-            self.update_last_shown_explanations(target_explanations)
+        # Process explanations after execution using universal helper (consistent with subsequent questions)
+        # This ensures explanations are marked as SHOWN in user model AND removed from plan
+        self.process_explanations_after_execution(target_explanations)
 
         await ctx.set("scaffolding_result", scaff)
         return StopEvent(result=scaff)
@@ -1093,16 +1082,16 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
                 reasoning="Error occurred during processing - using fallback",
                 approved=True,  # Default to approved to continue with existing plan
                 next_response=None,
-                explanations_count=1,
+                rendered_step_names=[],
                 response="I apologize, but I encountered a technical issue. Let me try to continue with the existing plan."
             )
 
-        # Determine which explanations to use based on approval decision
-        target_explanations = self.get_target_explanations_from_approval(result)
+        # Get target explanations from ExecuteResult's rendered_step_names (LLM determines what was shown)
+        target_explanations = self.get_target_explanations_from_execute_result(result)
         
         # Defensive check to ensure target_explanations is not None
         if target_explanations is None:
-            logger.warning("get_target_explanations_from_approval returned None - using empty list")
+            logger.warning("get_target_explanations_from_execute_result returned None - using empty list")
             target_explanations = []
 
         # Update user model with plan result using helper method (before plan updates)

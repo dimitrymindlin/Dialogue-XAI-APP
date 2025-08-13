@@ -256,6 +256,30 @@ class UserModelHelperMixin:
             explanations_count=getattr(result, 'explanations_count', 1)
         )
 
+    def get_target_explanations_from_execute_result(self, execute_result: Any) -> List[ChosenExplanationModel]:
+        """
+        Extract target explanations from ExecuteResult using rendered_step_names field.
+        
+        This method provides the new approach for getting explanations that were actually rendered
+        by the LLM, replacing the old explanations_count-based logic. The LLM determines what
+        explanations were included in the response via the rendered_step_names field.
+        
+        Args:
+            execute_result: ExecuteResult object with rendered_step_names field
+            
+        Returns:
+            List[ChosenExplanationModel]: The explanations that were actually rendered
+        """
+        if not execute_result:
+            return []
+            
+        rendered_steps = getattr(execute_result, 'rendered_step_names', [])
+        if not rendered_steps:
+            logger.warning("ExecuteResult has no rendered_step_names - returning empty list")
+            return []
+            
+        return rendered_steps
+
     def get_target_explanations_from_approval(self, result: Union[PlanApprovalModel, PlanApprovalExecuteResultModel]) -> List[ChosenExplanationModel]:
         """
         Get the list of target explanations to be executed based on plan approval results and explanations_count.
