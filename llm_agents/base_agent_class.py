@@ -180,6 +180,22 @@ class BaseAgent(ABC):
         # Buffer the prompt for final CSV
         self._csv_items.append({"component_name": component_name, "input": input, "output": output})
 
+    def _log_state_with_timing(self, component_name: str, state: str, timestamp: str) -> None:
+        """
+        Log state snapshots with semantic field names for timing analysis.
+        
+        Args:
+            component_name: Name of the component (e.g., "pre_execution_state")
+            state: JSON string of the state data
+            timestamp: ISO format timestamp
+        """
+        # Use semantic field names for state snapshots
+        self._csv_items.append({
+            "component_name": component_name, 
+            "state": state, 
+            "timestamp": timestamp
+        })
+
     def initialize_new_datapoint(
             self,
             instance: InstanceDatapoint,
