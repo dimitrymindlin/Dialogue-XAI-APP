@@ -76,13 +76,13 @@ class PlanResultModel(BaseModel):
     new_explanations: List[NewExplanationModel] = Field(default_factory=list,
                                                         description="List of completely new explanations to be added to the explanation collection, where similar explanations are not in the explanation collection already.")
     explanation_plan: List[ChosenExplanationModel] = Field(default_factory=list,
-                                                           description="Ordered list of explanation steps or scaffolding techniques, indicating the long-term plan to explain the whole model prediction to the user.")
+                                                           description="Ordered list of 6-7 explanation steps or scaffolding techniques, indicating the long-term plan to explain the whole model prediction to the user.")
 class ExecuteResult(BaseModel):
     reasoning: str = Field(..., description=f"{reasoning_prefix} on how to craft the response.")
     response: str = Field(...,
                           description="The response to the user's question about the shown instance and prediction only using information from the chat history and explanation plan styled with appropriate html elements such as <b> for bold text or bullet points.")
-    rendered_step_names: List[ChosenExplanationModel] = Field(...,
-                                                             description="List of explanation steps that were rendered in the response, where each step is represented by its name and the step name is used to render the explanation in the response.")
+    rendered_step_names: List[ChosenExplanationModel] = Field(default_factory=list,
+                                                             description="List of explanation steps that were rendered in the response, where each step is represented by its name and the step name is used to render the explanation in the response. Empty list if no XAI explanations were shown.")
 
 
 class PlanExecuteResultModel(ExecuteResult, PlanResultModel):
@@ -112,11 +112,10 @@ class PlanApprovalModel(BaseModel):
                            description=f"{reasoning_prefix} for the decision to approve or modify the predefined plan based on the user's message and current understanding state.")
     approved: bool = Field(...,
                            description="Whether the predefined plan is approved as-is (True) or needs modification (False).")
+    new_explanations: List[NewExplanationModel] = Field(default_factory=list,
+                                                        description="List of completely new explanations to be added to the explanation collection, where similar explanations are not in the explanation collection already")
     next_response: Optional[ChosenExplanationModel] = Field(None,
-                                                  description="If not approved, the chosen explanation to show instead of the predefined plan's next step. Required when approved=False.")
-    explanations_count: int = Field(...,
-                                    description="The number of explanations from the plan to include in the next response to reply to the user's message. Minimum is 1, can be 2 or 3 of next explanations together.")
-
+                                                  description="If not approved, the chosen explanation to show instead of the predefined plan's next step. Required when approved=False. Can be new explanation or an existing one from the explanation collection.")
 
 class PlanApprovalExecuteResultModel(ExecuteResult, PlanApprovalModel):
     """
@@ -126,4 +125,19 @@ class PlanApprovalExecuteResultModel(ExecuteResult, PlanApprovalModel):
     reasoning: str = Field(
         ...,
         description=f"{reasoning_prefix} for the decision to approve or modify the predefined plan and how to craft the response."
+    )
+
+
+class ConversationalResultModel(BaseModel):
+    """
+    Simplified data model for conversational agent responses.
+    No user modeling or plan tracking - just reasoning and response.
+    """
+    reasoning: str = Field(
+        ..., 
+        description=f"{reasoning_prefix} for understanding the user's question and selecting appropriate explanations to include in the response."
+    )
+    response: str = Field(
+        ...,
+        description="The response to the user's question using available explanations and conversation context, styled with appropriate HTML elements such as <b> for bold text or bullet points."
     )
