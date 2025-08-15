@@ -165,12 +165,13 @@ class BaseAgentInitMixin:
             "user_model_state": user_model_state,
             "explanation_plan_state": explanation_plan_state
         }
-        
-        # Log the state snapshot
-        self.log_component_input_output(
-            f"{snapshot_type}_state", 
-            json.dumps(state_data), 
-            f"State captured at {snapshot_type}"
+
+        # Log the state snapshot with timestamp for timing analysis
+        timestamp = datetime.datetime.now().isoformat()
+        self._log_state_with_timing(
+            f"{snapshot_type}_state",
+            json.dumps(state_data),
+            timestamp
         )
 
     @timed
@@ -748,48 +749,6 @@ class PlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin, StreamingM
         return StopEvent(result=scaff)
 
 
-class UnifiedMixin(UnifiedHelperMixin, StreamingMixin):
-    @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
-    async def unified_mape_k(self, ctx: Context, ev: StartEvent) -> StopEvent:
-        user_message = ev.input
-        await ctx.set("user_message", user_message)
-
-        # use SinglePromptPrompt for unified call
-        sp_pm = UnifiedPrompt()
-        template = sp_pm.get_prompts()["default"].get_template()
-        prompt_str = template.format(
-            domain_description=self.domain_description,
-            feature_context=self.get_formatted_feature_context(),
-            instance=self.instance,
-            predicted_class_name=self.predicted_class_name,
-            understanding_displays=self.understanding_displays.as_text(),
-            modes_of_engagement=self.modes_of_engagement.as_text(),
-            chat_history=self.get_chat_history_as_xml(),
-            user_message=user_message,
-            user_model=self.user_model.get_state_summary(as_dict=False),
-            explanation_collection=self.user_model.get_complete_explanation_collection(as_dict=False),
-            explanation_plan=self.format_predefined_plan_for_prompt(),
-            last_shown_explanations=self.get_formatted_last_shown_explanations(),
-        )
-
-        # Wrap the prompt string in a PromptTemplate for structured prediction
-        unified_prompt = PromptTemplate(prompt_str)
-        # Use unified prediction (streaming or not) with logging
-        result: SinglePromptResultModel = await self._predict(SinglePromptResultModel, unified_prompt,
-                                                              "SinglePromptResult")
-
-        # Process the unified result using helper method
-        # This handles all MAPE-K phases in one go
-        self.process_unified_result(user_message, result)
-
-        # Prepare final result for workflow
-        final = ExecuteResult(
-            reasoning=result.reasoning,
-            response=replace_plot_placeholders(result.response, self.visual_explanations_dict),
-        )
-        return StopEvent(result=final)
-
-
 # Composed agent classes
 
 class MapeK4BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorMixin, AnalyzeMixin, PlanMixin, ExecuteMixin,
@@ -831,25 +790,6 @@ class MapeK2BaseAgent(Workflow, LlamaIndexBaseAgent, MonitorAnalyzeMixin, PlanEx
         )
 
 
-class MapeKUnifiedBaseAgent(Workflow, LlamaIndexBaseAgent, UnifiedMixin, StreamingMixin, BaseAgentInitMixin):
-    """
-    Unified MAPE-K agent: performs all MAPE-K steps in a single LLM call with streaming support.
-    """
-
-    def __init__(self, llm: LLM = None, structured_output: bool = True, timeout: float = 100.0, **kwargs):
-        # Initialize LlamaIndexBaseAgent with all the base parameters
-        LlamaIndexBaseAgent.__init__(self, **kwargs)
-
-        # Initialize with special reasoning model
-        self._init_agent_components(
-            llm=llm,
-            structured_output=structured_output,
-            timeout=timeout,
-            special_model=OPENAI_REASONING_MODEL_NAME,
-            **kwargs
-        )
-
-
 class PlanApprovalMixin(UserModelHelperMixin, ConversationHelperMixin):
     @step(retry_policy=ConstantDelayRetryPolicy(delay=5, maximum_attempts=0))
     async def plan_approval(self, ctx: Context, ev: AnalyzeDoneEvent) -> PlanDoneEvent:
@@ -879,12 +819,19 @@ class PlanApprovalMixin(UserModelHelperMixin, ConversationHelperMixin):
         plan_approval_prompt = PromptTemplate(prompt_str)
         approval_result = await self._predict(PlanApprovalModel, plan_approval_prompt, "PlanApprovalResult")
 
-        # Update the explanation plan based on the approval result
-        # This creates the updated plan that will be passed to execute
-        approval_result = self.update_explanation_plan_after_approval(approval_result)
-
-        # Update user model with the new plan result
-        self.update_explanation_plan(approval_result)
+        # Reorder-only at approval time (no removal). Actual consumption happens after execution
+        plan = list(self.explanation_plan or [])
+        nr = approval_result.next_response
+        if not approval_result.approved and nr:
+            # Remove any existing matching item, then put it at the front
+            plan = [p for p in plan if not (
+                getattr(p, 'explanation_name', None) == nr.explanation_name and
+                getattr(p, 'step_name', None) == nr.step_name
+            )]
+            plan.insert(0, nr)
+        
+        # Update agent's internal plan directly
+        self.explanation_plan = plan
 
         await ctx.set("approval_result", approval_result)
         return PlanDoneEvent()
@@ -938,9 +885,18 @@ class PlanApprovalExecuteMixin(UserModelHelperMixin, ConversationHelperMixin):
             logger.warning("get_target_explanations_from_execute_result returned None - using empty list")
             target_explanations = []
 
-        # Update user model with plan result using helper method (before plan updates)
-        plan_result = self.update_explanation_plan_after_approval(result)
-        self.update_explanation_plan(plan_result)
+        # Reorder-only at approval time (no removal). Actual consumption happens after execution
+        plan = list(self.explanation_plan or [])
+        nr = result.next_response
+        if not result.approved and nr:
+            plan = [p for p in plan if not (
+                getattr(p, 'explanation_name', None) == nr.explanation_name and
+                getattr(p, 'step_name', None) == nr.step_name
+            )]
+            plan.insert(0, nr)
+        
+        # Update agent's internal plan directly
+        self.explanation_plan = plan
 
         # Process explanations after execution using universal helper
         self.process_explanations_after_execution(target_explanations)
@@ -1092,10 +1048,18 @@ class ConditionalPlanExecuteMixin(UserModelHelperMixin, ConversationHelperMixin,
             logger.warning("get_target_explanations_from_execute_result returned None - using empty list")
             target_explanations = []
 
-        # Update user model with plan result using helper method (before plan updates)
-        # Keep original result for conversation update, get plan result separately
-        plan_result = self.update_explanation_plan_after_approval(result)
-        self.update_explanation_plan(plan_result)
+        # Reorder-only at approval time (no removal). Actual consumption happens after execution
+        plan = list(self.explanation_plan or [])
+        nr = result.next_response
+        if not result.approved and nr:
+            plan = [p for p in plan if not (
+                getattr(p, 'explanation_name', None) == nr.explanation_name and
+                getattr(p, 'step_name', None) == nr.step_name
+            )]
+            plan.insert(0, nr)
+        
+        # Update agent's internal plan directly
+        self.explanation_plan = plan
 
         # Process explanations after execution using universal helper
         self.process_explanations_after_execution(target_explanations)
