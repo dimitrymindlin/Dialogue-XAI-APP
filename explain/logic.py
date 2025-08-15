@@ -4,7 +4,6 @@ This file contains the core logic for facilitating conversations. It orchestrate
 routines for setting up conversations, controlling the state of the conversation, and running
 the functions to get the responses to user inputs.
 """
-import asyncio
 import difflib
 import json
 import os
@@ -263,6 +262,8 @@ class ExplainBot:
                 from llm_agents.openai_mapek_agent import MapeK2OpenAIAgent as Agent
             elif self.use_llm_agent == "mape_k_openai_unified":
                 from llm_agents.openai_mapek_agent import MapeKUnifiedOpenAIAgent as Agent
+            elif self.use_llm_agent == "conversational":
+                from llm_agents.simple_conv_agent import ConversationalStreamAgent as Agent
             else:
                 raise ValueError(f"Unknown agent type: {self.use_llm_agent}")
             self.agent = Agent(
