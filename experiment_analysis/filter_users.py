@@ -434,6 +434,12 @@ def filter_by_dataset_and_condition(user_df, dataset_name, condition="all"):
     user_df["dataset"] = profile_col.apply(
         lambda x: x.get("study_group_name", DATASET).split("-")[0] if isinstance(x, dict) else DATASET)
 
+    # Extract condition from study group name (adult-thesis-mapek -> mapek)
+    user_df["study_group"] = profile_col.apply(
+        lambda x: x.get("study_group_name", "").split("-")[2] 
+        if isinstance(x, dict) and "study_group_name" in x and len(x.get("study_group_name", "").split("-")) > 2
+        else "unknown")
+
     # Identify users not in the specified dataset
     users_not_in_dataset = user_df[user_df['dataset'] != dataset_name]['id'].tolist()
 
