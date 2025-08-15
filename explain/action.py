@@ -325,6 +325,11 @@ def compute_explanation_report(conversation,
     # get ceteris paribus for all features
     ceteris_paribus_sentences = []
     for feature in data.columns:
+        if feature == "DailyWaterIntake":
+            # fake feature, return that no change can flip prediction
+            ceteris_paribus_sentences.append("No changes in <b>{Daily Water Intake}</b> alone can change the model prediction.")
+            continue
+
         ceteris_paribus = explain_ceteris_paribus(conversation, data, feature, instance_type_naming, opposite_class,
                                                   as_text=True)
         ceteris_paribus_sentences.append(ceteris_paribus)
