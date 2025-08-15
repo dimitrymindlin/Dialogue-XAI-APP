@@ -236,7 +236,7 @@ class BackendMocker:
         """Test streaming directly from MAPE-K agents without Flask backend.
         
         This is a NEW method that tests the streaming functionality directly 
-        from the updated mape_k_mixins.py agents.
+        from the updated mape_k_component_mixins.py agents.
         
         Args:
             question: Natural language question
@@ -249,7 +249,7 @@ class BackendMocker:
         
         try:
             # Import the streaming-enabled agents
-            from llm_agents.mape_k_mixins import MapeK2BaseAgent, MapeKUnifiedBaseAgent
+            from llm_agents.mape_k_component_mixins import MapeK2BaseAgent, MapeKUnifiedBaseAgent
             from llama_index.llms.openai import OpenAI
             import os
             
@@ -498,7 +498,7 @@ async def main():
         # Handle direct streaming mode (bypasses Flask entirely)
         if args.use_direct_stream:
             logger.info("🚀 Using DIRECT AGENT STREAMING mode (bypassing Flask backend)")
-            logger.info("This tests the new streaming functionality in mape_k_mixins.py directly!")
+            logger.info("This tests the new streaming functionality in mape_k_component_mixins.py directly!")
             
             responses = await mocker.ask_questions_direct_stream_sequence(questions)
             
