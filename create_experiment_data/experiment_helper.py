@@ -187,7 +187,10 @@ class ExperimentHelper:
                 if value != old_instance.instance_as_dict[key]:
                     instance.instance_as_dict[key] = {"old": old_instance.instance_as_dict[key], "current": value}
 
-        instance = self._make_displayable_instance(instance)
+        try:
+            instance = self._make_displayable_instance(instance)
+        except Exception as e:
+            print(f"Error in making instance displayable: {e}, using normal instance")
 
         instance.counter = datapoint_count
         instance.instance_type = self.current_instance_type
