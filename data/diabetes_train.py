@@ -16,7 +16,8 @@ from data.train_utils import (
     update_config_with_metrics,
     get_and_store_feature_importances,
     generate_feature_names_output,
-    check_nan_values
+    check_nan_values,
+    standardize_column_names
 )
 
 DATASET_NAME = "diabetes"
@@ -25,8 +26,6 @@ save_path = f"./{DATASET_NAME}"
 save_flag = True
 
 
-def standardize_column_names(data):
-    data.columns = [col.capitalize() for col in data.columns]
 
 
 def clean_data(data, cols_with_nan_list):
@@ -46,24 +45,32 @@ def map_ordinal_columns(data, config, exclude_columns):
 
 
 def add_control_variable(data, variable_name):
-    # Define the binary categories and their corresponding probabilities for the skewed distribution
-    categories = ["Yes", "No"]
-    probabilities = [0.25, 0.75]  # Skewed distribution - 25% have allergies, 75% don't
+    """Add a numeric negative control feature for daily water intake.
+    Random values in realistic range, sampled independently of the target.
+    """
+    # Generate random water intake values in realistic range (1.0 to 4.5 liters per day)
+    # Using normal distribution with some bounds to simulate realistic intake patterns
+    np.random.seed(42)  # For reproducibility
+    water_intake = np.random.normal(loc=2.5, scale=0.8, size=len(data))
+    
+    # Clip to realistic bounds and round to 1 decimal place
+    water_intake = np.clip(water_intake, 1.0, 4.5)
+    water_intake = np.round(water_intake, 1)
 
-    # Generate random allergy status assignments based on the defined probabilities
-    data[variable_name] = np.random.choice(categories, size=len(data), p=probabilities)
+    # Sample independently of y to act as a negative control
+    data[variable_name] = water_intake
 
 
 def preprocess_data_specific(data, config):
     if "drop_columns" in config:
         data.drop(columns=config["drop_columns"], inplace=True)
 
-    standardize_column_names(data)
+    data = standardize_column_names(data)
     target_col = config["target_col"]
-    control_variable_name = "HasAllergies"
-    # Add HasAllergies as a categorical variable (not ordinal)
+    control_variable_name = "DailyWaterIntake"
+    # Add DailyWaterIntake as a numeric variable (negative control)
     add_control_variable(data, control_variable_name)
-    # Note: HasAllergies should be in columns_to_encode, not ordinal_mapping
+    # Note: DailyWaterIntake is numeric, so not in columns_to_encode
 
     # Following functions assume capitalized col names
     columns_with_nan = data.columns[data.isna().any()].tolist()
@@ -164,9 +171,9 @@ def main():
         original_columns_to_encode = config["columns_to_encode"].copy()
         config["columns_to_encode"] = []
         for col in original_columns_to_encode:
-            # Map original names to standardized names
-            if col == "HasAllergies" and "HasAllergies" in X_train.columns:
-                config["columns_to_encode"].append("HasAllergies")
+            # Map original names to standardized names - skip DailyWaterIntake as it's numeric
+            if col != "DailyWaterIntake" and col in X_train.columns:
+                config["columns_to_encode"].append(col)
 
     # Set up feature display names and update config
     feature_display_names, config = setup_feature_display_names(X_train, config, target_col)
@@ -192,8 +199,25 @@ def main():
     X_train_with_names = X_train.copy()
     X_test_with_names = X_test.copy()
 
-    # Note: categorical_mapping.json is already created by label_encode_and_save_classes in ml_utilities.py
-    # No need to create a duplicate mapping here that would overwrite the correct format
+    # Save categorical mapping from preprocess function using column indices as keys
+    categorical_mapping = {}
+    for feature in config["columns_to_encode"]:
+        # Create mappings based on encoded_classes
+        if feature in encoded_classes:
+            # Find the column index for this feature in the final dataframe
+            if feature in X_train.columns:
+                feature_index = X_train.columns.get_loc(feature)
+                # Create array mapping where index = encoded value, value = original label
+                class_mapping = encoded_classes[feature]
+                # Sort by encoded value to create proper array matching adult format
+                sorted_classes = sorted(class_mapping.items(), key=lambda x: x[1])
+                categorical_mapping[str(feature_index)] = [original_name for original_name, _ in sorted_classes]
+                print(f"Created categorical mapping for '{feature}' at index {feature_index}: {categorical_mapping[str(feature_index)]}")
+            else:
+                print(f"Warning: Feature '{feature}' not found in X_train columns")
+
+    # Save categorical mapping
+    save_categorical_mapping(categorical_mapping, save_path)
 
     # Remove target column for model training
     X_train.drop(columns=[target_col], inplace=True)
@@ -230,19 +254,7 @@ def main():
         save_model_and_features(best_model, X_train, config, save_path, DATASET_NAME)
 
     # Generate feature names output after transformation
-    # Create feature mapping for generate_feature_names_output (different format than categorical_mapping.json)
-    # Use original column names (not display names) for the mapping
-    feature_mapping_for_names = {}
-    original_columns_to_encode = ["HasAllergies"]  # Use original column names
-    for feature in original_columns_to_encode:
-        if feature in encoded_classes:
-            feature_mapping_for_names[feature] = {str(v): k for k, v in encoded_classes[feature].items()}
-    
-    # Create a temporary config with original column names for generate_feature_names_output
-    temp_config = config.copy()
-    temp_config["columns_to_encode"] = original_columns_to_encode
-    
-    feature_names_out = generate_feature_names_output(X_train, temp_config, feature_mapping_for_names)
+    feature_names_out = generate_feature_names_output(X_train, config, categorical_mapping)
 
     # Get and store feature importances in config
     feature_importances = get_and_store_feature_importances(best_model, feature_names_out, config, save_path,

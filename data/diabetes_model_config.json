@@ -1,7 +1,6 @@
 {
   "target_col": "Y",
   "columns_to_encode": [
-    "HasAllergies"
   ],
   "ordinal_mapping": {
     "Y": {
@@ -12,25 +11,31 @@
   "rename_columns": {},
   "model_params": {
     "n_estimators": [
-      100
+      100,
+      200
     ],
     "max_depth": [
-      5
-    ],
-    "min_samples_leaf": [
-      5,
-      6,
-      8,
-      10
-    ],
-    "min_samples_split": [
+      10,
+      15,
       20
     ],
+    "min_samples_leaf": [
+      1,
+      2,
+      5
+    ],
+    "min_samples_split": [
+      2,
+      5,
+      10
+    ],
     "max_features": [
-      "sqrt"
+      "sqrt",
+      "log2"
     ],
     "min_impurity_decrease": [
-      0.01
+      0.0,
+      0.001
     ]
   },
   "column_details": [
@@ -91,11 +96,11 @@
       ]
     ],
     [
-      "HasAllergies",
+      "DailyWaterIntake",
       [
-        "Has Allergies",
-        "",
-        "Indicates whether the person has any allergies (Yes or No)."
+        "Daily Water Intake",
+        "liters",
+        "The amount of water consumed daily in liters. Adequate hydration is important for overall health."
       ]
     ]
   ],
