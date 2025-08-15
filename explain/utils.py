@@ -63,8 +63,15 @@ def read_and_format_data(filepath,
     if not cat_features and not num_features:
         cat_features, num_features = get_numeric_categorical(dataset)
 
-    # Make categorical features categorical in the dataset
-    dataset[cat_features] = dataset[cat_features].astype('object')
+    # Make categorical features categorical and ensure numerical features stay numeric
+    for col in cat_features:
+        if col in dataset.columns:
+            dataset[col] = dataset[col].astype('object')
+            
+    # Ensure numerical features stay numeric (in case they got converted to object)
+    for col in num_features:
+        if col in dataset.columns:
+            dataset[col] = pd.to_numeric(dataset[col], errors='coerce')
 
     return dataset, y_values, cat_features, num_features
 

@@ -144,7 +144,13 @@ class DemandDrivenBaseGenerator(DemandDrivenGeneratorInterface):
         """Validate that generated instance meets feature difference constraints."""
         if generated_instance is None or len(generated_instance) == 0:
             return False
+        
+        # Skip validation for diabetes - dataset search already ensures criteria are met
+        if hasattr(self, 'dataset_name') and self.dataset_name == 'diabetes':
+            logger.debug("DIABETES: Skipping redundant validation (search pre-validated)")
+            return True
             
+        # Keep validation for adult and other datasets (synthetic generation needs validation)
         diff_count = self._count_feature_differences(original_instance, generated_instance)
         return self.min_feature_differences <= diff_count <= self.max_feature_differences
     

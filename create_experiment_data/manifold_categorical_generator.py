@@ -72,8 +72,9 @@ class ManifoldAwareCategoricalGenerator:
         """Pre-compute manifold distance threshold for efficiency."""
         # Sample distances from existing data - adaptive sample size
         all_distances = []
-        # Use more samples for larger datasets, but cap at reasonable limit
+        # Use more samples for larger datasets, but cap at reasonable limit and dataset size
         sample_size = max(500, min(2000, len(self.data) // 10))
+        sample_size = min(sample_size, len(self.data))  # Ensure sample_size doesn't exceed dataset size
         sample_indices = np.random.choice(len(self.data), sample_size, replace=False)
 
         for idx in sample_indices:

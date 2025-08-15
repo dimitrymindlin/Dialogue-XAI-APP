@@ -113,12 +113,16 @@ class SHAPExplainer(BaseExplainer):
             shap_vals = self.explainer.shap_values(transformed_x)
             shap_vals = shap_vals[:, :, label]  # Select the relevant class
 
-            # Extract the OneHotEncoder from the ColumnTransformer
-            encoder = self.model.named_steps['preprocessor'].named_transformers_['one_hot']
-
-            shap_groups = get_shap_group_indices(encoder.get_feature_names_out())
-
-            final_shap_values = combine_shap_values_reduced(shap_vals, shap_groups)
+            # Check if OneHotEncoder exists in the pipeline
+            if 'one_hot' in self.model.named_steps['preprocessor'].named_transformers_:
+                # Extract the OneHotEncoder from the ColumnTransformer
+                encoder = self.model.named_steps['preprocessor'].named_transformers_['one_hot']
+                shap_groups = get_shap_group_indices(encoder.get_feature_names_out())
+                final_shap_values = combine_shap_values_reduced(shap_vals, shap_groups)
+            else:
+                # No categorical features, use SHAP values directly
+                # Ensure it's 1D by taking the first row if it's 2D
+                final_shap_values = shap_vals[0] if shap_vals.ndim > 1 else shap_vals
         else:
             shap_vals = self.explainer.shap_values(data_x[0], nsamples=10_000, silent=True)
 

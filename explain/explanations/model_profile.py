@@ -142,7 +142,7 @@ class PdpExplanation:
 
             "Insulin": "<p>On average, people with <strong>insulin levels above 150</strong> have a slightly higher chance of having diabetes.</p> <p>Beyond that level, the chance stays about the same, showing only a weak effect.</p>",
 
-            "HasAllergies": "<p>On average, a person's <strong>allergies</strong> do not seem to affect the chance of having diabetes.</p> <p>The risk stays about the same.</p>"
+            "Dailywaterintake": "<p>On average, a person's <strong>daily water intake</strong> does not seem to affect the chance of having diabetes.</p> <p>The risk stays about the same regardless of how much water someone drinks.</p>"
         }
 
         # Select the appropriate feature mapping based on dataset name

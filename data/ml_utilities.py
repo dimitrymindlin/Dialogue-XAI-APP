@@ -62,11 +62,16 @@ def preprocess_data(data, columns_to_encode, ordinal_info, drop_columns=None):
 
 
 def construct_pipeline(columns_to_encode, model):
+    # Only add OneHotEncoder if there are categorical columns to encode
+    transformers = []
+    if columns_to_encode:
+        transformers.append(('one_hot', OneHotEncoder(handle_unknown='ignore'), columns_to_encode))
+    
     preprocessor = ColumnTransformer(
-        transformers=[
-            ('one_hot', OneHotEncoder(handle_unknown='ignore'), columns_to_encode),
-        ], remainder='passthrough'
+        transformers=transformers,
+        remainder='passthrough'
     )
+    
     pipeline = Pipeline(steps=[
         ('to_array', FunctionTransformer(np.asarray, validate=False)),
         ('preprocessor', preprocessor),

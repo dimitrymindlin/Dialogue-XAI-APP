@@ -17,11 +17,12 @@ class DiverseKNNInstanceSelector:
     """Selector for similar instances with enforced actionable feature diversity (KNN-based candidate pool, diversity-aware selection)."""
 
     def __init__(self, data: pd.DataFrame, categorical_features: List[str] = None,
-                 actionable_features: List[str] = None):
+                 actionable_features: List[str] = None, dataset_name: str = "unknown"):
         self.original_data = data.copy()  # Store original data with string categorical values
         self.data = data.copy()  # This will contain encoded data after _prepare_data()
         self.categorical_features = categorical_features or []
         self.actionable_features = actionable_features or list(data.columns)
+        self.dataset_name = dataset_name
         self.label_encoders = {}
         self.scaler = StandardScaler()
         self._prepare_data()
@@ -172,11 +173,50 @@ class DiverseKNNInstanceSelector:
     def _calculate_feature_thresholds(self):
         """Calculate thresholds for determining meaningful changes in features."""
         self.feature_thresholds = {}
+        
+        if self.dataset_name == "diabetes":
+            # Use percentile-based thresholds for diabetes (more adaptive)
+            self.feature_thresholds = self._calculate_percentile_thresholds()
+        else:
+            # Keep existing standard deviation approach for adult/german
+            multiplier = 0.2   # Keep existing for adult/german (mixed features)
+            for col in self.data.columns:
+                if col in self.categorical_features:
+                    self.feature_thresholds[col] = 0
+                else:
+                    self.feature_thresholds[col] = max(self.data[col].std() * multiplier, 1e-6)
+    
+    def _calculate_percentile_thresholds(self) -> dict:
+        """Calculate percentile-based thresholds by analyzing actual feature differences (diabetes only)."""
+        import numpy as np
+        feature_thresholds = {}
+        
+        # Sample instance pairs to calculate difference distributions
+        sample_size = min(500, len(self.data) * (len(self.data) - 1) // 2)
+        np.random.seed(42)  # For reproducibility
+        
         for col in self.data.columns:
             if col in self.categorical_features:
-                self.feature_thresholds[col] = 0
+                feature_thresholds[col] = 0
             else:
-                self.feature_thresholds[col] = max(self.data[col].std() * 0.2, 1e-6)
+                differences = []
+                
+                # Sample pairs of instances to calculate differences
+                for _ in range(sample_size):
+                    idx1, idx2 = np.random.choice(len(self.data), 2, replace=False)
+                    diff = abs(self.data.iloc[idx1][col] - self.data.iloc[idx2][col])
+                    if diff > 0:  # Only non-zero differences
+                        differences.append(diff)
+                
+                if differences:
+                    # Use 30th percentile as threshold (captures smaller but meaningful differences)
+                    threshold = np.percentile(differences, 30)
+                    feature_thresholds[col] = max(threshold, 1e-6)
+                else:
+                    # Fallback to std approach if no differences found
+                    feature_thresholds[col] = max(self.data[col].std() * 0.2, 1e-6)
+        
+        return feature_thresholds
 
     def _is_meaningful_change(self, feature_name: str, val1: float, val2: float) -> bool:
         """Determine if the change between two feature values is significant enough to consider."""

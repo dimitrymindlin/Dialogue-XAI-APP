@@ -96,6 +96,11 @@ class DemandDrivenTestInstanceManager:
         logger.info(f"  Target: {target_class_1_count} class 1, {total_instances - target_class_1_count} class 0")
         
         for i, train_id in enumerate(training_instances):
+            # Log progress at 25%, 50%, 75% intervals
+            progress_percent = (i + 1) / total_instances
+            if i == 0 or progress_percent in [0.25, 0.50, 0.75] or i == total_instances - 1:
+                logger.info(f"  Processing {phase} instances... {progress_percent:.0%} complete ({i+1}/{total_instances})")
+            
             original_instance = self.data.loc[train_id:train_id]
             original_class = self.model.predict(original_instance)[0]
             
@@ -103,6 +108,8 @@ class DemandDrivenTestInstanceManager:
             current_class_1_count = class_counts[1]
             remaining_instances = total_instances - i
             remaining_class_1_needed = target_class_1_count - current_class_1_count
+            
+            logger.debug(f"  ID {train_id}: balance {current_class_1_count}/{total_instances-i} class 1, need {remaining_class_1_needed} more")
             
             # Decide on target class based on remaining needs
             if remaining_class_1_needed > remaining_instances:
@@ -142,10 +149,9 @@ class DemandDrivenTestInstanceManager:
                     'attempts_needed': instance_info['attempts']
                 }
                 
-                logger.debug(f"    {train_id}: {instance_info['method']} -> class {predicted_class} " +
-                           f"(target: {target_class}, attempts: {instance_info['attempts']})")
+                logger.debug(f"    ID {train_id}: {instance_info['method']} -> class {predicted_class}")
             else:
-                logger.warning(f"    {train_id}: FAILED to generate instance")
+                logger.warning(f"    ID {train_id}: Generation FAILED")
                 # For failed generation, we need to handle this gracefully
                 # We'll create a fallback assignment to maintain the expected structure
                 assignments[train_id] = {
@@ -163,8 +169,7 @@ class DemandDrivenTestInstanceManager:
         final_balance = class_counts[1] / total_assigned if total_assigned > 0 else 0
         balance_achieved = abs(final_balance - target_balance) <= tolerance
         
-        logger.info(f"  Final balance: {class_counts[1]}/{total_assigned} = {final_balance:.3f} " +
-                   f"(target: {target_balance:.3f}, {'✓' if balance_achieved else '✗'})")
+        logger.info(f"  {phase.upper()}: Final balance {class_counts[1]}/{total_assigned} = {final_balance:.3f} {'✓' if balance_achieved else '✗'}")
         
         return {
             'assignments': assignments,

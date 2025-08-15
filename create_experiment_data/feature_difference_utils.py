@@ -1,14 +1,54 @@
 import pandas as pd
 from typing import List, Set
 
-def calculate_feature_thresholds(data: pd.DataFrame, categorical_features: List[str]) -> dict:
-    """Calculate meaningful change thresholds: 20% of std for numerical, 0 for categorical."""
+def calculate_feature_thresholds(data: pd.DataFrame, categorical_features: List[str], dataset_name: str = "unknown") -> dict:
+    """Calculate meaningful change thresholds: percentile-based for diabetes, std-based for others."""
     feature_thresholds = {}
+    
+    if dataset_name == "diabetes":
+        # Use percentile-based thresholds for diabetes (more adaptive)
+        feature_thresholds = _calculate_percentile_thresholds(data, categorical_features)
+    else:
+        # Use standard deviation approach for other datasets
+        multiplier = 0.2   # Keep existing for adult/german (mixed features)
+        for col in data.columns:
+            if col in categorical_features:
+                feature_thresholds[col] = 0
+            else:
+                feature_thresholds[col] = max(data[col].std() * multiplier, 1e-6)
+    
+    return feature_thresholds
+
+def _calculate_percentile_thresholds(data: pd.DataFrame, categorical_features: List[str]) -> dict:
+    """Calculate percentile-based thresholds by analyzing actual feature differences."""
+    import numpy as np
+    feature_thresholds = {}
+    
+    # Sample instance pairs to calculate difference distributions
+    sample_size = min(500, len(data) * (len(data) - 1) // 2)
+    np.random.seed(42)  # For reproducibility
+    
     for col in data.columns:
         if col in categorical_features:
             feature_thresholds[col] = 0
         else:
-            feature_thresholds[col] = max(data[col].std() * 0.2, 1e-6)
+            differences = []
+            
+            # Sample pairs of instances to calculate differences
+            for _ in range(sample_size):
+                idx1, idx2 = np.random.choice(len(data), 2, replace=False)
+                diff = abs(data.iloc[idx1][col] - data.iloc[idx2][col])
+                if diff > 0:  # Only non-zero differences
+                    differences.append(diff)
+            
+            if differences:
+                # Use 30th percentile as threshold (captures smaller but meaningful differences)
+                threshold = np.percentile(differences, 30)
+                feature_thresholds[col] = max(threshold, 1e-6)
+            else:
+                # Fallback to std approach if no differences found
+                feature_thresholds[col] = max(data[col].std() * 0.2, 1e-6)
+    
     return feature_thresholds
 
 

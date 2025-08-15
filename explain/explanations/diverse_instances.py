@@ -134,7 +134,7 @@ class DiverseInstances:
         
         if self.feature_thresholds is None:
             from create_experiment_data.feature_difference_utils import calculate_feature_thresholds
-            self.feature_thresholds = calculate_feature_thresholds(data, self.categorical_features)
+            self.feature_thresholds = calculate_feature_thresholds(data, self.categorical_features, self.dataset_name)
 
     def _create_submodular_instances(self, data: pd.DataFrame, model):
         """Create diverse instances using SP-LIME with enforced class balance."""
@@ -152,7 +152,7 @@ class DiverseInstances:
 
     def _get_diverse_seeds(self, data: pd.DataFrame, model):
         """Get diverse instance seeds from SP-LIME."""
-        target_seeds = 2 * self.n_clusters
+        target_seeds = 4 * self.n_clusters
         print(f"Using SP-LIME with SHAP to find {target_seeds} seeds for {self.n_clusters} clusters")
         print(f"Dataset size: {len(data)}, Target seeds: {target_seeds}")
         
