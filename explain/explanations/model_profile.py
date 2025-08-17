@@ -78,34 +78,32 @@ class PdpExplanation:
         """
         self.explainer = dx.Explainer(self.model, self.background_data, y=self.ys)
 
-        cat_profiles = self.explainer.model_profile(type='partial', variable_type='categorical', N=800,
-                                                    variables=self.categorical_features)
-        num_profiles = self.explainer.model_profile(type='accumulated', variable_type='numerical',
-                                                    variables=self.numerical_features)
+        if len(self.categorical_features) > 0:
+            cat_profiles = self.explainer.model_profile(type='partial', variable_type='categorical', N=800, variables=self.categorical_features)
+            # Replace the feature values in `_x_` with the original names from `categorical_mapping`
+            if self.categorical_mapping:
+                for feature in self.categorical_features:
+                    if feature in cat_profiles.result['_vname_'].values:
+                        feature_mask = cat_profiles.result['_vname_'] == feature
+                        feature_indices = cat_profiles.result.loc[feature_mask, '_x_']
 
-        # Replace the feature values in `_x_` with the original names from `categorical_mapping`
-        if self.categorical_mapping:
-            for feature in self.categorical_features:
-                if feature in cat_profiles.result['_vname_'].values:
-                    feature_mask = cat_profiles.result['_vname_'] == feature
-                    feature_indices = cat_profiles.result.loc[feature_mask, '_x_']
+                        # Get corresponding mapping list
+                        feature_mapping = self.categorical_mapping.get(self.background_data.columns.get_loc(feature))
 
-                    # Get corresponding mapping list
-                    feature_mapping = self.categorical_mapping.get(self.background_data.columns.get_loc(feature))
+                        if feature_mapping:
+                            cat_profiles.result.loc[feature_mask, '_x_'] = feature_indices.apply(
+                                lambda x: feature_mapping[int(float(x))] if int(float(x)) < len(feature_mapping) else x
+                            )
+            """# Plot the profiles
+                    if self.categorical_features and cat_profiles is not None:
+                        print("Plotting categorical profiles...")
+                        cat_profiles.plot()"""
 
-                    if feature_mapping:
-                        cat_profiles.result.loc[feature_mask, '_x_'] = feature_indices.apply(
-                            lambda x: feature_mapping[int(float(x))] if int(float(x)) < len(feature_mapping) else x
-                        )
-
-        """# Plot the profiles
-        if self.categorical_features and cat_profiles is not None:
-            print("Plotting categorical profiles...")
-            cat_profiles.plot()
-        
-        if self.numerical_features and num_profiles is not None:
-            print("Plotting numerical profiles...")
-            num_profiles.plot()"""
+        if len(self.numerical_features) > 0:
+            num_profiles = self.explainer.model_profile(type='accumulated', variable_type='numerical', variables=self.numerical_features)
+            """if self.numerical_features and num_profiles is not None:
+                print("Plotting numerical profiles...")
+                num_profiles.plot()"""
 
         # TODO: This was plotted and analyzed by hand. Find a way to automatically analyze the graphs ... LLM prompt?
 

@@ -6,7 +6,6 @@ that work with the existing Adult and Diabetes dataset generators.
 """
 
 import pandas as pd
-import numpy as np
 from typing import List, Optional
 import logging
 
