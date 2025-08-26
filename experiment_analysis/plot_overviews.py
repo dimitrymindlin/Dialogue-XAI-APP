@@ -145,11 +145,11 @@ def plot_user_predictions(user_accuracy_over_time_df, study_group_name, user_df)
         user_df[['id', 'final_score', 'intro_score', 'study_group']],
         left_on='user_id', right_on='id', how='left'
     )
-    user_accuracy_over_time_df.drop(columns='id', inplace=True)
+    user_accuracy_over_time_df = user_accuracy_over_time_df.drop(columns='id')
     # Filter by study group and remove col
     user_accuracy_over_time_df = user_accuracy_over_time_df[
         user_accuracy_over_time_df['study_group'] == study_group_name]
-    user_accuracy_over_time_df.drop(columns='study_group', inplace=True)
+    user_accuracy_over_time_df = user_accuracy_over_time_df.drop(columns='study_group')
 
     # Setup color map and apply to accuracy columns
     color_map = {'Correct': 'green', 'Wrong': 'red'}
