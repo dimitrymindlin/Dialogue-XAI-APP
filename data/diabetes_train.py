@@ -44,6 +44,83 @@ def map_ordinal_columns(data, config, exclude_columns):
         data[col] = data[col].map(mapping)
 
 
+def fix_medical_zeros(data):
+    """Fix medically implausible zero values in medical features.
+    
+    In the Pima Indian Diabetes dataset, zero values represent missing data,
+    not true measurements. This function replaces impossible zeros with 
+    realistic imputed values based on medical constraints.
+    """
+    print("\n=== FIXING MEDICALLY IMPLAUSIBLE ZERO VALUES ===")
+    
+    # Define medical features that cannot be zero and their minimum thresholds
+    medical_constraints = {
+        'BMI': {
+            'min_value': 15.0,  # Severe underweight threshold
+            'description': 'Body Mass Index (severe underweight minimum)'
+        },
+        'Glucose': {
+            'min_value': 50.0,  # Critical hypoglycemia threshold
+            'description': 'Blood glucose (critical hypoglycemia minimum)'
+        },
+        'BloodPressure': {
+            'min_value': 40.0,  # Severe hypotension threshold
+            'description': 'Diastolic blood pressure (severe hypotension minimum)'
+        },
+        'Insulin': {
+            'min_value': 10.0,  # Minimal endogenous production
+            'description': 'Serum insulin (minimal endogenous production)'
+        }
+    }
+    
+    total_imputed = 0
+    
+    for feature, constraints in medical_constraints.items():
+        if feature in data.columns:
+            # Count zero values
+            zero_mask = data[feature] == 0
+            zero_count = zero_mask.sum()
+            
+            if zero_count > 0:
+                # Calculate median from non-zero values
+                non_zero_values = data[data[feature] > 0][feature]
+                if len(non_zero_values) > 0:
+                    median_imputation = non_zero_values.median()
+                    
+                    # Ensure imputed value respects medical minimum
+                    imputation_value = max(median_imputation, constraints['min_value'])
+                    
+                    # Apply imputation
+                    data.loc[zero_mask, feature] = imputation_value
+                    
+                    print(f"{feature:12}: Fixed {zero_count:3d} impossible zeros → {imputation_value:.1f}")
+                    print(f"             {constraints['description']}")
+                    
+                    total_imputed += zero_count
+                else:
+                    # Fallback: use medical minimum if no non-zero values exist
+                    data.loc[zero_mask, feature] = constraints['min_value']
+                    print(f"{feature:12}: Fixed {zero_count:3d} zeros with minimum → {constraints['min_value']:.1f}")
+                    total_imputed += zero_count
+    
+    print(f"\nTotal medical fixes applied: {total_imputed} values")
+    
+    # Verify no impossible zeros remain
+    remaining_issues = []
+    for feature in medical_constraints.keys():
+        if feature in data.columns:
+            remaining_zeros = (data[feature] == 0).sum()
+            if remaining_zeros > 0:
+                remaining_issues.append(f"{feature}: {remaining_zeros} zeros")
+    
+    if remaining_issues:
+        print(f"⚠️  WARNING: Remaining issues: {', '.join(remaining_issues)}")
+    else:
+        print("✅ All medical constraints satisfied")
+    
+    return data
+
+
 def add_control_variable(data, variable_name):
     """Add a numeric negative control feature for daily water intake.
     Random values in realistic range, sampled independently of the target.
@@ -66,6 +143,10 @@ def preprocess_data_specific(data, config):
         data.drop(columns=config["drop_columns"], inplace=True)
 
     data = standardize_column_names(data)
+    
+    # Fix medically implausible zero values before any other processing
+    data = fix_medical_zeros(data)
+    
     target_col = config["target_col"]
     control_variable_name = "DailyWaterIntake"
     # Add DailyWaterIntake as a numeric variable (negative control)
