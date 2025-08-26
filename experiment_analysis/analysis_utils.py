@@ -169,7 +169,7 @@ def extract_questions(user_events, study_group):
                 result_df.loc[:, "text"] = ""
         _apply_chat_transformations(result_df, study_group)
         if "text" in result_df.columns:
-            result_df["text"].fillna("", inplace=True)
+            result_df["text"] = result_df["text"].fillna("")
         elif study_group == "active_chat":
             raise KeyError(
                 "No 'text' column found in user_questions_over_time. Maybe you forgot to change 'active_users' in pg admin?")

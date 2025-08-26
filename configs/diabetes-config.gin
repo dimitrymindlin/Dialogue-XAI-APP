@@ -39,7 +39,7 @@ MegaExplainer.use_tree_shap = True
 # Tabular Dice Params
 TabularDice.cache_location = "./cache/diabetes-dice-tabular.pkl"
 TabularDice.final_cfe_amount = 3
-TabularDice.max_features_to_change = 2
+TabularDice.max_features_to_change = 3
 
 # Diverse Instances
 DiverseInstances.cache_location = "./cache/diabetes-diverse-instances.pkl"
