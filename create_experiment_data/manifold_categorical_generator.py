@@ -5,6 +5,8 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from typing import List, Dict, Any
 import logging
 
+from .manifold_validator import ManifoldValidator
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,80 +44,13 @@ class ManifoldAwareCategoricalGenerator:
         if len(self.categorical_values) == 0:
             logger.warning(f"[ManifoldGenerator] No valid categorical features found!")
 
-        # Prepare data for manifold checking
-        self._prepare_manifold_checker()
+        # Initialize manifold validator
+        self.manifold_validator = ManifoldValidator(
+            data=data,
+            categorical_features=categorical_features,
+            manifold_k=self.manifold_k
+        )
 
-    def _prepare_manifold_checker(self):
-        """Prepare KNN for checking if generated instances are in data manifold."""
-        # Encode categorical features for manifold distance calculation
-        self.encoded_data = self.data.copy()
-        self.label_encoders = {}
-
-        for feature in self.categorical_features:
-            if feature in self.encoded_data.columns:
-                le = LabelEncoder()
-                self.encoded_data[feature] = le.fit_transform(self.encoded_data[feature].astype(str))
-                self.label_encoders[feature] = le
-
-        # Scale for distance calculation
-        self.scaler = StandardScaler()
-        self.scaled_data = self.scaler.fit_transform(self.encoded_data)
-
-        # Setup KNN for manifold checking
-        self.manifold_knn = NearestNeighbors(n_neighbors=self.manifold_k, metric='euclidean')
-        self.manifold_knn.fit(self.scaled_data)
-
-        # Pre-compute manifold threshold for efficiency
-        self._compute_manifold_threshold()
-
-    def _compute_manifold_threshold(self, threshold_percentile: float = 75):
-        """Pre-compute manifold distance threshold for efficiency."""
-        # Sample distances from existing data - adaptive sample size
-        all_distances = []
-        # Use more samples for larger datasets, but cap at reasonable limit and dataset size
-        sample_size = max(500, min(2000, len(self.data) // 10))
-        sample_size = min(sample_size, len(self.data))  # Ensure sample_size doesn't exceed dataset size
-        sample_indices = np.random.choice(len(self.data), sample_size, replace=False)
-
-        for idx in sample_indices:
-            instance_encoded = self.scaled_data[idx:idx + 1]
-            dists, _ = self.manifold_knn.kneighbors(instance_encoded)
-            all_distances.append(np.mean(dists[0]))
-
-        self.manifold_threshold = np.percentile(all_distances, threshold_percentile)
-
-    def _encode_instance(self, instance: pd.DataFrame) -> np.ndarray:
-        """Encode an instance for manifold distance calculation."""
-        encoded_instance = instance.copy()
-
-        for feature in self.categorical_features:
-            if feature in encoded_instance.columns and feature in self.label_encoders:
-                try:
-                    encoded_instance[feature] = self.label_encoders[feature].transform(
-                        encoded_instance[feature].astype(str)
-                    )
-                except ValueError:
-                    # Handle unseen categories by using most frequent value
-                    most_frequent = self.encoded_data[feature].mode().iloc[0]
-                    encoded_instance[feature] = most_frequent
-
-        return self.scaler.transform(encoded_instance)
-
-    def _is_in_manifold(self, instance: pd.DataFrame, debug: bool = False) -> bool:
-        """
-        Check if an instance is within the data manifold by comparing its distance
-        to k nearest neighbors with the pre-computed threshold.
-        """
-        try:
-            encoded_instance = self._encode_instance(instance)
-            distances, _ = self.manifold_knn.kneighbors(encoded_instance)
-            avg_distance = np.mean(distances[0])
-
-            return avg_distance <= self.manifold_threshold
-
-        except Exception as e:
-            logger.warning(f"Error checking manifold: {e}")
-            return False
 
     def _has_same_prediction(self, original_instance: pd.DataFrame,
                              generated_instance: pd.DataFrame) -> bool:
@@ -250,7 +185,7 @@ class ManifoldAwareCategoricalGenerator:
                 enhanced_variant = variant
 
             # Check constraints
-            is_manifold = self._is_in_manifold(enhanced_variant)
+            is_manifold = self.manifold_validator.is_in_manifold(enhanced_variant)
             same_prediction = self._has_same_prediction(original_instance, enhanced_variant)
 
             # Count feature differences

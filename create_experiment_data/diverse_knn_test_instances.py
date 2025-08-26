@@ -209,9 +209,11 @@ class DiverseKNNInstanceSelector:
                         differences.append(diff)
                 
                 if differences:
-                    # Use 30th percentile as threshold (captures smaller but meaningful differences)
-                    threshold = np.percentile(differences, 30)
-                    feature_thresholds[col] = max(threshold, 1e-6)
+                    # Use 50th percentile as threshold (less sensitive, more meaningful differences)
+                    # Also ensure minimum threshold to avoid counting tiny changes
+                    threshold = np.percentile(differences, 50)
+                    min_threshold = self.data[col].std() * 0.1  # Minimum based on std
+                    feature_thresholds[col] = max(threshold, min_threshold, 1e-6)
                 else:
                     # Fallback to std approach if no differences found
                     feature_thresholds[col] = max(self.data[col].std() * 0.2, 1e-6)

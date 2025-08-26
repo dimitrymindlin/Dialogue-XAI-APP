@@ -96,10 +96,11 @@ class DemandDrivenTestInstanceManager:
         logger.info(f"  Target: {target_class_1_count} class 1, {total_instances - target_class_1_count} class 0")
         
         for i, train_id in enumerate(training_instances):
-            # Log progress at 25%, 50%, 75% intervals
-            progress_percent = (i + 1) / total_instances
-            if i == 0 or progress_percent in [0.25, 0.50, 0.75] or i == total_instances - 1:
-                logger.info(f"  Processing {phase} instances... {progress_percent:.0%} complete ({i+1}/{total_instances})")
+            # Simple progress indicator
+            if i == 0:
+                logger.info(f"  Generating {phase} instances...")
+            elif (i + 1) == total_instances:
+                logger.info(f"  Completed {phase} instances.")
             
             original_instance = self.data.loc[train_id:train_id]
             original_class = self.model.predict(original_instance)[0]
@@ -109,7 +110,7 @@ class DemandDrivenTestInstanceManager:
             remaining_instances = total_instances - i
             remaining_class_1_needed = target_class_1_count - current_class_1_count
             
-            logger.debug(f"  ID {train_id}: balance {current_class_1_count}/{total_instances-i} class 1, need {remaining_class_1_needed} more")
+            # Balance tracking - only log for debugging
             
             # Decide on target class based on remaining needs
             if remaining_class_1_needed > remaining_instances:
@@ -149,9 +150,9 @@ class DemandDrivenTestInstanceManager:
                     'attempts_needed': instance_info['attempts']
                 }
                 
-                logger.debug(f"    ID {train_id}: {instance_info['method']} -> class {predicted_class}")
+                # Instance generated successfully
             else:
-                logger.warning(f"    ID {train_id}: Generation FAILED")
+                logger.error(f"    ID {train_id}: Generation FAILED")
                 # For failed generation, we need to handle this gracefully
                 # We'll create a fallback assignment to maintain the expected structure
                 assignments[train_id] = {
