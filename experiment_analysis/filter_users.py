@@ -4,7 +4,7 @@ import pandas as pd
 from experiment_analysis.plot_overviews import print_feedback_json
 import numpy as np
 from experiment_analysis.analysis_utils import add_prolific_times
-from experiment_analysis.analysis_config import DATASET
+from experiment_analysis.analysis_config import DATASET, INTRO_TEST_CYCLES, TEACHING_CYCLES, FINAL_TEST_CYCLES
 
 
 def filter_by_time(user_df, time_df, std_dev_threshold=2):
@@ -174,37 +174,17 @@ def filter_by_work_life_balance(user_df, wlb_users):
 
 
 def filter_by_missing_ml_kowledge(user_df):
-    fam_ml_mapping = {
-        "very low": 0,
-        "low": 1,
-        "moderate": 2,
-        "high": 3,
-        "very high": 4,
-        "anonymous": None
-    }
-
-    def parse_ml_knowledge(profile):
-        """Safely extract and map ML knowledge level from profile."""
-        try:
-            profile_data = json.loads(profile)
-            fam_ml_val = profile_data.get("fam_ml_val", "")
-            if fam_ml_val == "":
-                return None
-            # try to cast to int
-            try:
-                fam_ml_val = int(fam_ml_val)
-            except ValueError:
-                pass
-            if isinstance(fam_ml_val, int):
-                return fam_ml_val if 0 <= fam_ml_val <= 4 else None  # Ensure it's in range
-            elif isinstance(fam_ml_val, str):  # String mapping needed
-                return fam_ml_mapping.get(fam_ml_val, None)
-        except (json.JSONDecodeError, KeyError, TypeError):
-            return None  # Handle unexpected cases
-
-    # Apply function to extract ML knowledge
-    user_df["ml_knowledge"] = user_df["profile"].apply(parse_ml_knowledge)
-
+    """
+    Filter users with missing ML knowledge values.
+    
+    Note: ml_knowledge column should already exist from step 2 (profile variable extraction).
+    This function now only filters based on the existing column.
+    """
+    # Check if ml_knowledge column exists (it should from step 2)
+    if "ml_knowledge" not in user_df.columns:
+        print("Warning: ml_knowledge column not found. Skipping ML knowledge filter.")
+        return []
+    
     # Filter users with missing ml_knowledge values
     missing_count = user_df["ml_knowledge"].isnull().sum()
     if missing_count > 0:
@@ -212,6 +192,13 @@ def filter_by_missing_ml_kowledge(user_df):
         if not users_to_remove.empty:
             print(f"Missing ml_knowledge values: {missing_count}")
             return users_to_remove.tolist()
+    
+    print(f"ML knowledge distribution:")
+    if user_df["ml_knowledge"].notna().sum() > 0:
+        value_counts = user_df["ml_knowledge"].value_counts().sort_index()
+        for value, count in value_counts.items():
+            print(f"  {value}: {count} users")
+    
     return []
 
 
@@ -456,3 +443,50 @@ def filter_by_dataset_and_condition(user_df, dataset_name, condition="all"):
     users_not_in_dataset.extend(users_not_in_group)
 
     return users_not_in_dataset
+
+
+def filter_by_invalid_scores(user_df):
+    """
+    Filter users with scores exceeding the maximum possible values defined in analysis_config.
+    
+    Checks:
+    - intro_score <= INTRO_TEST_CYCLES
+    - learning_score <= TEACHING_CYCLES  
+    - final_score <= FINAL_TEST_CYCLES
+    
+    Args:
+        user_df (pd.DataFrame): DataFrame containing user scores
+        
+    Returns:
+        list: List of user IDs with invalid scores
+    """
+    invalid_users = []
+    score_checks = [
+        ('intro_score', INTRO_TEST_CYCLES),
+        ('learning_score', TEACHING_CYCLES),
+        ('final_score', FINAL_TEST_CYCLES)
+    ]
+    
+    for score_col, max_score in score_checks:
+        if score_col in user_df.columns:
+            # Find users where score exceeds maximum
+            invalid_mask = user_df[score_col] > max_score
+            if invalid_mask.any():
+                invalid_score_users = user_df[invalid_mask]
+                invalid_user_ids = invalid_score_users['id'].tolist()
+                
+                print(f"Found {len(invalid_user_ids)} users with {score_col} > {max_score}:")
+                for _, user in invalid_score_users.iterrows():
+                    score_val = user[score_col]
+                    if pd.notna(score_val):
+                        print(f"  User {user['id']}: {score_col} = {score_val} (max allowed: {max_score})")
+                
+                invalid_users.extend(invalid_user_ids)
+        else:
+            print(f"Warning: {score_col} column not found in user_df")
+    
+    # Remove duplicates while preserving order
+    invalid_users = list(dict.fromkeys(invalid_users))
+    
+    print(f"Total users with invalid scores: {len(invalid_users)}")
+    return invalid_users
