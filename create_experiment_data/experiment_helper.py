@@ -166,7 +166,8 @@ class ExperimentHelper:
         else:
             # For all test types, get the train instance ID first
             train_instance_id = self.instances["train"][datapoint_count].instance_id
-            old_instance = self.current_instance
+            # Use the corresponding train instance as the baseline for comparison
+            old_instance = self.instances["train"][datapoint_count]
             
             # Map instance types to phase names in the test dictionary
             phase_mapping = {
