@@ -139,20 +139,49 @@ class DemandDrivenBaseGenerator(DemandDrivenGeneratorInterface):
         
         return differences
     
+    def _count_all_feature_differences(self, original_instance: pd.DataFrame, 
+                                     generated_instance: pd.DataFrame) -> int:
+        """Count ALL feature differences between two instances (no thresholds)."""
+        if generated_instance is None or len(generated_instance) == 0:
+            return 0
+        
+        differences = 0
+        orig_values = original_instance.iloc[0]
+        gen_values = generated_instance.iloc[0]
+        
+        for col in self.actionable_features:
+            if col in orig_values and col in gen_values:
+                orig_val = orig_values[col]
+                gen_val = gen_values[col]
+                
+                # Count any difference (no thresholds)
+                if col in self.categorical_features:
+                    if str(orig_val) != str(gen_val):
+                        differences += 1
+                else:
+                    try:
+                        if float(orig_val) != float(gen_val):
+                            differences += 1
+                    except (ValueError, TypeError):
+                        if str(orig_val) != str(gen_val):
+                            differences += 1
+        
+        return differences
+    
     def _validate_instance(self, original_instance: pd.DataFrame, 
                           generated_instance: pd.DataFrame) -> bool:
         """Validate that generated instance meets feature difference constraints."""
         if generated_instance is None or len(generated_instance) == 0:
             return False
-        
-        # Skip validation for diabetes - dataset search already ensures criteria are met
-        if hasattr(self, 'dataset_name') and self.dataset_name == 'diabetes':
-            logger.debug("DIABETES: Skipping redundant validation (search pre-validated)")
-            return True
             
-        # Keep validation for adult and other datasets (synthetic generation needs validation)
+        # Validate feature difference constraints for all datasets
         diff_count = self._count_feature_differences(original_instance, generated_instance)
-        return self.min_feature_differences <= diff_count <= self.max_feature_differences
+        is_valid = self.min_feature_differences <= diff_count <= self.max_feature_differences
+        
+        if not is_valid:
+            logger.debug(f"Validation failed: {diff_count} differences (expected {self.min_feature_differences}-{self.max_feature_differences})")
+        
+        return is_valid
     
     def generate_similar_instance(self, original_instance: pd.DataFrame, 
                                 target_class: Optional[int] = None,
@@ -169,7 +198,7 @@ class DemandDrivenBaseGenerator(DemandDrivenGeneratorInterface):
         
         for attempt in range(max_attempts):
             # Strategy 1: Try manifold-aware generation
-            instance = self._generate_similar_candidate(original_instance)
+            instance = self._generate_similar_candidate(original_instance, self.min_feature_differences, self.max_feature_differences)
             
             if instance is not None:
                 # Validate feature differences
@@ -254,7 +283,9 @@ class DemandDrivenBaseGenerator(DemandDrivenGeneratorInterface):
         except Exception:
             return False
     
-    def _generate_similar_candidate(self, original_instance: pd.DataFrame) -> Optional[pd.DataFrame]:
+    def _generate_similar_candidate(self, original_instance: pd.DataFrame, 
+                                   min_feature_differences: int = None, 
+                                   max_feature_differences: int = None) -> Optional[pd.DataFrame]:
         """Generate a candidate similar instance. Override in subclasses."""
         # This is a placeholder - subclasses should implement specific logic
         # For now, return a copy with small random perturbations
