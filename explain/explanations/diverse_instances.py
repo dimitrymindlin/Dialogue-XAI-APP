@@ -39,7 +39,8 @@ class DiverseInstances:
                  feature_explainer=None,
                  categorical_features: List[str] = None,
                  actionable_features: List[str] = None,
-                 n_clusters=None):
+                 n_clusters=None,
+                 blacklisted_instances: List[int] = None):
         cached_data = load_cache(cache_location)
         self.diverse_instances = _convert_legacy_cache(cached_data)
         self.cache_location = cache_location
@@ -50,6 +51,7 @@ class DiverseInstances:
         self.actionable_features = actionable_features
         self.feature_thresholds = None  # Will be set when data is available
         self.n_clusters = n_clusters
+        self.blacklisted_instances = blacklisted_instances or []
 
     def get_all_instance_ids(self) -> List[int]:
         all_instances = []
@@ -153,15 +155,41 @@ class DiverseInstances:
     def _get_diverse_seeds(self, data: pd.DataFrame, model):
         """Get diverse instance seeds from SP-LIME."""
         target_seeds = 4 * self.n_clusters
+        
+        # Account for blacklisted instances - request extra to compensate
+        blacklist_buffer = len(self.blacklisted_instances) if self.blacklisted_instances else 0
+        requested_seeds = target_seeds + blacklist_buffer
+        
         print(f"Using SP-LIME with SHAP to find {target_seeds} seeds for {self.n_clusters} clusters")
         print(f"Dataset size: {len(data)}, Target seeds: {target_seeds}")
+        if blacklist_buffer > 0:
+            print(f"Requesting {requested_seeds} seeds (extra {blacklist_buffer} for blacklist compensation)")
         
-        diverse_instance_indices = self.feature_explainer.get_diverse_instance_ids(data.values, num_instances=target_seeds)
-        print(f"SP-LIME returned {len(diverse_instance_indices)} diverse indices (max target: {target_seeds})")
+        diverse_instance_indices = self.feature_explainer.get_diverse_instance_ids(data.values, num_instances=requested_seeds)
+        print(f"SP-LIME returned {len(diverse_instance_indices)} diverse indices (max target: {requested_seeds})")
         
         # Convert array indices to DataFrame indices
         diverse_instances = [data.index[i] for i in diverse_instance_indices if i < len(data)]
         print(f"Found {len(diverse_instances)} diverse instances using submodular pick.")
+        
+        # Filter out blacklisted instances
+        if self.blacklisted_instances:
+            original_count = len(diverse_instances)
+            diverse_instances = [instance_id for instance_id in diverse_instances 
+                               if instance_id not in self.blacklisted_instances]
+            filtered_count = original_count - len(diverse_instances)
+            if filtered_count > 0:
+                print(f"Filtered out {filtered_count} blacklisted instances: {self.blacklisted_instances}")
+                print(f"Remaining diverse instances: {len(diverse_instances)}")
+        
+        # Ensure we still have enough instances after filtering
+        if len(diverse_instances) < target_seeds:
+            raise ValueError(
+                f"Insufficient diverse instances after blacklist filtering. "
+                f"Found {len(diverse_instances)} instances, need {target_seeds}. "
+                f"Blacklisted instances: {self.blacklisted_instances}. "
+                f"Consider reducing n_clusters, removing items from blacklist, or using a larger dataset."
+            )
         
         # Check minimum requirements
         if len(diverse_instances) < self.n_clusters:

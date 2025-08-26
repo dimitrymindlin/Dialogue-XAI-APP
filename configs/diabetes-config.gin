@@ -46,6 +46,7 @@ DiverseInstances.cache_location = "./cache/diabetes-diverse-instances.pkl"
 DiverseInstances.dataset_name = "diabetes"
 DiverseInstances.instance_amount = 10
 DiverseInstances.n_clusters = 4
+DiverseInstances.blacklisted_instances = [593]
 
 # Test Instances
 TestInstances.cache_location = "./cache/diabetes-test-instances.pkl"
