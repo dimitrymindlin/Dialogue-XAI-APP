@@ -519,6 +519,61 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict, ena
                                     app.logger.info("--- STREAMING DEMOGRAPHICS TO FRONTEND ---")
                                     app.logger.info(json.dumps(chunk, indent=2))
                                     app.logger.info("------------------------------------------")
+                                    # Also print user model info derived from get_state_summary -> get_user_info
+                                    try:
+                                        if hasattr(bot, "agent") and hasattr(bot.agent, "user_model"):
+                                            # 1) From get_state_summary(as_dict=True) -> ["User Info"]
+                                            state_summary = bot.agent.user_model.get_state_summary(as_dict=True)
+                                            user_info = state_summary.get("User Info", {})
+                                            app.logger.info("--- USER MODEL INFO (from get_state_summary) ---")
+                                            app.logger.info(json.dumps(user_info, ensure_ascii=False, indent=2))
+                                            app.logger.info("------------------------------------------------")
+                                            # Print to stdout as well
+                                            print("--- USER MODEL INFO (from get_state_summary) ---")
+                                            print(json.dumps(user_info, ensure_ascii=False, indent=2))
+                                            print("------------------------------------------------")
+
+                                            # 2) Directly via get_user_info(as_dict=True)
+                                            user_info_direct = bot.agent.user_model.get_user_info(as_dict=True)
+                                            app.logger.info("--- USER MODEL INFO (from get_user_info) ---")
+                                            app.logger.info(json.dumps(user_info_direct, ensure_ascii=False, indent=2))
+                                            app.logger.info("---------------------------------------------")
+                                            print("--- USER MODEL INFO (from get_user_info) ---")
+                                            print(json.dumps(user_info_direct, ensure_ascii=False, indent=2))
+                                            print("---------------------------------------------")
+
+                                            # 3) Extract normalized ML knowledge level and push to frontend in demographics
+                                            def _extract_ml_level(val):
+                                                allowed = ["very low", "low", "moderate", "high", "very high", "anonymous"]
+                                                if val is None:
+                                                    return "anonymous"
+                                                text = str(val).strip().lower()
+                                                # Prefer exact prefix matches for phrases
+                                                for phrase in ["very low", "very high"]:
+                                                    if text.startswith(phrase):
+                                                        return phrase
+                                                # Then single-word levels
+                                                for lvl in ["very low", "low", "moderate", "high", "very high", "anonymous"]:
+                                                    if text.startswith(lvl):
+                                                        return lvl
+                                                # Fallback: search anywhere in text
+                                                for lvl in allowed:
+                                                    if lvl in text:
+                                                        return lvl
+                                                return "anonymous"
+
+                                            ml_value = user_info_direct.get("ML Knowledge") if isinstance(user_info_direct, dict) else None
+                                            ml_level = _extract_ml_level(ml_value)
+                                            try:
+                                                if isinstance(chunk.get("content"), dict):
+                                                    chunk["content"]["ml_knowledge"] = ml_level
+                                                    app.logger.info(f"Updated demographics ml_knowledge to '{ml_level}' from user model.")
+                                            except Exception:
+                                                pass
+                                        else:
+                                            app.logger.info("(User Model) Agent or user_model not available on bot; skipping print.")
+                                    except Exception as e:
+                                        app.logger.error(f"Error while printing user model info: {str(e)}")
                                     yield f"data: {json.dumps(chunk)}\n\n"
                             
                             elif chunk.get("type") == "final":
@@ -692,6 +747,125 @@ async def get_bot_response_from_nl_stream():
     
     return await get_bot_response_from_nl_stream_internal(user_id, data)
 
+
+@bp.route("/update_ml_knowledge", methods=['POST', 'OPTIONS'])
+def update_ml_knowledge():
+    """Update the ML knowledge level for the current user's user model.
+
+    Body JSON:
+        {
+          "user_id": "TEST",            # optional if provided as query param, defaults to TEST
+          "ml_knowledge": "high"        # one of: very low, low, moderate, high, very high, anonymous
+        }
+
+    Returns:
+        { "message": str, "ml_knowledge": str }
+    """
+    try:
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            resp = jsonify({"message": "ok"})
+            resp.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+            resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+            resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+            return resp, 200
+
+        data = request.get_json() or {}
+        user_id = request.args.get("user_id") or data.get("user_id") or "TEST"
+        new_value = data.get("ml_knowledge")
+
+        if not new_value:
+            return jsonify({"error": "'ml_knowledge' is required"}), 400
+
+        # Normalize incoming value
+        def _normalize_level(val: str) -> str:
+            text = str(val).strip().lower().replace("_", " ").replace("-", " ")
+            if text.startswith("very low"):  # keep phrase priority
+                return "very low"
+            if text.startswith("very high"):
+                return "very high"
+            for lvl in ["very low", "low", "moderate", "high", "very high", "anonymous"]:
+                if text == lvl or text.startswith(lvl):
+                    return lvl
+            # fallback
+            return "anonymous"
+
+        normalized = _normalize_level(new_value)
+
+        # Ensure bot exists
+        if user_id not in bot_dict:
+            return jsonify({"error": f"Bot not found for user {user_id}"}), 404
+
+        bot = bot_dict[user_id]
+
+        # Read previous level (if possible)
+        prev_level = None
+        try:
+            if hasattr(bot, "agent") and hasattr(bot.agent, "user_model"):
+                prev_info = bot.agent.user_model.get_user_info(as_dict=True)
+                prev_text = (prev_info or {}).get("ML Knowledge")
+                # Extract display level from description text
+                def _extract_ml_level(val):
+                    allowed = ["very low", "low", "moderate", "high", "very high", "anonymous"]
+                    if val is None:
+                        return "anonymous"
+                    t = str(val).strip().lower()
+                    for phrase in ["very low", "very high"]:
+                        if t.startswith(phrase):
+                            return phrase
+                    for lvl in allowed:
+                        if t.startswith(lvl) or lvl in t:
+                            return lvl
+                    return "anonymous"
+                prev_level = _extract_ml_level(prev_text)
+        except Exception:
+            prev_level = None
+
+        # Update user model values
+        updated_level_desc = None
+        if hasattr(bot, "agent") and hasattr(bot.agent, "user_model"):
+            try:
+                # Update BaseAgent attribute for consistency
+                bot.agent.user_ml_knowledge = normalized
+                # Update ExplainBot stored level if present
+                try:
+                    bot.ml_knowledge = normalized
+                except Exception:
+                    pass
+                # Update the actual user model description field using its helper
+                updated_level_desc = bot.agent.user_model.set_user_ml_knowledge(normalized)
+                bot.agent.user_model.user_ml_knowledge = updated_level_desc
+            except Exception as e:
+                app.logger.error(f"Failed updating user model ml_knowledge: {e}")
+                return jsonify({"error": "Failed to update user model"}), 500
+        else:
+            # No agent present — best effort update on bot only
+            try:
+                bot.ml_knowledge = normalized
+            except Exception:
+                pass
+
+        # Logs
+        app.logger.info(
+            f"ML knowledge change request for user {user_id}: {prev_level or 'unknown'} -> {normalized}"
+        )
+        print(f"[update_ml_knowledge] user={user_id} prev={prev_level} new={normalized}")
+
+        resp = jsonify({
+            "message": "ML knowledge updated",
+            "ml_knowledge": normalized
+        })
+        resp.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        resp.headers['Vary'] = 'Origin'
+        return resp, 200
+
+    except Exception as e:
+        app.logger.error(f"Error updating ML knowledge: {str(e)}")
+        app.logger.error(traceback.format_exc())
+        resp = jsonify({"error": f"Error updating ML knowledge: {str(e)}"})
+        resp.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        resp.headers['Vary'] = 'Origin'
+        return resp, 500
 
 @bp.route("/speech-to-text", methods=['POST'])
 async def transcribe_audio():
