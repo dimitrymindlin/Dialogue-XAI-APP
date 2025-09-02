@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import traceback
-import base64
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
@@ -12,7 +11,6 @@ from flask import request, Blueprint
 from flask import jsonify, Response
 from flask_cors import CORS
 import gin
-import openai
 import matplotlib
 import atexit
 from explain.logic import ExplainBot
