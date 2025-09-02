@@ -18,17 +18,17 @@ xai_explanations:
       - step_name: "FeatureInfluencesPlot"
         description: >
           Reading plots requires some familiarity with data science or statistics. Consider avoiding them for lay users unless specifically requested or clearly appropriate.
-          The plot visualizes feature importance and each feature’s influence on the model’s decision. Blue bars indicate features pushing the prediction toward under $50K -the more negative the value, the stronger the influence. Red bars indicate influence toward over $50K. Since the plot lacks explanations, be sure to provide context if necessary.
+          The plot visualizes feature importance and each feature's influence on the model's decision. Blue bars indicate features pushing the prediction toward {{class_0_description}} - the more negative the value, the stronger the influence. Red bars indicate influence toward {{class_1_description}}. Since the plot lacks explanations, be sure to provide context if necessary.
           Use the placeholder ##FeatureInfluencesPlot## to integrate the chart smoothly into the explanation—it will be replaced by the actual plot.
           The base value of this SHAP explanation is {{shap_base_value}}, indicating an initial bias toward the {{shap_initial_bias}} class. This may be important to mention depending on the context.
-      - step_name: "FeaturesInFavourOfOver50k"
+      - step_name: "FeaturesInFavourOfClass1"
         description: >
           The base value of this SHAP explanation is {{shap_base_value}} in favor of class {{shap_initial_bias}}.
-          {{feature_importance.features_in_favour_of_over_50k}}
-      - step_name: "FeaturesInFavourOfUnder50k"
+          {{feature_importance.features_in_favour_of_class_1}}
+      - step_name: "FeaturesInFavourOfClass0"
         description: >
           The base value of this SHAP explanation is {{shap_base_value}} in favor of class {{shap_initial_bias}}.
-          {{feature_importance.features_in_favour_of_under_50k}}
+          {{feature_importance.features_in_favour_of_class_0}}
       - step_name: "WhyThisFeatureImportant"
         description: >
           Check PossibleClarifications for a reply to this question. We cannot address why a feature is specially important

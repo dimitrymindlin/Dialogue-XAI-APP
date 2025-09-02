@@ -2,6 +2,7 @@ import json
 
 import yaml
 from jinja2 import Environment, FileSystemLoader
+from configs.dataset_config import DatasetConfig
 
 
 class XAIExplanationPopulator:
@@ -23,6 +24,8 @@ class XAIExplanationPopulator:
         self.predicted_class_name = predicted_class_name
         self.opposite_class_name = opposite_class_name
         self.instance_dict = instance_dict
+        # Get dataset configuration from singleton
+        self.dataset_config = DatasetConfig.get_instance()
         self.substitution_dict = self.process_xai_explanations()
         self.env = Environment(
             loader=FileSystemLoader(self.template_dir),
@@ -221,10 +224,8 @@ class XAIExplanationPopulator:
                 against_predicted.append(description)
 
         substitution_dict["feature_importance"] = {
-            f"features_in_favour_of_{self.predicted_class_name.replace(' ', '_')}": " ".join(
-                f"{desc}" for desc in in_favour_of),
-            f"features_in_favour_of_{self.opposite_class_name.replace(' ', '_')}": " ".join(
-                f"{desc}" for desc in against_predicted),
+            "features_in_favour_of_class_1": " ".join(f"{desc}" for desc in in_favour_of),
+            "features_in_favour_of_class_0": " ".join(f"{desc}" for desc in against_predicted),
             "feature_influences_plot_url": "https://yourdomain.com/path/to/feature_influences_plot.png"
         }
 
@@ -305,7 +306,11 @@ class XAIExplanationPopulator:
             "possible_classes": possible_classes,
             "negative_class": self.opposite_class_name,
             "shap_base_value": round(shap_base_value, 3),
-            "shap_initial_bias": shap_initial_bias
+            "shap_initial_bias": shap_initial_bias,
+            "class_0_description": self.dataset_config.class_0_description,
+            "class_1_description": self.dataset_config.class_1_description,
+            "instance_type_naming": self.dataset_config.instance_type_naming,
+            "target_variable_name": self.dataset_config.target_variable_name
         })
 
         # Pass over all xai_explanations and clean HTML tags in explanations

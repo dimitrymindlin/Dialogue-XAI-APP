@@ -13,6 +13,12 @@ ExplainBot.seed = 0
 ExplainBot.dataset_index_column = 0
 ExplainBot.instance_type_naming = "Person"
 ExplainBot.target_variable_name = "Income"
+
+# Dataset configuration for XAI explanations
+DatasetConfig.class_0_description = "under $50K"
+DatasetConfig.class_1_description = "over $50K"
+DatasetConfig.instance_type_naming = "Person"
+DatasetConfig.target_variable_name = "Income"
 ExplainBot.categorical_features = ['MaritalStatus', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
 TestInstances.categorical_features = ['MaritalStatus', 'InvestmentOutcome', 'EducationLevel', 'Occupation', 'WorkLifeBalance']
 ExplainBot.ordinary_features = ['InvestmentOutcome','EducationLevel', 'WorkLifeBalance']

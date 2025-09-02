@@ -16,6 +16,12 @@ ExplainBot.seed = 0
 ExplainBot.dataset_index_column = 0
 ExplainBot.instance_type_naming = "Passenger"
 ExplainBot.target_variable_name = "Survived"
+
+# Dataset configuration for XAI explanations
+DatasetConfig.class_0_description = "did not survive"
+DatasetConfig.class_1_description = "survived"
+DatasetConfig.instance_type_naming = "Passenger"
+DatasetConfig.target_variable_name = "Survived"
 ExplainBot.categorical_features = ['Age', 'Sex', 'Embarked', 'Fare', 'Title']
 ExplainBot.ordinary_features = ['Age', 'Fare', 'Pclass']
 ExplainBot.numerical_features = ['SibSp', 'Parch']

@@ -13,6 +13,12 @@ ExplainBot.seed = 0
 ExplainBot.dataset_index_column = 0
 ExplainBot.instance_type_naming = "Patient"
 ExplainBot.target_variable_name = "Y"
+
+# Dataset configuration for XAI explanations  
+DatasetConfig.class_0_description = "no diabetes"
+DatasetConfig.class_1_description = "diabetes"
+DatasetConfig.instance_type_naming = "Patient"
+DatasetConfig.target_variable_name = "Y"
 ExplainBot.categorical_features = []
 TestInstances.categorical_features = []
 ExplainBot.ordinary_features = []
