@@ -2,7 +2,7 @@ import json
 
 import yaml
 from jinja2 import Environment, FileSystemLoader
-from configs.dataset_config import DatasetConfig
+from dataset_config import DatasetConfig
 
 
 class XAIExplanationPopulator:

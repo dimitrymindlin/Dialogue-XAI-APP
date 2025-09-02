@@ -14,6 +14,7 @@ import gin
 import matplotlib
 import atexit
 from explain.logic import ExplainBot
+from dataset_config import DatasetConfig
 from speech_and_text.tts_service import generate_audio_from_text
 from speech_and_text.stt_service import transcribe_audio_file
 
