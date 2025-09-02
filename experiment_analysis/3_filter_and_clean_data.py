@@ -113,7 +113,7 @@ ENABLED_FILTERS.extend([
     # (filter_by_work_life_balance, {"user_df": users, "wlb_users": wlb_users}),
     # (filter_by_dummy_var_mentions, {"predictions_df": all_preds_df, "dummy_var_column": DUMMY_VAR_COLUMN}),
     (filter_by_fatal_understanding_error,
-     {"user_df": users, "study_group": "all", "question_type": "most_important_feature"}),
+     {"user_df": users, "study_group": "all", "question_type": "either"}),
     (remove_outliers_by_attention_check, {"user_df": users, "user_completed_df": user_completed}),
     (filter_users_that_didnt_ask_questions_from_df,
      {"users_df": users, "questions_over_time_df": questions_over_time_df}),

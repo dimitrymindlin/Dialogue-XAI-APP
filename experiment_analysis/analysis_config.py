@@ -9,10 +9,23 @@ import os
 
 # Set your experiment-specific parameters here
 EXPERIMENT_HANDLE = "thesis"
-EXPERIMENT_DATE = "08_2025"
-DATASET = "adult"
+EXPERIMENT_DATE = "09_2025"
+DATASET = "diabetes"
 GROUP = "mapek"
-EXPLICITELY_REPLACE_GROUP_NAME = {"adult-chat-thesis-08-2025": "adult-thesis-mapek-08-2025"}
+EXPLICITELY_REPLACE_GROUP_NAME = {
+    "prolific_export_68aefeb0905f55201f3d1143.csv": {
+        "adult-chat-thesis-08-2025": "adult-thesis-mapek-08-2025"
+    },
+    "prolific_export_68b547f459f1a30dd204d743.csv": {
+        "diabetes-thesis-conversational-08-2025": "diabetes-thesis-mapek-09-2025"
+    }
+}
+
+"""EXPERIMENT_HANDLE = "measuring"
+EXPERIMENT_DATE = "04_2024"
+DATASET = "adult"
+GROUP = "interactive"
+EXPLICITELY_REPLACE_GROUP_NAME = {"adult-chat-thesis-08-2025": "adult-thesis-mapek-08-2025"}"""
 
 PROLIFIC_CSV_FOLDER = f"data_{DATASET}_{EXPERIMENT_HANDLE}_{GROUP}_{EXPERIMENT_DATE}/"
 RESULTS_BASE = "results"

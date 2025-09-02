@@ -60,6 +60,7 @@ def merge_prolific_csvs(folder: str, output_file: str) -> pd.DataFrame:
     """
     Concisely merge all CSVs in a folder, deduplicate by 'Participant id', and save to output_file.
     Skips files that do not have 'Participant id' column.
+    Adds a 'source_file' column to track which CSV each row originated from.
     Returns the merged DataFrame.
     """
     csv_files = glob.glob(os.path.join(folder, "*.csv"))
@@ -69,6 +70,8 @@ def merge_prolific_csvs(folder: str, output_file: str) -> pd.DataFrame:
         try:
             df = pd.read_csv(file)
             if "Participant id" in df.columns:
+                # Add source file column to track origin
+                df['source_file'] = os.path.basename(file)
                 dataframes.append(df)
         except Exception as e:
             print(f"Error reading {file}: {e}")
@@ -110,7 +113,7 @@ def get_study_group_and_events(user_df, event_df, user_id):
     return study_group, user_events
 
 
-def get_study_name_description_if_possible(user_df):
+def get_study_name_description_if_possible(user_df, group_name=None):
     """
     Return a dictionary with unique 'study_group_name' values from the 'profile' JSON and their counts.
     If not available, fallback to 'study_group' values and their counts.
@@ -124,6 +127,9 @@ def get_study_name_description_if_possible(user_df):
             if "study_group_name" in profile_data:
                 study_name = profile_data["study_group_name"]
                 study_name_counts[study_name] = study_name_counts.get(study_name, 0) + 1
+                # check if group_name is in user_df["study_group"] and pull from there
+            elif group_name and group_name in user_df["study_group"].values:
+                study_name_counts[group_name] = study_name_counts.get(group_name, 0) + (user_df["study_group"] == group_name).sum()
         except (json.JSONDecodeError, TypeError):
             continue
 
