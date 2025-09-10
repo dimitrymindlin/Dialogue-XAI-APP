@@ -192,6 +192,72 @@ def init():
     }
     return result
 
+@bp.route('/get_user_model', methods=['GET'])
+def get_user_model():
+    """Return current user model values with allowed options (frontend contract stays the same)."""
+    user_id = request.args.get("user_id") or "TEST"
+
+    allowed_ml_levels_ui = ["low", "medium", "high"]
+    allowed_cognitive_states = ["active", "interactive", "constructive"]
+
+    current_ml = "low"
+    current_cog = "active"
+    try:
+        bot = bot_dict.get(user_id)
+        if bot and hasattr(bot, "agent"):
+            # Read canonical fields instead of parsing descriptive text
+            internal_ml = getattr(bot.agent, "user_ml_knowledge", None)
+            if isinstance(internal_ml, str):
+                t = internal_ml.strip().lower()
+                current_ml = "medium" if t == "moderate" else (t if t in {"low", "high"} else "low")
+            if hasattr(bot.agent, "user_model"):
+                cog = getattr(bot.agent.user_model, "cognitive_state", None)
+                if isinstance(cog, str):
+                    t = cog.strip().lower()
+                    if t in allowed_cognitive_states:
+                        current_cog = t
+    except Exception:
+        pass
+
+    return jsonify({
+        "ml_knowledge": [current_ml, allowed_ml_levels_ui],
+        "cognitive_state": [current_cog, allowed_cognitive_states],
+    })
+
+@bp.route('/update_user_model', methods=['POST', 'OPTIONS'])
+def update_user_model():
+    """
+    Stub: accept frontend variables, print them for debugging, and return OK.
+    The actual update logic will be implemented by another component.
+    """
+    # CORS preflight
+    if request.method == 'OPTIONS':
+        resp = jsonify({"message": "ok"})
+        resp.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        return resp, 200
+
+    data = request.get_json() or {}
+    user_id = request.args.get("user_id") or data.get("user_id") or "TEST"
+    ml_knowledge = data.get("ml_knowledge")
+    cognitive_state = data.get("cognitive_state")
+
+    # Print incoming values (for Egemen to debug frontend->backend wiring)
+    app.logger.info(f"[update_user_model] user_id={user_id} ml_knowledge={ml_knowledge} cognitive_state={cognitive_state}")
+    print(f"[update_user_model] user_id={user_id} ml_knowledge={ml_knowledge} cognitive_state={cognitive_state}")
+
+    # Echo back what we received
+    resp = jsonify({
+        "message": "received",
+        "user_id": user_id,
+        "ml_knowledge": ml_knowledge,
+        "cognitive_state": cognitive_state
+    })
+    resp.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+    resp.headers['Vary'] = 'Origin'
+    return resp, 200
+
 
 @bp.route('/finish', methods=['DELETE'])
 def finish():
@@ -803,128 +869,12 @@ async def get_bot_response_from_nl_stream():
     
     data = json.loads(request.data)
     app.logger.info(f"Starting streaming response for user {user_id}")
+    enable_conversational_mode = data.get("show_user_model_panel", False)
     
-    return await get_bot_response_from_nl_stream_internal(user_id, data)
+    return await get_bot_response_from_nl_stream_internal(user_id, data, enable_conversational_mode)
 
 
-@bp.route("/update_ml_knowledge", methods=['POST', 'OPTIONS'])
-def update_ml_knowledge():
-    """Update the ML knowledge level for the current user's user model.
-
-    Body JSON:
-        {
-          "user_id": "TEST",            # optional if provided as query param, defaults to TEST
-          "ml_knowledge": "high"        # one of: very low, low, moderate, high, very high, anonymous
-        }
-
-    Returns:
-        { "message": str, "ml_knowledge": str }
-    """
-    try:
-        # Handle CORS preflight
-        if request.method == 'OPTIONS':
-            resp = jsonify({"message": "ok"})
-            resp.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-            resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-            resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-            return resp, 200
-
-        data = request.get_json() or {}
-        user_id = request.args.get("user_id") or data.get("user_id") or "TEST"
-        new_value = data.get("ml_knowledge")
-
-        if not new_value:
-            return jsonify({"error": "'ml_knowledge' is required"}), 400
-
-        # Normalize incoming value
-        def _normalize_level(val: str) -> str:
-            text = str(val).strip().lower().replace("_", " ").replace("-", " ")
-            if text.startswith("very low"):  # keep phrase priority
-                return "very low"
-            if text.startswith("very high"):
-                return "very high"
-            for lvl in ["very low", "low", "moderate", "high", "very high", "anonymous"]:
-                if text == lvl or text.startswith(lvl):
-                    return lvl
-            # fallback
-            return "anonymous"
-
-        normalized = _normalize_level(new_value)
-
-        # Ensure bot exists
-        if user_id not in bot_dict:
-            return jsonify({"error": f"Bot not found for user {user_id}"}), 404
-
-        bot = bot_dict[user_id]
-
-        # Read previous level (if possible)
-        prev_level = None
-        try:
-            if hasattr(bot, "agent") and hasattr(bot.agent, "user_model"):
-                prev_info = bot.agent.user_model.get_user_info(as_dict=True)
-                prev_text = (prev_info or {}).get("ML Knowledge")
-                # Extract display level from description text
-                def _extract_ml_level(val):
-                    allowed = ["very low", "low", "moderate", "high", "very high", "anonymous"]
-                    if val is None:
-                        return "anonymous"
-                    t = str(val).strip().lower()
-                    for phrase in ["very low", "very high"]:
-                        if t.startswith(phrase):
-                            return phrase
-                    for lvl in allowed:
-                        if t.startswith(lvl) or lvl in t:
-                            return lvl
-                    return "anonymous"
-                prev_level = _extract_ml_level(prev_text)
-        except Exception:
-            prev_level = None
-
-        # Update user model values
-        updated_level_desc = None
-        if hasattr(bot, "agent") and hasattr(bot.agent, "user_model"):
-            try:
-                # Update BaseAgent attribute for consistency
-                bot.agent.user_ml_knowledge = normalized
-                # Update ExplainBot stored level if present
-                try:
-                    bot.ml_knowledge = normalized
-                except Exception:
-                    pass
-                # Update the actual user model description field using its helper
-                updated_level_desc = bot.agent.user_model.set_user_ml_knowledge(normalized)
-                bot.agent.user_model.user_ml_knowledge = updated_level_desc
-            except Exception as e:
-                app.logger.error(f"Failed updating user model ml_knowledge: {e}")
-                return jsonify({"error": "Failed to update user model"}), 500
-        else:
-            # No agent present — best effort update on bot only
-            try:
-                bot.ml_knowledge = normalized
-            except Exception:
-                pass
-
-        # Logs
-        app.logger.info(
-            f"ML knowledge change request for user {user_id}: {prev_level or 'unknown'} -> {normalized}"
-        )
-        print(f"[update_ml_knowledge] user={user_id} prev={prev_level} new={normalized}")
-
-        resp = jsonify({
-            "message": "ML knowledge updated",
-            "ml_knowledge": normalized
-        })
-        resp.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-        resp.headers['Vary'] = 'Origin'
-        return resp, 200
-
-    except Exception as e:
-        app.logger.error(f"Error updating ML knowledge: {str(e)}")
-        app.logger.error(traceback.format_exc())
-        resp = jsonify({"error": f"Error updating ML knowledge: {str(e)}"})
-        resp.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-        resp.headers['Vary'] = 'Origin'
-        return resp, 500
+# Removed deprecated update_ml_knowledge route; use /update_user_model instead
 
 @bp.route("/speech-to-text", methods=['POST'])
 async def transcribe_audio():
