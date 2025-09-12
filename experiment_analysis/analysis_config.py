@@ -8,10 +8,11 @@ All pipeline steps should import this config to ensure DRY and consistent folder
 import os
 
 # Set your experiment-specific parameters here
-EXPERIMENT_HANDLE = "thesis"
-EXPERIMENT_DATE = "09_2025"
 DATASET = "diabetes"
-GROUP = "mapek"
+EXPERIMENT_HANDLE = "thesis"
+GROUP = "conversational"
+EXPERIMENT_DATE = "08_2025"
+
 EXPLICITELY_REPLACE_GROUP_NAME = {
     "prolific_export_68aefeb0905f55201f3d1143.csv": {
         "adult-chat-thesis-08-2025": "adult-thesis-mapek-08-2025"

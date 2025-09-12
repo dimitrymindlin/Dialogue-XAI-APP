@@ -137,4 +137,29 @@ if all_metrics:
     summary_stats = users_filtered[all_metrics].describe()
     print(summary_stats.round(2))
 
+# Export score statistics to CSV
+if available_score_cols:
+    print(f"\nExporting score statistics to CSV...")
+    
+    # Calculate statistics for each score column
+    score_stats = []
+    for col in available_score_cols:
+        data = users_filtered[col].dropna()
+        if len(data) > 0:
+            stats = {
+                'Score_Type': col,
+                'Mean': round(data.mean(), 2),
+                'Median': round(data.median(), 2), 
+                'Standard_Deviation': round(data.std(), 2),
+                'N': len(data)
+            }
+            score_stats.append(stats)
+    
+    # Create DataFrame and save to CSV
+    if score_stats:
+        stats_df = pd.DataFrame(score_stats)
+        stats_csv_path = os.path.join(OVERVIEW_DIR, "score_statistics.csv")
+        stats_df.to_csv(stats_csv_path, index=False)
+        print(f"Saved score statistics to: {stats_csv_path}")
+
 print(f"\nOverview analysis complete. Results saved in: {OVERVIEW_DIR}")
