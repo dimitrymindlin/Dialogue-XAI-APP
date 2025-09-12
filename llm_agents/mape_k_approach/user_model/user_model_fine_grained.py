@@ -62,13 +62,23 @@ class Explanation(NewExplanationModel):
 
 
 class UserModelFineGrained:
-    def __init__(self, user_ml_knowledge,
+    # Class constants for DRY principle
+    _ML_KNOWLEDGE_DEFINITIONS_PATH = "llm_agents/mape_k_approach/user_model/user_ml_knowledge_definitions.json"
+    _ICAP_MODES_DEFINITIONS_PATH = "llm_agents/mape_k_approach/monitor_component/icap_modes_definition.json"
+    
+    # Cached DefinitionWrapper instances (class variables)
+    _ml_knowledge_wrapper = None
+    _icap_modes_wrapper = None
+    
+    def __init__(self,
+                 user_ml_knowledge,
                  initial_understood_concepts: Optional[List[str]] = None):
         self.explanations: Dict[str, Explanation] = {}
         self.cognitive_state: Optional[str] = ""
         self.explicit_understanding_signals: List[str] = []
         self.current_explanation_request: List[str] = []  # TODO: Not used for now.
-        self.user_ml_knowledge = self.set_user_ml_knowledge(user_ml_knowledge)
+        self.user_ml_knowledge_level = user_ml_knowledge  # Store original level name for sliders
+        self.user_ml_knowledge = self.set_user_ml_knowledge(user_ml_knowledge)  # Keep description for compatibility
         self.initial_understood_concepts = initial_understood_concepts
 
     def set_cognitive_state(self, cognitive_state: str):
@@ -80,32 +90,64 @@ class UserModelFineGrained:
         self.explicit_understanding_signals = explicit_understanding_signals
 
     def set_user_ml_knowledge(self, user_ml_knowledge: str):
-        """Set the user's ML knowledge"""
+        """Set the user's ML knowledge using cached DefinitionWrapper instance."""
         if user_ml_knowledge == "anonymous":
             return None
-        # 1 Load Ml knowledge concepts from json file
-        file_path = "llm_agents/mape_k_approach/user_model/user_ml_knowledge_definitions.json"
-        definitions = DefinitionWrapper(file_path)
+        
+        # Use cached DefinitionWrapper instance for consistency and performance
+        if UserModelFineGrained._ml_knowledge_wrapper is None:
+            UserModelFineGrained._ml_knowledge_wrapper = DefinitionWrapper(
+                UserModelFineGrained._ML_KNOWLEDGE_DEFINITIONS_PATH
+            )
+        
         # Get the differentiating_description for the user's ML knowledge
-        definition = definitions.get_differentiating_description(user_ml_knowledge)
+        definition = UserModelFineGrained._ml_knowledge_wrapper.get_differentiating_description(user_ml_knowledge)
         return definition
 
-    def get_user_info(self, as_dict=False):
-        """Return the user's cognitive state and ML knowledge as a string."""
-        if as_dict:
+    @property
+    def ml_knowledge_range(self):
+        """
+        Return list of available ML knowledge levels from definitions file.
+        Uses cached DefinitionWrapper instance for performance.
+        :return: List of ML knowledge level names (e.g., ['very low', 'low', 'moderate', ...])
+        """
+        if UserModelFineGrained._ml_knowledge_wrapper is None:
+            UserModelFineGrained._ml_knowledge_wrapper = DefinitionWrapper(
+                UserModelFineGrained._ML_KNOWLEDGE_DEFINITIONS_PATH
+            )
+        return UserModelFineGrained._ml_knowledge_wrapper.get_names()
+
+    @property
+    def icap_modes_range(self):
+        """
+        Return list of available ICAP engagement modes from definitions file.
+        Uses cached DefinitionWrapper instance for performance.
+        :return: List of ICAP mode names (e.g., ['active', 'constructive', 'interactive'])
+        """
+        if UserModelFineGrained._icap_modes_wrapper is None:
+            UserModelFineGrained._icap_modes_wrapper = DefinitionWrapper(
+                UserModelFineGrained._ICAP_MODES_DEFINITIONS_PATH
+            )
+        return UserModelFineGrained._icap_modes_wrapper.get_names()
+
+    def get_user_info(self, as_dict=None):
+        """Return tuple format for frontend sliders: {slider_name: (current_value, available_options)}."""
+        if as_dict is True:
             return {
                 "Cognitive State": self.cognitive_state,
                 "ML Knowledge": self.user_ml_knowledge,
                 "Explicit Understanding Signals": self.explicit_understanding_signals,
             }
-        parts = []
-        if self.cognitive_state != "":
-            parts.append(f"The user's cognitive state is {self.cognitive_state}.")
-        if self.user_ml_knowledge is not None:
-            parts.append(f"The user's ML knowledge is {self.user_ml_knowledge}.")
-        if self.explicit_understanding_signals != []:
-            parts.append(f"With the last message they signalled {self.explicit_understanding_signals}.")
-        return "\n".join(parts)
+        return {
+            "ML Knowledge": (
+                self.user_ml_knowledge_level if self.user_ml_knowledge_level else "anonymous",
+                self.ml_knowledge_range
+            ),
+            "ICAP Mode": (
+                self.cognitive_state if self.cognitive_state else "active", 
+                self.icap_modes_range
+            )
+        }
 
     def add_explanation(self, explanation_name: str, description: str):
         """Add a new explanation, overriding if it already exists."""

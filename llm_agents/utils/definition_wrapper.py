@@ -69,3 +69,10 @@ class DefinitionWrapper:
             if display["name"] == concept_name:
                 return display.get("differentiating_description", None)
         return None
+
+    def get_names(self):
+        """
+        Returns a list of all names from the definitions.
+        :return: List of names from the JSON definitions.
+        """
+        return [display.get("name", "") for display in self.displays]

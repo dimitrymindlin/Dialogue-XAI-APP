@@ -235,20 +235,115 @@ def init():
     return result
 
 
-@bp.route('/get_user_model', methods=['GET'])
-def get_user_model():
-    return jsonify({
-        "ml_knowledge": ["low", ["low", "medium", "high"]],
-        "cognitive_state": ["active", ["active", "interactive", "constructive"]],
-    })
+def _get_user_model_from_bot(user_id: str):
+    """
+    Centralized bot/agent/user_model retrieval with proper error handling.
+    
+    Args:
+        user_id: User identifier
+        
+    Returns:
+        UserModelFineGrained: The user model instance
+        
+    Raises:
+        KeyError: If bot not found for user
+        AttributeError: If agent or user_model not available
+    """
+    try:
+        bot = bot_dict[user_id]
+    except KeyError:
+        raise KeyError(f"Bot not found for user {user_id}")
+    
+    if not hasattr(bot, 'agent') or not hasattr(bot.agent, 'user_model'):
+        raise AttributeError("Agent or user model not available")
+    
+    return bot.agent.user_model
+
+
+def _validate_user_model_values(user_model, data: dict):
+    """
+    Validate user model input values against allowed ranges.
+    
+    Args:
+        user_model: UserModelFineGrained instance
+        data: Dictionary containing values to validate
+        
+    Raises:
+        ValueError: If any value is invalid
+    """
+    if "ML Knowledge" in data:
+        value = data["ML Knowledge"]
+        valid_options = user_model.ml_knowledge_range
+        if value not in valid_options:
+            raise ValueError(f"Invalid ML Knowledge: '{value}'. Valid options: {valid_options}")
+    
+    if "ICAP Mode" in data:
+        value = data["ICAP Mode"]
+        valid_options = user_model.icap_modes_range
+        if value not in valid_options:
+            raise ValueError(f"Invalid ICAP Mode: '{value}'. Valid options: {valid_options}")
+
 
 @bp.route('/get_user_model', methods=['GET'])
+def get_user_model():
+    """Get user model info from UserModelFineGrained in the bot's agent."""
+    user_id = request.args.get("user_id")
+    if not user_id:
+        user_id = "TEST"
+    
+    try:
+        user_model = _get_user_model_from_bot(user_id)
+        user_info = user_model.get_user_info()
+        return jsonify(user_info)
+    except KeyError as e:
+        return jsonify({"status": "error", "message": str(e)}), 404
+    except AttributeError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
+
+@bp.route('/set_user_model', methods=['POST'])
 def update_user_model():
     """
-   @ Egemen Get var name and new value from frontend,
-   @dimi pass to backend.
+    Update user model values in UserModelFineGrained.
+    Expected format: {
+        "user_id": "user_id",
+        "ML Knowledge": "low",
+        "ICAP Mode": "active"
+    }
     """
-    pass
+    data = request.get_json()
+    if not data:
+        return jsonify({"status": "error", "message": "No JSON data provided"}), 400
+    
+    user_id = data.get("user_id", "TEST")
+    
+    try:
+        user_model = _get_user_model_from_bot(user_id)
+        
+        # Validate input values before setting them
+        _validate_user_model_values(user_model, data)
+        
+        # Update ML Knowledge if provided
+        if "ML Knowledge" in data:
+            ml_knowledge_value = data["ML Knowledge"]
+            user_model.user_ml_knowledge_level = ml_knowledge_value
+            user_model.user_ml_knowledge = user_model.set_user_ml_knowledge(ml_knowledge_value)
+        
+        # Update ICAP Mode (cognitive state) if provided
+        if "ICAP Mode" in data:
+            cognitive_state_value = data["ICAP Mode"]
+            user_model.set_cognitive_state(cognitive_state_value)
+        
+        return jsonify({"status": "success", "message": "User model updated successfully"})
+    except KeyError as e:
+        return jsonify({"status": "error", "message": str(e)}), 404
+    except AttributeError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
 
 @bp.route('/finish', methods=['DELETE'])
 def finish():

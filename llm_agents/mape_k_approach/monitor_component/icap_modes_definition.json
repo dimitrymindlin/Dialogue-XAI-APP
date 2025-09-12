@@ -1,9 +1,9 @@
 [
   {
-    "name": "interactive",
-    "description": "Engagement where the user and the agent collaboratively refine understanding through a back-and-forth dialogue. This mode is the most cognitively engaging as it requires the user to not only critique or clarify but also integrate responses into a shared understanding, often leading to co-construction of knowledge.",
-    "example": "Example: The user asks, 'How can marital status be relevant here? Isn't that a biased assumption?' and follows up with, 'If marital status is removed, does the importance of age increase? Can you explain how that happens?'",
-    "differentiating_description": "interactive, characterized by a dynamic, two-way collaboration where both parties build and refine ideas together; this is the highest level of engagement, contrasting with the independent idea generation of the constructive state and the minimal participation of the active state."
+    "name": "active",
+    "description": "Engagement where the user participates in the conversation but does not add new ideas. This mode is the least cognitively engaging.",
+    "example": "Example: The user repeats what the agent said, does not provide any new information.",
+    "differentiating_description": "active, characterized by straightforward participation through repetition or acknowledgment without contributing additional ideas; this is the lowest form of engagement compared to both the idea-generating constructive state and the dynamic, collaborative interactive state."
   },
   {
     "name": "constructive",
@@ -12,9 +12,9 @@
     "differentiating_description": "constructive, marked by the user's independent generation of new ideas and personal insights; this represents a moderate level of engagement, falling between the highest interactive state and the lowest active state."
   },
   {
-    "name": "active",
-    "description": "Engagement where the user participates in the conversation but does not add new ideas. This mode is the least cognitively engaging.",
-    "example": "Example: The user repeats what the agent said, does not provide any new information.",
-    "differentiating_description": "active, characterized by straightforward participation through repetition or acknowledgment without contributing additional ideas; this is the lowest form of engagement compared to both the idea-generating constructive state and the dynamic, collaborative interactive state."
+    "name": "interactive",
+    "description": "Engagement where the user and the agent collaboratively refine understanding through a back-and-forth dialogue. This mode is the most cognitively engaging as it requires the user to not only critique or clarify but also integrate responses into a shared understanding, often leading to co-construction of knowledge.",
+    "example": "Example: The user asks, 'How can marital status be relevant here? Isn't that a biased assumption?' and follows up with, 'If marital status is removed, does the importance of age increase? Can you explain how that happens?'",
+    "differentiating_description": "interactive, characterized by a dynamic, two-way collaboration where both parties build and refine ideas together; this is the highest level of engagement, contrasting with the independent idea generation of the constructive state and the minimal participation of the active state."
   }
 ]
