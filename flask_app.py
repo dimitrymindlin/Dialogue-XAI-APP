@@ -14,7 +14,6 @@ import gin
 import matplotlib
 import atexit
 from explain.logic import ExplainBot
-from dataset_config import DatasetConfig
 from speech_and_text.tts_service import generate_audio_from_text
 from speech_and_text.stt_service import transcribe_audio_file
 
@@ -253,10 +252,10 @@ def _get_user_model_from_bot(user_id: str):
         bot = bot_dict[user_id]
     except KeyError:
         raise KeyError(f"Bot not found for user {user_id}")
-    
+
     if not hasattr(bot, 'agent') or not hasattr(bot.agent, 'user_model'):
         raise AttributeError("Agent or user model not available")
-    
+
     return bot.agent.user_model
 
 
@@ -276,7 +275,7 @@ def _validate_user_model_values(user_model, data: dict):
         valid_options = user_model.ml_knowledge_range
         if value not in valid_options:
             raise ValueError(f"Invalid ML Knowledge: '{value}'. Valid options: {valid_options}")
-    
+
     if "ICAP Mode" in data:
         value = data["ICAP Mode"]
         valid_options = user_model.icap_modes_range
@@ -290,7 +289,7 @@ def get_user_model():
     user_id = request.args.get("user_id")
     if not user_id:
         user_id = "TEST"
-    
+
     try:
         user_model = _get_user_model_from_bot(user_id)
         user_info = user_model.get_user_info()
@@ -301,6 +300,7 @@ def get_user_model():
         return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
+
 
 @bp.route('/set_user_model', methods=['POST'])
 def update_user_model():
@@ -315,26 +315,26 @@ def update_user_model():
     data = request.get_json()
     if not data:
         return jsonify({"status": "error", "message": "No JSON data provided"}), 400
-    
+
     user_id = data.get("user_id", "TEST")
-    
+
     try:
         user_model = _get_user_model_from_bot(user_id)
-        
+
         # Validate input values before setting them
         _validate_user_model_values(user_model, data)
-        
+
         # Update ML Knowledge if provided
         if "ML Knowledge" in data:
             ml_knowledge_value = data["ML Knowledge"]
             user_model.user_ml_knowledge_level = ml_knowledge_value
             user_model.user_ml_knowledge = user_model.set_user_ml_knowledge(ml_knowledge_value)
-        
+
         # Update ICAP Mode (cognitive state) if provided
         if "ICAP Mode" in data:
             cognitive_state_value = data["ICAP Mode"]
             user_model.set_cognitive_state(cognitive_state_value)
-        
+
         return jsonify({"status": "success", "message": "User model updated successfully"})
     except KeyError as e:
         return jsonify({"status": "error", "message": str(e)}), 404
@@ -344,6 +344,7 @@ def update_user_model():
         return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
+
 
 @bp.route('/finish', methods=['DELETE'])
 def finish():
