@@ -40,7 +40,7 @@ def _get_thread_pool_size(env_var, default=None):
 # Global thread pool for background tasks (limit concurrent threads)
 background_executor = ThreadPoolExecutor(
     max_workers=_get_thread_pool_size("BACKGROUND_EXECUTOR_THREADS"),
-    thread_name_prefix="mlflow"
+    thread_name_prefix="background_worker"
 )
 
 ml_executor = ThreadPoolExecutor(
@@ -138,7 +138,7 @@ def _configure_gin():
 
 def _setup_directories():
     """Create necessary directories for the application."""
-    directories = ["cache", "cache/mlruns"]
+    directories = ["cache"]
     for directory in directories:
         if not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
@@ -389,7 +389,7 @@ def get_train_datapoint():
         user_id = "TEST"
     datapoint_count = request.args.get("datapoint_count")
 
-    # Update MLflow experiment for the current chat round
+    # Update experiment_id for the current chat round
     if datapoint_count and bot_dict[user_id].use_llm_agent:
         experiment_id = create_experiment_id(user_id, datapoint_count)
         bot_dict[user_id].agent.experiment_id = experiment_id
