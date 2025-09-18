@@ -286,6 +286,55 @@ class ExplainBot:
 
         # Initialize XAI Cache Manager
         self.xai_cache_manager = XAICacheManager()
+        self._ensure_xai_cache_seeded()
+
+    def _ensure_xai_cache_seeded(self) -> None:
+        """Deterministically compute XAI cache entries when none are available."""
+        if not self.use_llm_agent:
+            return
+
+        try:
+            experiment_helper = self.conversation.get_var('experiment_helper').contents
+            train_instances = experiment_helper.instances.get("train", [])
+        except Exception as exc:  # pragma: no cover - defensive guard for misconfiguration
+            app.logger.warning("Unable to access train instances for XAI cache precomputation: %s", exc)
+            return
+
+        if not train_instances:
+            app.logger.info("No train instances available for XAI cache precomputation.")
+            return
+
+        feature_mapping = self.get_feature_display_name_dict()
+        uncached_instances = []
+        for instance in train_instances:
+            cached = self.xai_cache_manager.get_cached_xai_report(instance.instance_id)
+            if not cached:
+                uncached_instances.append(instance)
+
+        if not uncached_instances:
+            app.logger.info("XAI cache already populated for all %d train instances.", len(train_instances))
+            return
+
+        app.logger.info(
+            "Precomputing XAI cache for %d train instances (dataset=%s)",
+            len(uncached_instances),
+            getattr(self.xai_cache_manager, "dataset_name", "unknown")
+        )
+
+        for instance in uncached_instances:
+            try:
+                app.logger.debug("Precomputing XAI report for instance %s", instance.instance_id)
+                self.xai_cache_manager.compute_and_cache_xai_report(
+                    self.conversation,
+                    instance.instance_id,
+                    feature_mapping
+                )
+            except Exception as exc:  # pragma: no cover - keep initialization resilient
+                app.logger.warning(
+                    "Failed to precompute XAI report for instance %s: %s",
+                    instance.instance_id,
+                    exc
+                )
 
     def get_feature_display_name_dict(self):
         template_manager = self.conversation.get_var('template_manager').contents
@@ -1242,44 +1291,6 @@ class ExplainBot:
         result_df.to_csv(output_path, index=False, sep=";")
         print(f"All questions and answers saved to {output_path}")
         return result_df
-
-    def trigger_background_xai_computation(self, phase_transition_from: str = "test"):
-        """
-        Trigger background computation of XAI reports for upcoming train instances.
-        Call this when transitioning from test to train phase.
-        
-        Args:
-            phase_transition_from: The phase we're transitioning from ("test", "intro-test", etc.)
-        """
-        if not self.use_llm_agent:
-            return
-
-        try:
-            print(f"Triggering background XAI computation after {phase_transition_from} phase...")
-            experiment_helper = self.conversation.get_var('experiment_helper').contents
-            train_instances = experiment_helper.instances.get("train", [])
-
-            if train_instances:
-                # Get instance IDs for the first few train instances to precompute
-                instance_ids_to_precompute = []
-                max_precompute = min(5, len(train_instances))  # Precompute first 5 instances
-
-                for i in range(max_precompute):
-                    if i < len(train_instances):
-                        instance_ids_to_precompute.append(train_instances[i].instance_id)
-
-                # Submit for background computation
-                self.xai_cache_manager.precompute_instances_background(
-                    self.conversation,
-                    instance_ids_to_precompute,
-                    self.get_feature_display_name_dict()
-                )
-                print(f"Submitted {len(instance_ids_to_precompute)} instances for background computation")
-            else:
-                print("No train instances found for background computation")
-
-        except Exception as e:
-            print(f"Warning: Failed to trigger background XAI computation: {e}")
 
     def get_xai_cache_stats(self) -> Dict[str, Any]:
         """Get statistics about the XAI cache."""

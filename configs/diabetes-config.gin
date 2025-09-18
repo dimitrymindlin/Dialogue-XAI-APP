@@ -67,8 +67,6 @@ PdpExplanation.cache_location = "./cache/diabetes-pdp.pkl"
 # XAI Cache Manager
 XAICacheManager.dataset_name = "diabetes"
 XAICacheManager.cache_location = "./cache/{dataset}-xai-reports.pkl"
-XAICacheManager.max_background_workers = 2
-XAICacheManager.precompute_ahead = 3
 
 # Tabular Anchor Params
 TabularAnchor.cache_location = "./cache/diabetes-anchor-tabular.pkl"

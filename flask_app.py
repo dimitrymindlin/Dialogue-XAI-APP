@@ -36,12 +36,6 @@ def _get_thread_pool_size(env_var, default=None):
         raise RuntimeError(f"Environment variable '{env_var}' must be an integer.")
 
 
-# Global thread pool for background tasks (limit concurrent threads)
-background_executor = ThreadPoolExecutor(
-    max_workers=_get_thread_pool_size("BACKGROUND_EXECUTOR_THREADS"),
-    thread_name_prefix="background_worker"
-)
-
 ml_executor = ThreadPoolExecutor(
     max_workers=_get_thread_pool_size("ML_EXECUTOR_THREADS"),
     thread_name_prefix="ml_executor"
@@ -826,61 +820,14 @@ async def transcribe_audio():
 
 @bp.route("/test-tts", methods=['GET'])
 def test_tts_page():
-    """
-    Serve the test TTS HTML page.
-    """
+    """Serve the test TTS HTML page."""
     return app.send_static_file('test_tts.html')
-
-
-@bp.route('/trigger_background_computation', methods=['POST'])
-def trigger_background_computation():
-    """
-    Trigger background computation of XAI reports for upcoming train instances.
-    Call this when user completes test phase and is about to start train phase.
-    """
-    try:
-        data = request.get_json()
-        user_id = data.get("user_id")
-        phase_from = data.get("phase_from", "test")  # Default to test phase
-
-        if not user_id:
-            user_id = "TEST"
-
-        exists = user_id in bot_dict
-        if exists:
-            # Run the background XAI computation in the background_executor
-            background_executor.submit(
-                bot_dict[user_id].trigger_background_xai_computation,
-                phase_from
-            )
-            return jsonify({
-                "status": "success",
-                "message": f"Background XAI computation started for user {user_id} (running in background)"
-            })
-        else:
-            return jsonify({
-                "status": "error",
-                "message": f"User {user_id} not found"
-            }), 404
-
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Failed to trigger background computation: {str(e)}"
-        }), 500
 
 
 app = create_app()
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', use_reloader=False)
-
-
-def cleanup_background_tasks():
-    """Clean shutdown of background thread pool."""
-    app.logger.info("Shutting down background task executor...")
-    background_executor.shutdown(wait=True, timeout=30)
-    app.logger.info("Background task executor shutdown complete")
 
 
 ## Rate limiting removed: not useful for long-running requests
@@ -892,7 +839,6 @@ def cleanup_resources():
     # Shutdown thread pools
     try:
         ml_executor.shutdown(wait=True, timeout=10)
-        background_executor.shutdown(wait=True, timeout=10)
     except Exception as e:
         app.logger.warning(f"Thread pool shutdown warning: {e}")
 
