@@ -89,9 +89,6 @@ class Conversation:
 
         self.username = "unknown"
 
-        # Question id to answer type mapping
-        self.question_id_to_answer_type = {}
-
         # The description
         self.describe = DatasetDescription(index_col=index_col,
                                            target_var_name=target_var_name,
@@ -139,17 +136,6 @@ class Conversation:
         """Gets the ids for the training data."""
         dataset = self.stored_vars["dataset"].contents["X"]
         return list(dataset.index)
-
-    def get_questions(self):
-        assert self.question_bank_path is not None, "Question bank path not set"
-        try:
-            return self.get_var("questions")
-        except KeyError:
-            question_bank = pd.read_csv(self.question_bank_path, delimiter=";")["paraphrased"]
-            question_bank = question_bank.tolist()
-            var = Variable(name='question_bank', contents=question_bank, kind='question_bank')
-            self._store_var(var)
-            return question_bank
 
     def add_dataset(self,
                     data: pd.DataFrame,
