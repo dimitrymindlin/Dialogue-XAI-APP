@@ -13,6 +13,7 @@ from flask_cors import CORS
 import gin
 import matplotlib
 import atexit
+from dataset_config import DatasetConfig  # Ensure gin sees DatasetConfig before parsing
 from explain.logic import ExplainBot
 from speech_and_text.tts_service import generate_audio_from_text
 from speech_and_text.stt_service import transcribe_audio_file
