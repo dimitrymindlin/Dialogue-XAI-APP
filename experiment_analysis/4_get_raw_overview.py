@@ -13,14 +13,14 @@ Outputs:
 - Console output with basic statistics and sanity checks
 """
 
-from experiment_analysis.analysis_config import RESULTS_DIR
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import analysis_config as config
 
-FILTERED_DIR = os.path.join(RESULTS_DIR, "3_filtered")
-OVERVIEW_DIR = os.path.join(RESULTS_DIR, "4_overview")
+FILTERED_DIR = os.path.join(config.RESULTS_DIR, "3_filtered")
+OVERVIEW_DIR = os.path.join(config.RESULTS_DIR, "4_overview")
 os.makedirs(OVERVIEW_DIR, exist_ok=True)
 
 # Load filtered data

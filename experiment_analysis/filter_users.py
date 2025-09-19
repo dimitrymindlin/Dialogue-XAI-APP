@@ -1,10 +1,14 @@
 import json
 from datetime import datetime
+from pathlib import Path
+from typing import Iterable, List, Optional, Sequence, Tuple
+
 import pandas as pd
 from experiment_analysis.plot_overviews import print_feedback_json
 import numpy as np
-from experiment_analysis.analysis_utils import add_prolific_times
+from experiment_analysis.analysis_utils import add_prolific_times, count_dummy_var_users
 from experiment_analysis.analysis_config import DATASET, INTRO_TEST_CYCLES, TEACHING_CYCLES, FINAL_TEST_CYCLES
+from experiment_analysis import analysis_config as config
 
 
 def filter_by_time(user_df, time_df, std_dev_threshold=2):
@@ -158,19 +162,254 @@ def filter_by_prolific_users(analysis, prolific_file_name):
     return non_prolific_user_ids
 
 
-def filter_by_work_life_balance(user_df, wlb_users):
-    wlb_users = [user for user in wlb_users if user[0] in user_df["id"].values]
-    # Add learning time to wlb_df based on user_id
-    wlb_users = [
-        (user[0], user[1], user_df[user_df["id"] == user[0]]["total_learning_time"].values[0])
-        for user in wlb_users]
-    # Save wlb users to a csv file
-    wlb_df = pd.DataFrame(wlb_users, columns=["user_id", "feedback", "learning_time"])
-    wlb_df = wlb_df.sort_values(by="learning_time", ascending=False)
-    wlb_df.to_csv("wlb_users.csv", index=False)
-    # Print unique remaining wlb users
+def _normalise_wlb_entries(entries: Iterable) -> List[Tuple[str, str]]:
+    normalised: List[Tuple[str, str]] = []
+    for entry in entries:
+        if isinstance(entry, str):
+            normalised.append((entry, ""))
+        elif isinstance(entry, Sequence):
+            if not entry:
+                continue
+            user_id = entry[0]
+            feedback = entry[1] if len(entry) > 1 else ""
+            normalised.append((str(user_id), str(feedback) if feedback is not None else ""))
+        elif isinstance(entry, dict) and "user_id" in entry:
+            normalised.append((str(entry["user_id"]), str(entry.get("feedback", ""))))
+    return normalised
+
+
+def _resolve_wlb_file(path_str: str) -> Path:
+    candidate = Path(path_str)
+    if candidate.exists():
+        return candidate
+
+    if candidate.is_absolute():
+        return candidate
+
+    experiment_dir = Path(getattr(config, "ACTIVE_EXPERIMENT_PATH", Path(__file__).parent))
+    for base in (experiment_dir, experiment_dir.parent, Path.cwd()):
+        resolved = base / path_str
+        if resolved.exists():
+            return resolved
+
+    return candidate
+
+
+def _load_wlb_users_from_file(path_str: str) -> List[Tuple[str, str]]:
+    path = _resolve_wlb_file(path_str)
+    if not path.exists():
+        print(f"Warning: Work-life balance users file not found at {path}.")
+        return []
+
+    try:
+        df = pd.read_csv(path)
+    except Exception as exc:  # pragma: no cover - fallback logging
+        print(f"Warning: Failed to read work-life balance users file {path}: {exc}")
+        return []
+
+    if "user_id" not in df.columns:
+        print(f"Warning: Work-life balance users file {path} missing 'user_id' column.")
+        return []
+
+    feedback_col = "feedback" if "feedback" in df.columns else None
+    entries = []
+    for _, row in df.iterrows():
+        user_id = row.get("user_id")
+        if pd.isna(user_id):
+            continue
+        feedback = row.get(feedback_col, "") if feedback_col else ""
+        if pd.isna(feedback):
+            feedback = ""
+        entries.append((str(user_id), str(feedback)))
+    return entries
+
+
+def _get_configured_wlb_users(source_override: Iterable | None = None) -> List[Tuple[str, str]]:
+    if source_override is not None:
+        return _normalise_wlb_entries(source_override)
+
+    configured_entries = getattr(config, "WORK_LIFE_BALANCE_USERS", [])
+    if configured_entries:
+        return _normalise_wlb_entries(configured_entries)
+
+    source_file = getattr(config, "WORK_LIFE_BALANCE_USERS_FILE", None)
+    if source_file:
+        if isinstance(source_file, (list, tuple)):
+            return _normalise_wlb_entries(source_file)
+        return _load_wlb_users_from_file(source_file)
+
+    return []
+
+
+def filter_by_work_life_balance(
+    user_df,
+    predictions_df=None,
+    dummy_var_column: str = "dummy_var_mention",
+    fallback_users=None,
+):
+    entries: List[Tuple[str, str, str, Optional[int]]] = []  # (user_id, feedback, source, mention_count)
+
+    if predictions_df is not None and dummy_var_column in predictions_df.columns:
+        dummy_var_users = count_dummy_var_users(predictions_df, dummy_var_column)
+        for user_id, feedback, mention_count in dummy_var_users:
+            if pd.isna(user_id):
+                continue
+            entries.append(
+                (str(user_id), str(feedback) if feedback is not None else "", "prediction", int(mention_count))
+            )
+
+    configured_entries = _get_configured_wlb_users(fallback_users)
+    for user_id, feedback in configured_entries:
+        entries.append((str(user_id), feedback, "config", None))
+
+    if not entries:
+        print("Work-life balance filter enabled but no users were identified. Skipping filter.")
+        return []
+
+    available_ids = set(user_df["id"].astype(str))
+    filtered_entries = [entry for entry in entries if entry[0] in available_ids]
+    if not filtered_entries:
+        print("Work-life balance filter: identified users not present in dataset. Skipping filter.")
+        return []
+
+    augmented_entries = []
+    for user_id, feedback, source, mention_count in filtered_entries:
+        matching_rows = user_df[user_df["id"].astype(str) == user_id]
+        learning_time = None
+        if not matching_rows.empty and "total_learning_time" in matching_rows.columns:
+            learning_time = matching_rows["total_learning_time"].iloc[0]
+        augmented_entries.append((user_id, feedback, source, learning_time, mention_count))
+
+    wlb_df = pd.DataFrame(
+        augmented_entries,
+        columns=["user_id", "feedback", "source", "learning_time", "mention_count"],
+    )
+    if wlb_df["learning_time"].notna().any():
+        wlb_df = wlb_df.sort_values(by="learning_time", ascending=False, na_position="last")
+
+    output_dir = Path(config.RESULTS_DIR) / "3_filtered"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "wlb_users.csv"
+    wlb_df.to_csv(output_path, index=False)
+    print(f"Saved work-life balance filter details to {output_path}")
     print("Unique remaining WLB users: ", wlb_df["user_id"].nunique())
     return wlb_df["user_id"].tolist()
+
+
+def filter_users_not_in_original_data(user_df):
+    """Exclude users that are not present in experiment `user_df.csv` if available."""
+
+    experiment_dir = Path(getattr(config, "ACTIVE_EXPERIMENT_PATH", Path(".")))
+    source_file = experiment_dir / "user_df.csv"
+
+    if not source_file.exists():
+        print(f"filter_users_not_in_original_data skipped: {source_file} not found")
+        return []
+
+    try:
+        original_df = pd.read_csv(source_file)
+    except Exception as exc:  # pragma: no cover - I/O safeguard
+        print(f"Warning: Unable to read {source_file}: {exc}")
+        return []
+
+    if "id" not in original_df.columns:
+        print(f"Warning: '{source_file}' missing required 'id' column. Skipping filter.")
+        return []
+
+    allowed_ids = set(original_df["id"].dropna().astype(str))
+    current_ids = user_df["id"].dropna().astype(str)
+
+    missing_mask = ~current_ids.isin(allowed_ids)
+    missing_ids = current_ids[missing_mask].unique()
+
+    if len(missing_ids) == 0:
+        return []
+
+    print(
+        f"filter_users_not_in_original_data: excluding {len(missing_ids)} users not present in {source_file.name}"
+    )
+    return missing_ids.tolist()
+
+
+def filter_users_missing_self_assessment(user_df, column_name="self_assessment_answers"):
+    """Exclude users lacking self-assessment answers."""
+
+    if column_name not in user_df.columns:
+        print(
+            f"filter_users_missing_self_assessment skipped: '{column_name}' column not found in user data"
+        )
+        return []
+
+    column = user_df[column_name]
+    if column.notna().sum() == 0:
+        print(
+            "filter_users_missing_self_assessment skipped: no self-assessment data available for any user"
+        )
+        return []
+
+    def has_answers(value):
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            return False
+        if isinstance(value, str):
+            return value.strip() not in ("", "[]", "null", "None")
+        if isinstance(value, (list, tuple)):
+            return len(value) > 0
+        return False
+
+    missing_mask = ~column.apply(has_answers)
+    missing_ids = user_df.loc[missing_mask, "id"].dropna().astype(str).tolist()
+
+    print(
+        f"filter_users_missing_self_assessment: excluding {len(missing_ids)} users missing self assessment"
+    )
+    return missing_ids
+
+
+def filter_users_with_sorry_responses(
+    events_df,
+    user_column="user_id",
+    message_column="message",
+    actor_column="actor",
+    phrases=None,
+):
+    """Exclude users whose system messages contain specific fallback apologies."""
+
+    required_columns = {user_column, message_column}
+    if not required_columns.issubset(events_df.columns):
+        print(
+            "filter_users_with_sorry_responses skipped: events dataframe missing required columns"
+        )
+        return []
+
+    df = events_df[[user_column, message_column]].copy()
+
+    actor_series = None
+    for col in events_df.columns:
+        if col.lower() == actor_column.lower():
+            actor_series = events_df[col].astype(str).str.lower()
+            break
+    if actor_series is not None:
+        df = df[actor_series.str.contains("system", na=False)]
+
+    df["__message_lower"] = df[message_column].astype(str).str.lower()
+    df["__message_lower"] = df["__message_lower"].str.replace("’", "'", regex=False)
+
+    if phrases is None:
+        phrases = ["sorry! i couldn't understand that."]
+    phrases = [phrase.lower().replace("’", "'") for phrase in phrases]
+
+    mask = False
+    for phrase in phrases:
+        mask = mask | df["__message_lower"].str.contains(phrase, na=False)
+
+    flagged_users = df.loc[mask, user_column].dropna().astype(str).unique().tolist()
+
+    if flagged_users:
+        print(
+            f"filter_users_with_sorry_responses: excluding {len(flagged_users)} users with apology messages"
+        )
+
+    return flagged_users
 
 
 def filter_by_missing_ml_kowledge(user_df):
@@ -200,6 +439,33 @@ def filter_by_missing_ml_kowledge(user_df):
             print(f"  {value}: {count} users")
     
     return []
+
+
+def filter_by_high_ml_knowledge(user_df, column_name="ml_knowledge", threshold=4):
+    """Exclude users whose ML knowledge score exceeds ``threshold``."""
+
+    if column_name not in user_df.columns:
+        print(
+            f"filter_by_high_ml_knowledge skipped: '{column_name}' column not found in user data"
+        )
+        return []
+
+    try:
+        scores = pd.to_numeric(user_df[column_name], errors="coerce")
+    except Exception as exc:  # pragma: no cover - conversion safeguard
+        print(f"filter_by_high_ml_knowledge: unable to parse '{column_name}' values ({exc}). Skipping filter")
+        return []
+
+    high_mask = scores > threshold
+    high_ids = user_df.loc[high_mask, "id"].dropna().astype(str).tolist()
+
+    if not high_ids:
+        return []
+
+    print(
+        f"filter_by_high_ml_knowledge: excluding {len(high_ids)} users with {column_name} > {threshold}"
+    )
+    return high_ids
 
 
 def filter_by_negative_times(user_df):
@@ -260,9 +526,14 @@ def filter_by_broken_variables(user_df, user_completed_df, event_df=None):
     return list(exclude_user_ids)
 
 
-def filter_by_self_defined_attention_check(user_df, wlb_users):
+def filter_by_self_defined_attention_check(user_df, predictions_df=None, dummy_var_column="dummy_var_mention", wlb_users=None):
     # Filter by users who used work-life balance as an important variable
-    remove_user_ids = filter_by_work_life_balance(user_df, wlb_users)
+    remove_user_ids = filter_by_work_life_balance(
+        user_df,
+        predictions_df=predictions_df,
+        dummy_var_column=dummy_var_column,
+        fallback_users=wlb_users,
+    )
     return remove_user_ids
 
 
@@ -422,10 +693,19 @@ def filter_by_dataset_and_condition(user_df, dataset_name, condition="all"):
         lambda x: x.get("study_group_name", DATASET).split("-")[0] if isinstance(x, dict) else DATASET)
 
     # Extract condition from study group name (adult-thesis-mapek -> mapek)
-    user_df["study_group"] = profile_col.apply(
-        lambda x: x.get("study_group_name", "").split("-")[2] 
-        if isinstance(x, dict) and "study_group_name" in x and len(x.get("study_group_name", "").split("-")) > 2
-        else "unknown")
+    if "study_group" in user_df.columns:
+        existing_study_groups = user_df["study_group"].copy()
+    else:
+        existing_study_groups = pd.Series([pd.NA] * len(user_df), index=user_df.index, dtype="object")
+
+    user_df["study_group"] = [
+        profile.get("study_group_name", "").split("-")[2]
+        if isinstance(profile, dict)
+        and "study_group_name" in profile
+        and len(profile.get("study_group_name", "").split("-")) > 2
+        else existing_study_groups.get(idx)
+        for idx, profile in profile_col.items()
+    ]
 
     # Identify users not in the specified dataset
     users_not_in_dataset = user_df[user_df['dataset'] != dataset_name]['id'].tolist()

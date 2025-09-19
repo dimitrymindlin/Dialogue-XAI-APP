@@ -16,15 +16,7 @@ Outputs:
 - (add more as needed for further extraction steps)
 """
 
-from experiment_analysis.analysis_config import (
-    RESULTS_DIR,
-    DUMMY_VAR_NAME,
-    DUMMY_VAR_COLUMN,
-    DUMMY_VAR_THRESHOLD,
-    TEACHING_CYCLES,
-    FINAL_TEST_CYCLES,
-    DATASET
-)
+import analysis_config as config
 from analysis_utils import (
     unpack_questions,
     extract_all_questionnaires,
@@ -37,11 +29,12 @@ from analysis_utils import (
     add_subjective_understanding_score
 )
 from experiment_analysis.calculations import create_predictions_df
+from ml_knowledge_utils import ML_KNOWLEDGE_TEXT_TO_NUM
 import os
 import pandas as pd
 
-RAW_DIR = os.path.join(RESULTS_DIR, "1_raw")
-UNPACKED_DIR = os.path.join(RESULTS_DIR, "2_unpacked")
+RAW_DIR = os.path.join(config.RESULTS_DIR, "1_raw")
+UNPACKED_DIR = os.path.join(config.RESULTS_DIR, "2_unpacked")
 os.makedirs(UNPACKED_DIR, exist_ok=True)
 
 # Load raw data
@@ -77,8 +70,11 @@ for user_id in users["id"]:
         all_questionnaires_list.append(questionnaire_df)
     # Aggregate prediction DataFrames for each user
     intro_test_preds, preds_learning, final_test_preds, _ = create_predictions_df(
-        users, user_events, exclude_incomplete=False, teaching_cycles=TEACHING_CYCLES,
-        final_test_cycles=FINAL_TEST_CYCLES
+        users,
+        user_events,
+        exclude_incomplete=False,
+        teaching_cycles=config.TEACHING_CYCLES,
+        final_test_cycles=config.FINAL_TEST_CYCLES,
     )
     if intro_test_preds is not None:
         initial_test_preds_list.append(intro_test_preds)
@@ -105,9 +101,9 @@ if questions_over_time_list:
 final_test_preds_df = pd.concat(final_test_preds_list, ignore_index=True) if final_test_preds_list else pd.DataFrame()
 final_test_preds_df = add_dummy_var_mention_column(
     final_test_preds_df,
-    dummy_var_name=DUMMY_VAR_NAME,
-    column_name=DUMMY_VAR_COLUMN,
-    similarity_threshold=DUMMY_VAR_THRESHOLD
+    dummy_var_name=config.DUMMY_VAR_NAME,
+    column_name=config.DUMMY_VAR_COLUMN,
+    similarity_threshold=config.DUMMY_VAR_THRESHOLD,
 )
 initial_test_preds_df = pd.concat(initial_test_preds_list,
                                   ignore_index=True) if initial_test_preds_list else pd.DataFrame()
@@ -147,12 +143,16 @@ if all_preds_dfs:
 # Add understanding question analysis to users DataFrame
 print("Analyzing understanding questions...")
 try:
-    users = add_understanding_question_analysis(users, dataset_name=DATASET)
-    print(f"Added understanding question analysis columns to users DataFrame for {DATASET} dataset")
+    users = add_understanding_question_analysis(users, dataset_name=config.DATASET)
+    print(
+        f"Added understanding question analysis columns to users DataFrame for {config.DATASET} dataset"
+    )
 except FileNotFoundError as e:
     print(f"WARNING: {str(e)}")
     print(
-        f"Understanding question analysis skipped. Please create a config file at configs/{DATASET}_understanding.json")
+        "Understanding question analysis skipped. Please create a config file at "
+        f"configs/{config.DATASET}_understanding.json"
+    )
 except Exception as e:
     print(f"ERROR analyzing understanding questions: {str(e)}")
     print("Understanding question analysis failed, but continuing with pipeline...")
@@ -163,14 +163,7 @@ def extract_profile_variables(users_df):
     import json
     
     # Define mappings
-    fam_ml_mapping = {
-        "very low": 0,
-        "low": 1,
-        "moderate": 2,
-        "high": 3,
-        "very high": 4,
-        "anonymous": None
-    }
+    fam_ml_mapping = ML_KNOWLEDGE_TEXT_TO_NUM
     
     ml_studies_mapping = {
         "never": 0,

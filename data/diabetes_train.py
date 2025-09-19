@@ -25,9 +25,6 @@ config_path = f"./{DATASET_NAME}_model_config.json"
 save_path = f"./{DATASET_NAME}"
 save_flag = True
 
-
-
-
 def clean_data(data, cols_with_nan_list):
     data[data == '?'] = np.nan
     for col in cols_with_nan_list:

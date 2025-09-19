@@ -19,9 +19,11 @@ Outputs:
 - results/{PROLIFIC_FOLDER_NAME}/3_filtered/predictions_filtered.csv
 """
 
-from experiment_analysis.analysis_config import RESULTS_DIR
 import os
+from typing import Any, Dict, Iterable, List, Tuple
+
 import pandas as pd
+import analysis_config as config
 from experiment_analysis.filter_users import (
     filter_completed_users,
     filter_by_dataset_and_condition,
@@ -30,22 +32,218 @@ from experiment_analysis.filter_users import (
     remove_outliers_by_attention_check,
     filter_by_work_life_balance,
     filter_by_missing_ml_kowledge,
+    filter_by_high_ml_knowledge,
     filter_by_self_defined_attention_check,
     filter_by_wanted_count,
     filter_users_that_didnt_ask_questions_from_df,
     filter_by_fatal_understanding_error,
-    filter_by_invalid_scores
+    filter_by_invalid_scores,
+    filter_users_not_in_original_data,
+    filter_users_missing_self_assessment,
+    filter_users_with_sorry_responses,
 )
 from experiment_analysis.analysis_utils import (
-    count_dummy_var_users,
     filter_by_dummy_var_mentions,
     filter_dataframes_by_user_ids,
     save_dataframes_to_csv
 )
-from experiment_analysis.analysis_config import DUMMY_VAR_NAME, DUMMY_VAR_COLUMN, DATASET, GROUP
 
-UNPACKED_DIR = os.path.join(RESULTS_DIR, "2_unpacked")
-FILTERED_DIR = os.path.join(RESULTS_DIR, "3_filtered")
+UNPACKED_DIR = os.path.join(config.RESULTS_DIR, "2_unpacked")
+FILTERED_DIR = os.path.join(config.RESULTS_DIR, "3_filtered")
+
+
+DEFAULT_STEP3_FILTERS: List[str] = [
+    "filter_completed_users",
+    "filter_by_dataset_and_condition",
+    "filter_by_invalid_scores",
+    "filter_by_time",
+    "filter_by_missing_ml_kowledge",
+    "filter_by_negative_times",
+    "filter_by_fatal_understanding_error",
+    "remove_outliers_by_attention_check",
+    "filter_users_that_didnt_ask_questions_from_df",
+    "filter_users_missing_self_assessment",
+]
+def _normalise_filter_entries(entries: Iterable[Any]) -> List[Dict[str, Any]]:
+    normalised: List[Dict[str, Any]] = []
+    for entry in entries:
+        if isinstance(entry, str):
+            normalised.append({"name": entry, "options": {}})
+        elif isinstance(entry, dict) and "name" in entry:
+            options = entry.get("options") or {}
+            normalised.append({"name": entry["name"], "options": options})
+        else:
+            print(f"Warning: Skipping invalid filter definition: {entry}")
+    return normalised
+
+
+def _build_filter(name: str, context: Dict[str, Any], options: Dict[str, Any]):
+    users_df = context["users"]
+
+    if name == "filter_completed_users":
+        return filter_completed_users, {"user_df": users_df}
+
+    if name == "filter_by_dataset_and_condition":
+        dataset_name = options.get("dataset_name", config.DATASET)
+        condition = options.get("condition", config.GROUP)
+        return filter_by_dataset_and_condition, {"user_df": users_df, "dataset_name": dataset_name, "condition": condition}
+
+    if name == "filter_by_invalid_scores":
+        return filter_by_invalid_scores, {"user_df": users_df}
+
+    if name == "filter_by_time":
+        kwargs = {"user_df": users_df, "time_df": context["user_completed"]}
+        if "std_dev_threshold" in options:
+            kwargs["std_dev_threshold"] = options["std_dev_threshold"]
+        return filter_by_time, kwargs
+
+    if name == "filter_by_missing_ml_kowledge":
+        return filter_by_missing_ml_kowledge, {"user_df": users_df}
+
+    if name == "filter_by_high_ml_knowledge":
+        column_name = options.get("column_name", "ml_knowledge")
+        threshold = options.get("threshold", 2)
+        return filter_by_high_ml_knowledge, {
+            "user_df": users_df,
+            "column_name": column_name,
+            "threshold": threshold,
+        }
+
+    if name == "filter_by_negative_times":
+        if "total_exp_time" not in users_df.columns:
+            print("Warning: Skipping filter_by_negative_times because 'total_exp_time' column is missing")
+            return None
+        return filter_by_negative_times, {"user_df": users_df}
+
+    if name == "filter_by_fatal_understanding_error":
+        study_group = options.get("study_group", "all")
+        question_type = options.get("question_type", "most_important_feature")
+        return filter_by_fatal_understanding_error, {
+            "user_df": users_df,
+            "study_group": study_group,
+            "question_type": question_type,
+        }
+
+    if name == "remove_outliers_by_attention_check":
+        return remove_outliers_by_attention_check, {
+            "user_df": users_df,
+            "user_completed_df": context["user_completed"],
+        }
+
+    if name == "filter_users_that_didnt_ask_questions_from_df":
+        questions_df = context.get("questions_over_time")
+        if questions_df is None or questions_df.empty:
+            print("Warning: Skipping filter_users_that_didnt_ask_questions_from_df because questions data is unavailable")
+            return None
+        return filter_users_that_didnt_ask_questions_from_df, {
+            "users_df": users_df,
+            "questions_over_time_df": questions_df,
+        }
+
+    if name == "filter_users_not_in_original_data":
+        return filter_users_not_in_original_data, {"user_df": users_df}
+
+    if name == "filter_users_missing_self_assessment":
+        column_name = options.get("column_name", "self_assessment_answers")
+        return filter_users_missing_self_assessment, {
+            "user_df": users_df,
+            "column_name": column_name,
+        }
+
+    if name == "filter_users_with_sorry_responses":
+        events_df = context.get("events")
+        if events_df is None or events_df.empty:
+            print("Warning: Skipping filter_users_with_sorry_responses because events data is unavailable")
+            return None
+        return filter_users_with_sorry_responses, {
+            "events_df": events_df,
+            "user_column": options.get("user_column", "user_id"),
+            "message_column": options.get("message_column", "message"),
+            "actor_column": options.get("actor_column", "actor"),
+        }
+
+    if name == "filter_by_dummy_var_mentions":
+        predictions_df = context.get("all_preds")
+        if predictions_df is None or predictions_df.empty:
+            print("Warning: Skipping filter_by_dummy_var_mentions because predictions dataframe is empty")
+            return None
+        dummy_column = options.get(
+            "dummy_var_column",
+            getattr(config, "DUMMY_VAR_COLUMN", "dummy_var_mention"),
+        )
+        return filter_by_dummy_var_mentions, {
+            "predictions_df": predictions_df,
+            "dummy_var_column": dummy_column,
+        }
+
+    if name == "filter_by_work_life_balance":
+        predictions_df = context.get("all_preds")
+        dummy_column = options.get(
+            "dummy_var_column",
+            getattr(config, "DUMMY_VAR_COLUMN", "dummy_var_mention"),
+        )
+        kwargs = {
+            "user_df": users_df,
+            "predictions_df": predictions_df,
+            "dummy_var_column": dummy_column,
+            "fallback_users": options.get("wlb_users"),
+        }
+        return filter_by_work_life_balance, kwargs
+
+    if name == "filter_by_self_defined_attention_check":
+        predictions_df = context.get("all_preds")
+        dummy_column = options.get(
+            "dummy_var_column",
+            getattr(config, "DUMMY_VAR_COLUMN", "dummy_var_mention"),
+        )
+        kwargs = {
+            "user_df": users_df,
+            "predictions_df": predictions_df,
+            "dummy_var_column": dummy_column,
+            "wlb_users": options.get("wlb_users"),
+        }
+        return filter_by_self_defined_attention_check, kwargs
+
+    if name == "filter_by_wanted_count":
+        count = options.get("count", 70)
+        return filter_by_wanted_count, {"user_df": users_df, "count": count}
+
+    print(f"Warning: Unknown filter '{name}' requested; skipping")
+    return None
+
+
+def _build_filter_pipeline(context: Dict[str, Any]) -> List[Tuple[Any, Dict[str, Any]]]:
+    configured_pipeline = getattr(config, "STEP3_FILTER_PIPELINE", None)
+    additional_filters = getattr(config, "STEP3_ADDITIONAL_FILTERS", None)
+
+    if configured_pipeline is not None:
+        raw_entries: Iterable[Any] = configured_pipeline
+    else:
+        raw_entries = list(DEFAULT_STEP3_FILTERS)
+        if additional_filters:
+            raw_entries = list(raw_entries) + list(additional_filters)
+
+    normalised_entries = _normalise_filter_entries(raw_entries)
+
+    exclude_filters = {
+        entry.lower()
+        for entry in getattr(config, "STEP3_EXCLUDE_FILTERS", [])
+        if isinstance(entry, str)
+    }
+    if exclude_filters:
+        normalised_entries = [
+            entry
+            for entry in normalised_entries
+            if entry["name"].lower() not in exclude_filters
+        ]
+
+    pipeline: List[Tuple[Any, Dict[str, Any]]] = []
+    for entry in normalised_entries:
+        filter_tuple = _build_filter(entry["name"], context, entry["options"])
+        if filter_tuple:
+            pipeline.append(filter_tuple)
+    return pipeline
+
 os.makedirs(FILTERED_DIR, exist_ok=True)
 
 # Load unpacked data
@@ -92,32 +290,15 @@ if missing:
             how='left'
         )
 
-# List of tuples: (filter_function, kwargs_dict)
-ENABLED_FILTERS = [
-    (filter_completed_users, {"user_df": users}),
-    (filter_by_dataset_and_condition, {"user_df": users, "dataset_name": DATASET, "condition": GROUP}),
-    (filter_by_invalid_scores, {"user_df": users}),
-    (filter_by_time, {"user_df": users, "time_df": user_completed}),
-    (filter_by_missing_ml_kowledge, {"user_df": users}),
-]
+filter_context: Dict[str, Any] = {
+    "users": users,
+    "events": events,
+    "user_completed": user_completed,
+    "questions_over_time": questions_over_time_df,
+    "all_preds": all_preds_df,
+}
 
-# Only add the filter_by_negative_times if total_exp_time column exists
-if 'total_exp_time' in users.columns:
-    ENABLED_FILTERS.append((filter_by_negative_times, {"user_df": users}))
-else:
-    print("Warning: Skipping filter_by_negative_times because 'total_exp_time' column is missing")
-
-# Add the remaining filters
-ENABLED_FILTERS.extend([
-    # Uncomment filters as needed:
-    # (filter_by_work_life_balance, {"user_df": users, "wlb_users": wlb_users}),
-    # (filter_by_dummy_var_mentions, {"predictions_df": all_preds_df, "dummy_var_column": DUMMY_VAR_COLUMN}),
-    (filter_by_fatal_understanding_error,
-     {"user_df": users, "study_group": "all", "question_type": "either"}),
-    (remove_outliers_by_attention_check, {"user_df": users, "user_completed_df": user_completed}),
-    (filter_users_that_didnt_ask_questions_from_df,
-     {"users_df": users, "questions_over_time_df": questions_over_time_df}),
-])
+ENABLED_FILTERS = _build_filter_pipeline(filter_context)
 
 # --- RUN FILTERS AND COLLECT USER IDS TO EXCLUDE ---
 exclude_user_ids = set()

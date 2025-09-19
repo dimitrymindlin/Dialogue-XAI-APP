@@ -537,12 +537,36 @@ def add_understanding_question_analysis(user_df, study_group=None, dataset_name=
     for idx, row in df.iterrows():
         user_id = row[id_col]
 
-        # Get questions and answers
         try:
             questions = row[questions_col]
             answers = row[answers_col]
 
-            # Process the answers
+            if pd.isna(questions) or pd.isna(answers):
+                continue
+
+            if questions is None or answers is None:
+                continue
+
+            if isinstance(questions, float):
+                continue
+            if isinstance(answers, float):
+                continue
+
+            if isinstance(questions, str):
+                try:
+                    questions = json.loads(questions)
+                except json.JSONDecodeError:
+                    questions = ast.literal_eval(questions)
+
+            if isinstance(answers, str):
+                try:
+                    answers = json.loads(answers)
+                except json.JSONDecodeError:
+                    answers = ast.literal_eval(answers)
+
+            if not isinstance(questions, (list, tuple)) or not isinstance(answers, (list, tuple)):
+                continue
+
             for q_idx, (question, answer) in enumerate(zip(questions, answers)):
                 answer = str(answer).lower() if answer else ""
 
