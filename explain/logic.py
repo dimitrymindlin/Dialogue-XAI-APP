@@ -38,9 +38,6 @@ from explain.explanations.model_profile import PdpExplanation
 from explain.utils import read_and_format_data
 from explain.xai_cache_manager import XAICacheManager
 
-from parsing.llm_intent_recognition.llm_pipeline_setup.openai_pipeline.openai_pipeline import \
-    LLMSinglePromptWithMemoryAndSystemMessage
-
 app = Flask(__name__)
 
 
@@ -241,6 +238,8 @@ class ExplainBot:
         # Initialize completion + parsing modules
         self.intent_recognition_model = None
         if self.use_intent_recognition == "openAI":
+            from parsing.llm_intent_recognition.llm_pipeline_setup.openai_pipeline.openai_pipeline import \
+                LLMSinglePromptWithMemoryAndSystemMessage
             self.intent_recognition_model = LLMSinglePromptWithMemoryAndSystemMessage(self.feature_ordering)
 
         if self.use_llm_agent:
@@ -251,7 +250,7 @@ class ExplainBot:
             elif self.use_llm_agent == "mape_k_2":
                 from llm_agents.mape_k_component_mixins import MapeK2BaseAgent as Agent
             elif self.use_llm_agent in ("unified_mape_k", "mape_k_unified"):
-                from llm_agents.mape_k_component_mixins import MapeKUnifiedBaseAgent as Agent
+                from llm_agents.unified_agent import MapeKUnifiedBaseAgent as Agent
             elif self.use_llm_agent == "mape_k_approval_2":
                 from llm_agents.mape_k_component_mixins import MapeKApprovalBaseAgent as Agent
             elif self.use_llm_agent in ("mape_k_approval", "mape_k_approval_4"):
@@ -262,6 +261,8 @@ class ExplainBot:
                 from llm_agents.openai_mapek_agent import MapeK2OpenAIAgent as Agent
             elif self.use_llm_agent == "mape_k_openai_unified":
                 from llm_agents.openai_mapek_agent import MapeKUnifiedOpenAIAgent as Agent
+            elif self.use_llm_agent in ("simple_openai", "simple_openai_agent"):
+                from llm_agents.simple_openai_agent import SimpleOpenAIAgent as Agent
             elif self.use_llm_agent == "conversational":
                 from llm_agents.simple_conv_agent import ConversationalStreamAgent as Agent
             else:
@@ -859,12 +860,43 @@ class ExplainBot:
         final_result = returned_item
         return final_result, question_id, feature_id, reasoning
 
+    @staticmethod
+    def _normalize_agent_response(agent_result) -> Tuple[str, str]:
+        """
+        Normalize different agent return formats into (reasoning, response).
+        """
+        # Preferred contract used by most agents
+        if isinstance(agent_result, tuple):
+            if len(agent_result) >= 2:
+                return agent_result[0], agent_result[1]
+            if len(agent_result) == 1:
+                return "", agent_result[0]
+            return "", ""
+
+        # Dict contract used by some OpenAI-based simple agents
+        if isinstance(agent_result, dict):
+            reasoning = agent_result.get("reasoning", "")
+            response = agent_result.get("response", agent_result.get("text", ""))
+            if not response:
+                response = str(agent_result)
+            return reasoning, response
+
+        # Object contract with named attributes
+        reasoning = getattr(agent_result, "reasoning", "")
+        response = getattr(agent_result, "response", "")
+        if response:
+            return reasoning, response
+
+        # Fallback
+        return "", str(agent_result)
+
     async def update_state_from_nl(self, user_input):
         # 1. Get the question_id and feature_name from the user input
         feature_name = None
         feature_id = None
         if self.use_llm_agent:
-            reasoning, response = await self.agent.answer_user_question(user_input)
+            agent_result = await self.agent.answer_user_question(user_input)
+            reasoning, response = self._normalize_agent_response(agent_result)
             return response, None, None, reasoning
         elif self.use_intent_recognition:
             # Get the question_id and feature_name from the user input
@@ -910,7 +942,8 @@ class ExplainBot:
                     yield chunk
             else:
                 # Fallback to normal response
-                reasoning, response = await self.agent.answer_user_question(user_input)
+                agent_result = await self.agent.answer_user_question(user_input)
+                reasoning, response = self._normalize_agent_response(agent_result)
                 yield {
                     "type": "final",
                     "content": response,

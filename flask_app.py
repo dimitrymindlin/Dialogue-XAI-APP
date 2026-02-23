@@ -15,8 +15,6 @@ import matplotlib
 import atexit
 from dataset_config import DatasetConfig  # Ensure gin sees DatasetConfig before parsing
 from explain.logic import ExplainBot
-from speech_and_text.tts_service import generate_audio_from_text
-from speech_and_text.stt_service import transcribe_audio_file
 
 from dotenv import load_dotenv
 
@@ -41,6 +39,18 @@ ml_executor = ThreadPoolExecutor(
     max_workers=_get_thread_pool_size("ML_EXECUTOR_THREADS"),
     thread_name_prefix="ml_executor"
 )
+
+
+def _generate_audio_from_text(text, voice):
+    """Lazy-load TTS dependency so non-speech deployments can boot cleanly."""
+    from speech_and_text.tts_service import generate_audio_from_text
+    return generate_audio_from_text(text, voice)
+
+
+def _transcribe_audio_file(file_path):
+    """Lazy-load STT dependency so non-speech deployments can boot cleanly."""
+    from speech_and_text.stt_service import transcribe_audio_file
+    return transcribe_audio_file(file_path)
 
 
 def create_experiment_id(user_id, datapoint_count):
@@ -582,7 +592,7 @@ def get_bot_response():
         if soundwave:
             voice = data.get("voice", "alloy")
             # Move audio generation to background as well
-            audio_future = ml_executor.submit(generate_audio_from_text, response[0], voice)
+            audio_future = ml_executor.submit(_generate_audio_from_text, response[0], voice)
             try:
                 audio_result = audio_future.result()
                 if "error" in audio_result:
@@ -640,7 +650,7 @@ async def _get_bot_response_from_nl_internal(user_id: str, data: dict):
     # Generate audio if requested
     if data.get("soundwave", False):
         voice = data.get("voice", "alloy")
-        audio_result = generate_audio_from_text(response, voice)
+        audio_result = _generate_audio_from_text(response, voice)
         if "error" in audio_result:
             message_dict["audio_error"] = audio_result["error"]
         else:
@@ -721,7 +731,7 @@ async def get_bot_response_from_nl_stream_internal(user_id: str, data: dict):
                                 soundwave = data.get("soundwave", False)
                                 if soundwave:
                                     voice = data.get("voice", "alloy")
-                                    audio_result = generate_audio_from_text(final_response, voice)
+                                    audio_result = _generate_audio_from_text(final_response, voice)
                                     if "error" in audio_result:
                                         final_data["audio_error"] = audio_result["error"]
                                     else:
@@ -791,7 +801,7 @@ async def transcribe_audio():
 
         try:
             # Call the refactored STT service
-            transcription_result = transcribe_audio_file(temp_file_path)
+            transcription_result = _transcribe_audio_file(temp_file_path)
 
             if "error" in transcription_result:
                 return jsonify({"error": transcription_result["error"]}), 500
