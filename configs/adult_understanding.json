@@ -1,0 +1,16 @@
+{
+    "most_important_feature": {
+        "correct_answer": "maritalstatus",
+        "fatal_error": "worklifebalance"
+    },
+    "least_important_feature": {
+        "correct_answer": "worklifebalance",
+        "fatal_error": "investmentoutcome"
+    },
+    "non_dataset_features": ["workexperience", "gender"],
+    "column_mapping": {
+        "user_id": "id",
+        "questions": "understanding_questions",
+        "answers": "understanding_answers"
+    }
+}

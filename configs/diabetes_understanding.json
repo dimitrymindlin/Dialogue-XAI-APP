@@ -1,0 +1,16 @@
+{
+    "most_important_feature": {
+        "correct_answer": "glucose",
+        "fatal_error": "dailywaterintake"
+    },
+    "least_important_feature": {
+        "correct_answer": "dailywaterintake",
+        "fatal_error": "glucose"
+    },
+    "non_dataset_features": ["cholesterol", "blood_pressure"],
+    "column_mapping": {
+        "user_id": "id",
+        "questions": "understanding_questions",
+        "answers": "understanding_answers"
+    }
+}
