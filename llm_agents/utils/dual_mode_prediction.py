@@ -115,64 +115,60 @@ async def astructured_predict_with_fallback(
         Exception: If both structured and string parsing fail
     """
     
-    # Check if we should use structured output or go directly to string parsing
+    structured_error = None
+
+    # First attempt: structured output (optional)
     if use_structured_output:
-        # First attempt: Try structured prediction
         try:
             logger.info(f"Attempting structured prediction for {model_class.__name__}")
             result = await llm.astructured_predict(model_class, prompt_template, **prompt_kwargs)
             logger.info(f"Structured prediction successful for {model_class.__name__}")
             return result
-            
         except Exception as structured_error:
             logger.warning(f"Structured prediction failed for {model_class.__name__}: {structured_error}")
             logger.info("Falling back to string-based parsing")
     else:
         logger.info(f"Using string-based parsing directly for {model_class.__name__} (structured_output=False)")
-        structured_error = None  # No structured error since we didn't try it
 
-        # Fallback: String-based parsing with model description
-        try:
-            # Create enhanced prompt with model description
-            original_template = prompt_template.template
-            model_description = create_pydantic_description_prompt(model_class)
+    # Fallback: string parsing with model description
+    fallback_error = None
+    try:
+        original_template = prompt_template.template
+        model_description = create_pydantic_description_prompt(model_class)
+        enhanced_template = f"{original_template}\n\n{model_description}"
+        enhanced_prompt = PromptTemplate(enhanced_template)
 
-            enhanced_template = f"{original_template}\n\n{model_description}"
-            enhanced_prompt = PromptTemplate(enhanced_template)
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"String parsing attempt {attempt + 1}/{max_retries} for {model_class.__name__}")
+                raw_response = await llm.apredict(enhanced_prompt, **prompt_kwargs)
+                logger.debug(f"Raw LLM response: {raw_response}")
 
-            for attempt in range(max_retries):
-                try:
-                    logger.info(f"String parsing attempt {attempt + 1}/{max_retries} for {model_class.__name__}")
+                json_text = extract_json_from_text(raw_response)
+                parsed_data = json.loads(json_text)
+                result = model_class(**parsed_data)
+                logger.info(f"String parsing successful for {model_class.__name__} on attempt {attempt + 1}")
+                return result
+            except (json.JSONDecodeError, ValidationError, KeyError) as parse_error:
+                fallback_error = parse_error
+                logger.warning(
+                    f"String parsing attempt {attempt + 1} failed for {model_class.__name__}: {parse_error}"
+                )
+                if attempt == max_retries - 1:
+                    break
+    except Exception as unexpected_fallback_error:
+        fallback_error = unexpected_fallback_error
 
-                    # Get raw text response
-                    raw_response = await llm.apredict(enhanced_prompt, **prompt_kwargs)
-                    logger.debug(f"Raw LLM response: {raw_response}")
+    if use_structured_output and structured_error is not None:
+        error_msg = (
+            f"Failed to parse {model_class.__name__} using both structured output and string parsing. "
+            f"Structured error: {structured_error}. Fallback error: {fallback_error}"
+        )
+    else:
+        error_msg = f"Failed to parse {model_class.__name__} using string parsing. Error: {fallback_error}"
 
-                    # Extract and parse JSON
-                    json_text = extract_json_from_text(raw_response)
-                    parsed_data = json.loads(json_text)
-
-                    # Validate with pydantic model
-                    result = model_class(**parsed_data)
-                    logger.info(f"String parsing successful for {model_class.__name__} on attempt {attempt + 1}")
-                    return result
-
-                except (json.JSONDecodeError, ValidationError, KeyError) as parse_error:
-                    logger.warning(
-                        f"String parsing attempt {attempt + 1} failed for {model_class.__name__}: {parse_error}")
-                    if attempt == max_retries - 1:
-                        raise parse_error
-                    continue
-
-        except Exception as fallback_error:
-            error_msg = f"Failed to parse {model_class.__name__} using "
-            if use_structured_output:
-                error_msg += f"both structured output and string parsing. Structured error: {structured_error}. Fallback error: {fallback_error}"
-            else:
-                error_msg += f"string parsing. Error: {fallback_error}"
-
-            logger.error(error_msg)
-            raise Exception(error_msg)
+    logger.error(error_msg)
+    raise Exception(error_msg)
 
 
 def structured_predict_with_fallback(
@@ -201,61 +197,57 @@ def structured_predict_with_fallback(
         Exception: If both structured and string parsing fail
     """
 
-    # Check if we should use structured output or go directly to string parsing
+    structured_error = None
+
+    # First attempt: structured output (optional)
     if use_structured_output:
-        # First attempt: Try structured prediction
         try:
             logger.info(f"Attempting structured prediction for {model_class.__name__}")
             result = llm.structured_predict(model_class, prompt_template, **prompt_kwargs)
             logger.info(f"Structured prediction successful for {model_class.__name__}")
             return result
-
         except Exception as structured_error:
             logger.warning(f"Structured prediction failed for {model_class.__name__}: {structured_error}")
             logger.info("Falling back to string-based parsing")
     else:
         logger.info(f"Using string-based parsing directly for {model_class.__name__} (structured_output=False)")
-        structured_error = None  # No structured error since we didn't try it
 
-        # Fallback: String-based parsing with model description
-        try:
-            # Create enhanced prompt with model description
-            original_template = prompt_template.template
-            model_description = create_pydantic_description_prompt(model_class)
+    # Fallback: string parsing with model description
+    fallback_error = None
+    try:
+        original_template = prompt_template.template
+        model_description = create_pydantic_description_prompt(model_class)
+        enhanced_template = f"{original_template}\n\n{model_description}"
+        enhanced_prompt = PromptTemplate(enhanced_template)
 
-            enhanced_template = f"{original_template}\n\n{model_description}"
-            enhanced_prompt = PromptTemplate(enhanced_template)
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"String parsing attempt {attempt + 1}/{max_retries} for {model_class.__name__}")
+                raw_response = llm.predict(enhanced_prompt, **prompt_kwargs)
+                logger.debug(f"Raw LLM response: {raw_response}")
 
-            for attempt in range(max_retries):
-                try:
-                    logger.info(f"String parsing attempt {attempt + 1}/{max_retries} for {model_class.__name__}")
+                json_text = extract_json_from_text(raw_response)
+                parsed_data = json.loads(json_text)
+                result = model_class(**parsed_data)
+                logger.info(f"String parsing successful for {model_class.__name__} on attempt {attempt + 1}")
+                return result
+            except (json.JSONDecodeError, ValidationError, KeyError) as parse_error:
+                fallback_error = parse_error
+                logger.warning(
+                    f"String parsing attempt {attempt + 1} failed for {model_class.__name__}: {parse_error}"
+                )
+                if attempt == max_retries - 1:
+                    break
+    except Exception as unexpected_fallback_error:
+        fallback_error = unexpected_fallback_error
 
-                    # Get raw text response
-                    raw_response = llm.predict(enhanced_prompt, **prompt_kwargs)
-                    logger.debug(f"Raw LLM response: {raw_response}")
+    if use_structured_output and structured_error is not None:
+        error_msg = (
+            f"Failed to parse {model_class.__name__} using both structured output and string parsing. "
+            f"Structured error: {structured_error}. Fallback error: {fallback_error}"
+        )
+    else:
+        error_msg = f"Failed to parse {model_class.__name__} using string parsing. Error: {fallback_error}"
 
-                    # Extract and parse JSON
-                    json_text = extract_json_from_text(raw_response)
-                    parsed_data = json.loads(json_text)
-
-                    # Validate with pydantic model
-                    result = model_class(**parsed_data)
-                    logger.info(f"String parsing successful for {model_class.__name__} on attempt {attempt + 1}")
-                    return result
-
-                except (json.JSONDecodeError, ValidationError, KeyError) as parse_error:
-                    logger.warning(
-                        f"String parsing attempt {attempt + 1} failed for {model_class.__name__}: {parse_error}")
-                    if attempt == max_retries - 1:
-                        raise parse_error
-                    continue
-
-        except Exception as fallback_error:
-            error_msg = f"Failed to parse {model_class.__name__} using "
-            if use_structured_output:
-                error_msg += f"both structured output and string parsing. Structured error: {structured_error}. Fallback error: {fallback_error}"
-            else:
-                error_msg += f"string parsing. Error: {fallback_error}"
-
-            logger.error(error_msg)
-            raise Exception(error_msg)
+    logger.error(error_msg)
+    raise Exception(error_msg)

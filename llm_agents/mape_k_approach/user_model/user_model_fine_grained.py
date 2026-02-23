@@ -191,7 +191,7 @@ class UserModelFineGrained:
                                       exp_step: str,
                                       new_state: Union[ExplanationState, str]) -> None:
         """Update the state of a specific explanation step."""
-        logger.info(f"🔄 UPDATE_EXPLANATION_STEP_STATE: {exp_name}.{exp_step} -> {new_state}")
+        logger.info(f"UPDATE_EXPLANATION_STEP_STATE: {exp_name}.{exp_step} -> {new_state}")
         
         # Convert string to ExplanationState if necessary
         if isinstance(new_state, str):
@@ -203,9 +203,6 @@ class UserModelFineGrained:
 
         explanation = self._get_explanation(exp_name)
         if explanation:
-            logger.info(f"  - Found explanation '{exp_name}' with {len(explanation.explanation_steps)} steps")
-            step_names = [s.step_name for s in explanation.explanation_steps]
-            logger.info(f"  - Available step names: {step_names}")
             explanation.update_state(exp_step, new_state)
         else:
             logger.warning(f"Explanation '{exp_name}' not found in the model.")
